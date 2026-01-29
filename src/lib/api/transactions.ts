@@ -140,3 +140,57 @@ export async function getUniquePayees(search?: string, limit?: number): Promise<
 export async function getUniqueTags(search?: string, limit?: number): Promise<string[]> {
   return invoke('get_unique_tags', { search, limit: limit || 20 });
 }
+
+export interface PaginatedTransactionsParams {
+  limit: number;
+  offset: number;
+  sortField?: string;
+  sortDirection?: 'asc' | 'desc';
+  filters?: TransactionFilters;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
+/**
+ * Get paginated transactions with sorting and filtering
+ */
+export async function getTransactionsPaginated(
+  params: PaginatedTransactionsParams
+): Promise<PaginatedResult<Transaction>> {
+  const { limit, offset, sortField = 'date', sortDirection = 'desc', filters } = params;
+
+  // Get all transactions matching filters, then apply pagination
+  const allTransactions = await getTransactions(filters);
+
+  // Sort transactions
+  const sorted = [...allTransactions].sort((a, b) => {
+    let comparison = 0;
+    switch (sortField) {
+      case 'date':
+        comparison = a.date.localeCompare(b.date);
+        break;
+      case 'payee':
+        comparison = a.payee.localeCompare(b.payee);
+        break;
+      case 'amount_cents':
+        comparison = a.amountCents - b.amountCents;
+        break;
+      default:
+        comparison = a.date.localeCompare(b.date);
+    }
+    return sortDirection === 'asc' ? comparison : -comparison;
+  });
+
+  // Apply pagination
+  const items = sorted.slice(offset, offset + limit);
+
+  return {
+    items,
+    totalCount: allTransactions.length,
+    hasMore: offset + limit < allTransactions.length
+  };
+}
