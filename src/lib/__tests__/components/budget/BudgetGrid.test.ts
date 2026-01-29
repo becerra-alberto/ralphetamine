@@ -21,24 +21,24 @@ describe('BudgetGrid', () => {
 			render(BudgetGrid);
 			expect(
 				screen.getByRole('region', { name: /budget grid/i })
-			).toBeInTheDocument();
+			).toBeTruthy();
 		});
 
 		it('should render with category header column', () => {
 			render(BudgetGrid);
-			expect(screen.getByRole('columnheader', { name: /categories/i })).toBeInTheDocument();
+			expect(screen.getByRole('columnheader', { name: /categories/i })).toBeTruthy();
 		});
 
 		it('should render empty state when no categories', () => {
 			render(BudgetGrid);
-			expect(screen.getByText(/no budget categories yet/i)).toBeInTheDocument();
+			expect(screen.getByText(/no budget categories yet/i)).toBeTruthy();
 		});
 
 		it('should render empty state hint', () => {
 			render(BudgetGrid);
 			expect(
 				screen.getByText(/add your first budget category/i)
-			).toBeInTheDocument();
+			).toBeTruthy();
 		});
 	});
 
@@ -74,7 +74,7 @@ describe('BudgetGrid', () => {
 
 		it('should render category rows when categories exist', () => {
 			render(BudgetGrid);
-			expect(screen.queryByText(/no budget categories yet/i)).not.toBeInTheDocument();
+			expect(screen.queryByText(/no budget categories yet/i)).not.toBeTruthy();
 		});
 
 		it('should render correct number of rows for categories', () => {
@@ -110,7 +110,7 @@ describe('BudgetGrid', () => {
 		it('should show loading message when isLoading is true', () => {
 			budgetStore.setLoading(true);
 			render(BudgetGrid);
-			expect(screen.getByText(/loading budget data/i)).toBeInTheDocument();
+			expect(screen.getByText(/loading budget data/i)).toBeTruthy();
 		});
 	});
 
@@ -118,13 +118,13 @@ describe('BudgetGrid', () => {
 		it('should show error message when error exists', () => {
 			budgetStore.setError('Failed to load data');
 			render(BudgetGrid);
-			expect(screen.getByText(/failed to load data/i)).toBeInTheDocument();
+			expect(screen.getByText(/failed to load data/i)).toBeTruthy();
 		});
 
 		it('should have alert role for error state', () => {
 			budgetStore.setError('Error occurred');
 			render(BudgetGrid);
-			expect(screen.getByRole('alert')).toBeInTheDocument();
+			expect(screen.getByRole('alert')).toBeTruthy();
 		});
 	});
 
@@ -144,12 +144,12 @@ describe('BudgetGrid', () => {
 				}
 			]);
 			render(BudgetGrid);
-			expect(screen.getByRole('rowheader', { name: /total/i })).toBeInTheDocument();
+			expect(screen.getByRole('rowheader', { name: /total/i })).toBeTruthy();
 		});
 
 		it('should not render totals row when no categories', () => {
 			render(BudgetGrid);
-			expect(screen.queryByRole('rowheader', { name: /total/i })).not.toBeInTheDocument();
+			expect(screen.queryByRole('rowheader', { name: /total/i })).not.toBeTruthy();
 		});
 	});
 });

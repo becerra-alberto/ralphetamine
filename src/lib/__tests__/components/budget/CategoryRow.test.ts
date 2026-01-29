@@ -36,7 +36,7 @@ describe('CategoryRow', () => {
 					currentMonth: '2025-01'
 				}
 			});
-			expect(screen.getByText('Groceries')).toBeInTheDocument();
+			expect(screen.getByText('Groceries')).toBeTruthy();
 		});
 
 		it('should have row role', () => {
@@ -49,7 +49,7 @@ describe('CategoryRow', () => {
 					currentMonth: '2025-01'
 				}
 			});
-			expect(screen.getByRole('row')).toBeInTheDocument();
+			expect(screen.getByRole('row')).toBeTruthy();
 		});
 
 		it('should have rowheader for category name', () => {
@@ -62,7 +62,7 @@ describe('CategoryRow', () => {
 					currentMonth: '2025-01'
 				}
 			});
-			expect(screen.getByRole('rowheader')).toBeInTheDocument();
+			expect(screen.getByRole('rowheader')).toBeTruthy();
 		});
 
 		it('should have data-testid attribute', () => {
@@ -75,7 +75,7 @@ describe('CategoryRow', () => {
 					currentMonth: '2025-01'
 				}
 			});
-			expect(screen.getByTestId('category-row')).toBeInTheDocument();
+			expect(screen.getByTestId('category-row')).toBeTruthy();
 		});
 
 		it('should have data-category-id attribute', () => {
@@ -141,7 +141,7 @@ describe('CategoryRow', () => {
 			});
 
 			// €500.00 for budgeted
-			expect(screen.getByText('€500.00')).toBeInTheDocument();
+			expect(screen.getByText('€500.00')).toBeTruthy();
 		});
 	});
 

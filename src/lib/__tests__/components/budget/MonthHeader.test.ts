@@ -5,7 +5,7 @@ import MonthHeader from '../../../components/budget/MonthHeader.svelte';
 describe('MonthHeader', () => {
 	it('should render with abbreviated month name', () => {
 		render(MonthHeader, { props: { month: '2025-01', isCurrent: false } });
-		expect(screen.getByText('Jan')).toBeInTheDocument();
+		expect(screen.getByText('Jan')).toBeTruthy();
 	});
 
 	it('should render all month abbreviations correctly', () => {
@@ -26,19 +26,19 @@ describe('MonthHeader', () => {
 
 		for (const { month, expected } of monthTests) {
 			const { unmount } = render(MonthHeader, { props: { month, isCurrent: false } });
-			expect(screen.getByText(expected)).toBeInTheDocument();
+			expect(screen.getByText(expected)).toBeTruthy();
 			unmount();
 		}
 	});
 
 	it('should have columnheader role', () => {
 		render(MonthHeader, { props: { month: '2025-06', isCurrent: false } });
-		expect(screen.getByRole('columnheader')).toBeInTheDocument();
+		expect(screen.getByRole('columnheader')).toBeTruthy();
 	});
 
 	it('should have aria-label with month name', () => {
 		render(MonthHeader, { props: { month: '2025-06', isCurrent: false } });
-		expect(screen.getByRole('columnheader', { name: 'Jun' })).toBeInTheDocument();
+		expect(screen.getByRole('columnheader', { name: 'Jun' })).toBeTruthy();
 	});
 
 	it('should apply current class when isCurrent is true', () => {

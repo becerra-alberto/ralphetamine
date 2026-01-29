@@ -5,17 +5,17 @@ import YearHeader from '../../../components/budget/YearHeader.svelte';
 describe('YearHeader', () => {
 	it('should render year text', () => {
 		render(YearHeader, { props: { year: 2025, monthCount: 6 } });
-		expect(screen.getByText('2025')).toBeInTheDocument();
+		expect(screen.getByText('2025')).toBeTruthy();
 	});
 
 	it('should have columnheader role', () => {
 		render(YearHeader, { props: { year: 2025, monthCount: 6 } });
-		expect(screen.getByRole('columnheader')).toBeInTheDocument();
+		expect(screen.getByRole('columnheader')).toBeTruthy();
 	});
 
 	it('should have aria-label with year', () => {
 		render(YearHeader, { props: { year: 2025, monthCount: 6 } });
-		expect(screen.getByRole('columnheader', { name: '2025' })).toBeInTheDocument();
+		expect(screen.getByRole('columnheader', { name: '2025' })).toBeTruthy();
 	});
 
 	it('should calculate width based on monthCount (120px per month)', () => {
