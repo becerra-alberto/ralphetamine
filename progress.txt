@@ -273,3 +273,23 @@ Story 5.5: Implement Account Balance Entry - COMPLETED
   - Commit: fcf864f
 Story 5.5: COMPLETED - feat(story-5.5): Implement Account Balance Entry
 [DONE] Story 5.5 - Account Balance Entry - Thu 29 Jan 2026 14:50:00 CST
+[DONE] Story 4.9 - tags multiselect - Thu 29 Jan 2026 14:54:36 CST
+
+Story 6.1: Create Onboarding Wizard Step 1 Goals - COMPLETED
+  - Migration 005: user_preferences table (key-value store with timestamps)
+  - Rust check_onboarding_status: Reads onboarding_completed flag and user_goals
+  - Rust save_user_goals: Stores selected goals as JSON array
+  - Rust complete_onboarding: Sets onboarding_completed flag to 'true'
+  - onboarding.ts API: checkOnboardingStatus, saveUserGoals, completeOnboarding wrappers
+  - onboarding.ts store: currentStep, totalSteps, goals, toggleGoal, nextStep, previousStep
+  - StepIndicator.svelte: "Step X of Y" text, progress bar (percentage width), dot indicators
+  - Step1Goals.svelte: 5 goal checkboxes (emergency fund, debt payoff, save goal, track spending, monitor net worth)
+  - OnboardingWizard.svelte: Full-screen overlay, step indicator, skip setup link, animated transitions (fly)
+  - Home page: First-launch detection via checkOnboardingStatus, shows wizard or dashboard
+  - Fail-open: If API fails, shows dashboard (not stuck on onboarding)
+  - Unit tests: StepIndicator.test.ts (7), Step1Goals.test.ts (10), OnboardingWizard.test.ts (9), onboarding.test.ts (14), home.test.ts (5 updated)
+  - Rust integration tests: 3 tests (no prefs, flag set, goals stored)
+  - All 1605 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: 4351db2
+Story 6.1: COMPLETED - feat(story-6.1): Create Onboarding Wizard Step 1 Goals
+[DONE] Story 6.1 - Onboarding Wizard Step 1 - Thu 29 Jan 2026 15:00:00 CST
