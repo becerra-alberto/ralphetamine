@@ -2,7 +2,7 @@
 id: "4.1"
 epic: 4
 title: "Create Transaction List View"
-status: pending
+status: done
 priority: critical
 estimation: large
 depends_on: ["2.1"]
