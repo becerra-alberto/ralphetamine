@@ -415,3 +415,25 @@ Story 7.1: Create CSV Import Wizard - File Selection - COMPLETED
   - All 1927 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
   - Commit: b5063a2
 Story 7.1: COMPLETED - feat(story-7.1): Create CSV Import Wizard - File Selection
+
+[LEARN] When running File.text() in jsdom test environment, the native implementation may not work correctly. Always add a FileReader-based polyfill to vitest.setup.ts unconditionally (not behind a feature-detect check) to ensure readCsvFile tests work reliably across all test runs.
+[DONE] Story 7.1 - csv file selection - Thu 29 Jan 2026 16:23:06 CST
+
+Story 7.2: Implement Column Mapping - COMPLETED
+  - columnDetection.ts: Auto-detect column mappings from CSV headers (EN/NL/DE patterns)
+  - MappableField type: date, payee, amount, inflow, outflow, memo, category, skip
+  - autoDetectMappings: Case-insensitive header matching with duplicate prevention
+  - validateMappings: Date + Payee required, Amount OR (Inflow+Outflow) required
+  - getAvailableFields: Dropdown options excluding already-used fields, amount mode aware
+  - isInflowOutflowMode/toggleAmountMode: Switch between single amount vs inflow/outflow
+  - parseRawAmountToCents: US (1,234.56) and European (1.234,56) format support, currency symbols
+  - parseRawDate: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, DD.MM.YYYY, ISO datetime
+  - buildPreviewTransaction: Builds preview from row data using current mappings
+  - ColumnRow.svelte: Individual column mapping row with header, sample value, field dropdown
+  - ColumnMapping.svelte: Full mapping step with auto-detection, amount mode toggle, validation errors, save template, preview
+  - MappingPreview.svelte: Preview table with parsed dates, formatted amounts (+/-), only non-skip columns
+  - ImportWizard.svelte: Updated with Step 2 integration, canProceed logic, mappingsReady event
+  - Unit tests: columnDetection.test.ts (58), ColumnMapping.test.ts (16), MappingPreview.test.ts (15)
+  - All 2006 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: 357875f
+Story 7.2: COMPLETED - feat(story-7.2): Implement Column Mapping
