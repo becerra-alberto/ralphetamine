@@ -437,3 +437,35 @@ Story 7.2: Implement Column Mapping - COMPLETED
   - All 2006 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
   - Commit: 357875f
 Story 7.2: COMPLETED - feat(story-7.2): Implement Column Mapping
+
+[LEARN] The project had skeleton components from a previous incomplete attempt at story 7.2. When implementing, always check if files already exist with partial implementations before creating new ones. The migrations system in this project uses a Rust array of Migration structs in migrations.rs rather than separate SQL files, though SQL files can also be created as documentation.
+[DONE] Story 7.2 - column mapping - Thu 29 Jan 2026 16:42:46 CST
+
+Story 7.3: Add Import Preview and Duplicate Detection - COMPLETED
+  - duplicateDetection.ts: Duplicate detection with date+amount+payee matching
+  - matchPayee: case-insensitive exact, containment, Dice coefficient similarity (≥0.85)
+  - normalizePayee: lowercase, remove punctuation, strip corporate suffixes (B.V., Inc, Ltd, GmbH)
+  - computeSimilarity: Dice coefficient on bigrams for fuzzy matching
+  - detectDuplicates: Scans imported vs existing, returns DuplicateCheckResult with confidence
+  - getDateRange: Extracts earliest/latest dates from preview transactions
+  - buildImportSummary: Total, duplicates, date range, toImport count
+  - ImportPreview.svelte: Step 3 UI with summary grid, preview table (first 10 + show more)
+  - Duplicate options: skip (default), import all, review each - radio buttons
+  - DuplicateReview.svelte: Side-by-side Import vs Existing comparison cards
+  - Confidence badges: Exact match (red) / Likely match (amber)
+  - Checkbox per duplicate: include/exclude with label toggle
+  - "These look like the same transaction" hint text
+  - ImportProgress.svelte: Spinner + progress bar during import, success/error states
+  - Success: "Imported X transactions (Y duplicates skipped)", Done button
+  - Error: Error message, Retry + Cancel buttons
+  - ImportWizard.svelte: Full Step 3 integration with prepareStep3, duplicate handling, executeImport
+  - prepareStep3: Builds preview transactions, fetches existing, detects duplicates
+  - executeImport: Filters by duplicate option, builds TransactionInput[], calls importTransactions API
+  - Rust import_transactions: Batch insert with BEGIN/COMMIT/ROLLBACK, UUID gen, ImportResult
+  - API importTransactions wrapper in transactions.ts
+  - Dark mode support for all components
+  - Unit tests: duplicateDetection.test.ts (29 tests), ImportPreview.test.ts (13), DuplicateReview.test.ts (10), ImportProgress.test.ts (15)
+  - All 2058 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: 93e2499
+Story 7.3: COMPLETED - feat(story-7.3): Add Import Preview and Duplicate Detection
+[DONE] Story 7.3 - Import Preview and Duplicate Detection - Thu 29 Jan 2026 17:01:00 CST
