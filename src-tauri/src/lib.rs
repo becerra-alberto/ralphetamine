@@ -57,6 +57,7 @@ pub fn run() {
             commands::save_disabled_categories,
             commands::complete_onboarding,
             commands::get_monthly_summary,
+            commands::import_transactions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

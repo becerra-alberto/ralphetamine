@@ -539,6 +539,75 @@ pub fn get_monthly_summary(month: String) -> Result<MonthlySummary, String> {
     })
 }
 
+/// Result of a batch import operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    pub imported: usize,
+    pub skipped: usize,
+}
+
+/// Import a batch of transactions from CSV
+#[tauri::command]
+pub fn import_transactions(
+    transactions: Vec<TransactionInput>,
+    skip_duplicates: Option<bool>,
+) -> Result<ImportResult, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+    let _skip = skip_duplicates.unwrap_or(true);
+    let mut imported = 0;
+    let mut skipped = 0;
+
+    // Use a transaction for atomicity (rollback on error)
+    db.execute("BEGIN TRANSACTION", &[])
+        .map_err(|e| e.to_string())?;
+
+    for input in &transactions {
+        let id = Uuid::new_v4().to_string();
+        let tags_json =
+            serde_json::to_string(&input.tags.clone().unwrap_or_default()).unwrap_or("[]".to_string());
+        let is_reconciled = if input.is_reconciled.unwrap_or(false) {
+            1
+        } else {
+            0
+        };
+
+        let result = db.execute(
+            "INSERT INTO transactions (id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            &[
+                &id,
+                &input.date,
+                &input.payee,
+                &input.category_id.clone().unwrap_or_default(),
+                &input.memo.clone().unwrap_or_default(),
+                &input.amount_cents.to_string(),
+                &input.account_id,
+                &tags_json,
+                &is_reconciled.to_string(),
+                &input.import_source.clone().unwrap_or("CSV".to_string()),
+            ],
+        );
+
+        match result {
+            Ok(_) => imported += 1,
+            Err(e) => {
+                // Rollback the entire transaction on error
+                let _ = db.execute("ROLLBACK", &[]);
+                return Err(format!("Import failed at row {}: {}", imported + skipped + 1, e));
+            }
+        }
+    }
+
+    db.execute("COMMIT", &[])
+        .map_err(|e| {
+            let _ = db.execute("ROLLBACK", &[]);
+            e.to_string()
+        })?;
+
+    Ok(ImportResult { imported, skipped })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

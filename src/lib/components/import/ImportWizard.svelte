@@ -3,23 +3,29 @@
 	import { fade, scale } from 'svelte/transition';
 	import FileSelection from './FileSelection.svelte';
 	import ColumnMapping from './ColumnMapping.svelte';
+	import ImportPreview from './ImportPreview.svelte';
+	import ImportProgress from './ImportProgress.svelte';
 	import type { CsvParseResult } from '$lib/utils/csvParser';
-	import type { ColumnMapping as ColumnMappingType } from '$lib/utils/columnDetection';
+	import {
+		buildPreviewTransaction,
+		type ColumnMapping as ColumnMappingType,
+		type PreviewTransaction
+	} from '$lib/utils/columnDetection';
+	import {
+		detectDuplicates,
+		buildImportSummary,
+		type DuplicateCheckResult,
+		type ImportSummary
+	} from '$lib/utils/duplicateDetection';
+	import { getTransactions, importTransactions } from '$lib/api/transactions';
+	import type { TransactionInput } from '$lib/types/transaction';
 
 	export let open: boolean = false;
 	export let testId: string = 'import-wizard';
 
 	const dispatch = createEventDispatcher<{
 		close: void;
-		fileReady: { data: CsvParseResult; fileName: string };
-		mappingsReady: {
-			data: CsvParseResult;
-			fileName: string;
-			mappings: ColumnMappingType[];
-			saveTemplate: boolean;
-			templateName: string;
-			useInflowOutflow: boolean;
-		};
+		importComplete: { imported: number; skipped: number };
 	}>();
 
 	let currentStep = 1;
@@ -35,8 +41,24 @@
 	let templateName = '';
 	let useInflowOutflow = false;
 
+	// Step 3 state
+	let previewTransactions: PreviewTransaction[] = [];
+	let duplicateResult: DuplicateCheckResult = { duplicates: [], cleanCount: 0, totalCount: 0 };
+	let importSummary: ImportSummary = { totalTransactions: 0, duplicatesFound: 0, dateRange: null, toImport: 0 };
+	let duplicateOption: 'skip' | 'import-all' | 'review' = 'skip';
+
+	// Import progress state
+	let importStatus: 'idle' | 'importing' | 'success' | 'error' = 'idle';
+	let importedCount = 0;
+	let skippedCount = 0;
+	let importError = '';
+
 	$: hasFile = fileData !== null;
-	$: canProceed = currentStep === 1 ? hasFile : currentStep === 2 ? mappingsValid : false;
+	$: canProceed = currentStep === 1 ? hasFile
+		: currentStep === 2 ? mappingsValid
+		: currentStep === 3 ? importStatus === 'idle'
+		: false;
+	$: showFooter = importStatus === 'idle';
 
 	function handleClose() {
 		dispatch('close');
@@ -53,16 +75,24 @@
 		saveTemplate = false;
 		templateName = '';
 		useInflowOutflow = false;
+		previewTransactions = [];
+		duplicateResult = { duplicates: [], cleanCount: 0, totalCount: 0 };
+		importSummary = { totalTransactions: 0, duplicatesFound: 0, dateRange: null, toImport: 0 };
+		duplicateOption = 'skip';
+		importStatus = 'idle';
+		importedCount = 0;
+		skippedCount = 0;
+		importError = '';
 	}
 
 	function handleBackdropClick(event: MouseEvent) {
-		if (event.target === event.currentTarget) {
+		if (event.target === event.currentTarget && importStatus !== 'importing') {
 			handleClose();
 		}
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
-		if (open && event.key === 'Escape') {
+		if (open && event.key === 'Escape' && importStatus !== 'importing') {
 			event.preventDefault();
 			event.stopPropagation();
 			handleClose();
@@ -90,26 +120,118 @@
 		useInflowOutflow = event.detail.useInflowOutflow;
 	}
 
-	function handleNext() {
+	async function prepareStep3() {
+		if (!fileData) return;
+
+		previewTransactions = fileData.rows.map((row) =>
+			buildPreviewTransaction(row, mappings)
+		);
+
+		try {
+			const existing = await getTransactions();
+			duplicateResult = detectDuplicates(previewTransactions, existing);
+		} catch {
+			duplicateResult = {
+				duplicates: [],
+				cleanCount: previewTransactions.length,
+				totalCount: previewTransactions.length
+			};
+		}
+
+		importSummary = buildImportSummary(previewTransactions, duplicateResult);
+	}
+
+	function handleDuplicateOptionChange(event: CustomEvent<{ option: 'skip' | 'import-all' | 'review' }>) {
+		duplicateOption = event.detail.option;
+		if (duplicateOption === 'import-all') {
+			duplicateResult = {
+				...duplicateResult,
+				duplicates: duplicateResult.duplicates.map((d) => ({ ...d, include: true }))
+			};
+		} else if (duplicateOption === 'skip') {
+			duplicateResult = {
+				...duplicateResult,
+				duplicates: duplicateResult.duplicates.map((d) => ({ ...d, include: false }))
+			};
+		}
+		importSummary = buildImportSummary(previewTransactions, duplicateResult);
+	}
+
+	function handleDuplicateToggle(event: CustomEvent<{ importIndex: number; include: boolean }>) {
+		const { importIndex, include } = event.detail;
+		duplicateResult = {
+			...duplicateResult,
+			duplicates: duplicateResult.duplicates.map((d) =>
+				d.importIndex === importIndex ? { ...d, include } : d
+			)
+		};
+		importSummary = buildImportSummary(previewTransactions, duplicateResult);
+	}
+
+	async function executeImport() {
+		importStatus = 'importing';
+		importedCount = 0;
+		skippedCount = 0;
+
+		const skipIndices = new Set(
+			duplicateOption !== 'import-all'
+				? duplicateResult.duplicates.filter((d) => !d.include).map((d) => d.importIndex)
+				: []
+		);
+
+		const inputs: TransactionInput[] = [];
+		for (let i = 0; i < previewTransactions.length; i++) {
+			if (skipIndices.has(i)) {
+				skippedCount++;
+				continue;
+			}
+			const tx = previewTransactions[i];
+			inputs.push({
+				date: tx.date,
+				payee: tx.payee,
+				amountCents: tx.amountCents,
+				memo: tx.memo || undefined,
+				accountId: '',
+				importSource: 'CSV'
+			});
+		}
+
+		try {
+			const result = await importTransactions(inputs);
+			importedCount = result.imported;
+			skippedCount += result.skipped;
+			importStatus = 'success';
+			dispatch('importComplete', { imported: importedCount, skipped: skippedCount });
+		} catch (err) {
+			importStatus = 'error';
+			importError = err instanceof Error ? err.message : 'An error occurred during import';
+		}
+	}
+
+	async function handleNext() {
 		if (currentStep === 1 && hasFile) {
 			currentStep = 2;
 		} else if (currentStep === 2 && mappingsValid) {
-			dispatch('mappingsReady', {
-				data: fileData!,
-				fileName: fileName!,
-				mappings,
-				saveTemplate,
-				templateName,
-				useInflowOutflow
-			});
-			handleClose();
+			currentStep = 3;
+			await prepareStep3();
+		} else if (currentStep === 3 && importStatus === 'idle') {
+			await executeImport();
 		}
 	}
 
 	function handleBack() {
-		if (currentStep > 1) {
+		if (currentStep > 1 && importStatus === 'idle') {
 			currentStep--;
 		}
+	}
+
+	function handleProgressClose() {
+		handleClose();
+	}
+
+	async function handleRetry() {
+		importStatus = 'idle';
+		await executeImport();
 	}
 
 	onMount(() => {
@@ -131,7 +253,7 @@
 	>
 		<div
 			class="wizard-panel"
-			class:wizard-panel--wide={currentStep === 2}
+			class:wizard-panel--wide={currentStep >= 2}
 			role="dialog"
 			aria-modal="true"
 			aria-label="Import Transactions"
@@ -160,7 +282,18 @@
 
 			<!-- Body -->
 			<div class="wizard-body" data-testid="{testId}-body">
-				{#if currentStep === 1}
+				{#if importStatus !== 'idle'}
+					<ImportProgress
+						status={importStatus}
+						imported={importedCount}
+						skipped={skippedCount}
+						total={importSummary.toImport}
+						errorMessage={importError}
+						testId="{testId}-progress"
+						on:close={handleProgressClose}
+						on:retry={handleRetry}
+					/>
+				{:else if currentStep === 1}
 					<FileSelection
 						testId="{testId}-file-selection"
 						on:fileReady={handleFileReady}
@@ -171,34 +304,45 @@
 						testId="{testId}-column-mapping"
 						on:mappingsChange={handleMappingsChange}
 					/>
+				{:else if currentStep === 3}
+					<ImportPreview
+						transactions={previewTransactions}
+						summary={importSummary}
+						{duplicateResult}
+						testId="{testId}-import-preview"
+						on:duplicateOptionChange={handleDuplicateOptionChange}
+						on:duplicateToggle={handleDuplicateToggle}
+					/>
 				{/if}
 			</div>
 
 			<!-- Footer -->
-			<footer class="wizard-footer" data-testid="{testId}-footer">
-				{#if currentStep > 1}
+			{#if showFooter}
+				<footer class="wizard-footer" data-testid="{testId}-footer">
+					{#if currentStep > 1}
+						<button
+							type="button"
+							class="btn-back"
+							data-testid="{testId}-back"
+							on:click={handleBack}
+						>
+							Back
+						</button>
+					{:else}
+						<div></div>
+					{/if}
+
 					<button
 						type="button"
-						class="btn-back"
-						data-testid="{testId}-back"
-						on:click={handleBack}
+						class="btn-next"
+						disabled={!canProceed}
+						data-testid="{testId}-next"
+						on:click={handleNext}
 					>
-						Back
+						{currentStep < totalSteps ? 'Next' : 'Import'}
 					</button>
-				{:else}
-					<div></div>
-				{/if}
-
-				<button
-					type="button"
-					class="btn-next"
-					disabled={!canProceed}
-					data-testid="{testId}-next"
-					on:click={handleNext}
-				>
-					{currentStep < totalSteps ? 'Next' : 'Import'}
-				</button>
-			</footer>
+				</footer>
+			{/if}
 		</div>
 	</div>
 {/if}
