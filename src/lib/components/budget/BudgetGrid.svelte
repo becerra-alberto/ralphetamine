@@ -1,19 +1,104 @@
 <script lang="ts">
-	import { budgetStore, yearGroups, categoryRows, currentMonth, isEmpty, monthlyTotals } from '$lib/stores/budget';
+	import {
+		budgetStore,
+		yearGroups,
+		currentMonth,
+		isEmpty,
+		monthlyTotals,
+		createCellKey
+	} from '$lib/stores/budget';
+	import { budgetUIStore } from '$lib/stores/budgetUI';
+	import {
+		groupCategoriesBySections,
+		calculateAllSectionTotals,
+		type CategorySection
+	} from '$lib/utils/categoryGroups';
 	import MonthHeader from './MonthHeader.svelte';
 	import YearHeader from './YearHeader.svelte';
 	import CategoryRow from './CategoryRow.svelte';
+	import SectionHeader from './SectionHeader.svelte';
 	import { formatCentsCurrency } from '$lib/types/budget';
+	import type { BudgetCell } from '$lib/stores/budget';
+	import type { MonthString } from '$lib/types/budget';
 
 	// Get reactive values from stores
 	$: months = $budgetStore.months;
 	$: isLoading = $budgetStore.isLoading;
 	$: error = $budgetStore.error;
 	$: years = $yearGroups;
-	$: rows = $categoryRows;
 	$: totals = $monthlyTotals;
 	$: current = $currentMonth;
 	$: empty = $isEmpty;
+	$: collapsedSections = $budgetUIStore.collapsedSections;
+
+	// Group categories into sections
+	$: sections = groupCategoriesBySections($budgetStore.categories);
+
+	// Check if we have sections (categories with parentId=null matching section names)
+	$: hasSections = sections.length > 0;
+
+	// Create a Map of cells for efficient lookup
+	$: cellsMap = createCellsMap($budgetStore.budgets, $budgetStore.actuals, months);
+
+	/**
+	 * Create a Map of BudgetCell for efficient lookup
+	 */
+	function createCellsMap(
+		budgets: Map<string, { amountCents: number }>,
+		actuals: Map<string, number>,
+		monthList: MonthString[]
+	): Map<string, BudgetCell> {
+		const map = new Map<string, BudgetCell>();
+		const allCategories = $budgetStore.categories;
+
+		allCategories.forEach((category) => {
+			monthList.forEach((month) => {
+				const key = createCellKey(category.id, month);
+				const budget = budgets.get(key);
+				const actualCents = actuals.get(key) ?? 0;
+				const budgetedCents = budget?.amountCents ?? 0;
+
+				map.set(key, {
+					categoryId: category.id,
+					month,
+					budgetedCents,
+					actualCents,
+					remainingCents: budgetedCents - Math.abs(actualCents)
+				});
+			});
+		});
+
+		return map;
+	}
+
+	/**
+	 * Check if a section is expanded
+	 */
+	function isSectionExpanded(section: CategorySection): boolean {
+		return !collapsedSections.has(section.id);
+	}
+
+	/**
+	 * Get cells for a category
+	 */
+	function getCategoryCells(categoryId: string): Map<MonthString, BudgetCell> {
+		const cells = new Map<MonthString, BudgetCell>();
+		months.forEach((month) => {
+			const key = createCellKey(categoryId, month);
+			const cell = cellsMap.get(key);
+			if (cell) {
+				cells.set(month, cell);
+			}
+		});
+		return cells;
+	}
+
+	/**
+	 * Get section totals for all months
+	 */
+	function getSectionTotals(section: CategorySection) {
+		return calculateAllSectionTotals(section, months, cellsMap);
+	}
 </script>
 
 <div class="budget-grid-container" role="region" aria-label="Budget Grid">
@@ -67,11 +152,44 @@
 							<p class="empty-state-hint">Add your first budget category to get started.</p>
 						</div>
 					</div>
+				{:else if hasSections}
+					<!-- Render sections with collapsible children -->
+					{#each sections as section (section.id)}
+						{@const isExpanded = isSectionExpanded(section)}
+						{@const sectionTotals = getSectionTotals(section)}
+
+						<SectionHeader
+							{section}
+							{months}
+							currentMonth={current}
+							totals={sectionTotals}
+							isCollapsed={!isExpanded}
+						/>
+
+						{#if isExpanded}
+							<div
+								class="section-content"
+								id="section-{section.id}-content"
+								data-testid="section-content"
+								data-section-id={section.id}
+							>
+								{#each section.children as childCategory (childCategory.id)}
+									<CategoryRow
+										category={childCategory}
+										cells={getCategoryCells(childCategory.id)}
+										{months}
+										currentMonth={current}
+									/>
+								{/each}
+							</div>
+						{/if}
+					{/each}
 				{:else}
-					{#each rows as rowData (rowData.category.id)}
+					<!-- Fallback: render flat category list when no sections exist -->
+					{#each $budgetStore.categories as category (category.id)}
 						<CategoryRow
-							category={rowData.category}
-							cells={rowData.cells}
+							{category}
+							cells={getCategoryCells(category.id)}
 							{months}
 							currentMonth={current}
 						/>
@@ -190,6 +308,22 @@
 
 	.grid-body {
 		flex: 1;
+	}
+
+	.section-content {
+		overflow: hidden;
+		animation: expand 200ms ease-out;
+	}
+
+	@keyframes expand {
+		from {
+			opacity: 0;
+			transform: translateY(-8px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	.empty-state {
