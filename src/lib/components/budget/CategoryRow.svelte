@@ -31,6 +31,7 @@
 				actualCents={cell?.actualCents ?? 0}
 				isCurrent={month === currentMonth}
 				categoryType={category.type}
+				categoryId={category.id}
 			/>
 		{/each}
 	</div>

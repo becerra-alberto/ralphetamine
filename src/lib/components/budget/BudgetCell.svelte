@@ -2,16 +2,45 @@
 	import type { MonthString } from '$lib/types/budget';
 	import { formatCentsCurrency } from '$lib/utils/currency';
 	import { getBudgetStatusWithClass } from '$lib/utils/budgetStatus';
+	import { tooltip } from '$lib/actions/tooltip';
+	import Tooltip from '$lib/components/shared/Tooltip.svelte';
+	import BudgetCellTooltip from './BudgetCellTooltip.svelte';
 
 	export let budgetedCents: number = 0;
 	export let actualCents: number = 0;
 	export let month: MonthString;
 	export let isCurrent: boolean = false;
 	export let categoryType: 'expense' | 'income' | 'transfer' = 'expense';
+	export let categoryId: string = '';
 
 	// Calculate budget status using the utility
 	$: statusResult = getBudgetStatusWithClass(actualCents, budgetedCents, categoryType);
 	$: statusClass = statusResult.className;
+
+	// Tooltip state
+	let tooltipVisible = false;
+	let cellElement: HTMLElement | null = null;
+	let isTooltipHovered = false;
+
+	function showTooltip(element: HTMLElement) {
+		cellElement = element;
+		tooltipVisible = true;
+	}
+
+	function hideTooltip() {
+		if (!isTooltipHovered) {
+			tooltipVisible = false;
+		}
+	}
+
+	function handleTooltipMouseEnter() {
+		isTooltipHovered = true;
+	}
+
+	function handleTooltipMouseLeave() {
+		isTooltipHovered = false;
+		tooltipVisible = false;
+	}
 </script>
 
 <div
@@ -20,6 +49,7 @@
 	role="cell"
 	data-testid="budget-cell"
 	data-month={month}
+	use:tooltip={{ onShow: showTooltip, onHide: hideTooltip, showDelay: 200, hideDelay: 200 }}
 >
 	<span class="cell-actual" data-testid="cell-actual">
 		{formatCentsCurrency(actualCents)}
@@ -28,6 +58,21 @@
 		{formatCentsCurrency(budgetedCents)}
 	</span>
 </div>
+
+<Tooltip visible={tooltipVisible} targetElement={cellElement}>
+	<div
+		on:mouseenter={handleTooltipMouseEnter}
+		on:mouseleave={handleTooltipMouseLeave}
+		role="presentation"
+	>
+		<BudgetCellTooltip
+			{actualCents}
+			budgetCents={budgetedCents}
+			{categoryId}
+			{month}
+		/>
+	</div>
+</Tooltip>
 
 <style>
 	.budget-cell {
