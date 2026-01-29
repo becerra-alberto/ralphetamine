@@ -1,3 +1,8 @@
+mod commands;
+mod db;
+
+use db::{init_database, run_migrations};
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -9,8 +14,26 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Initialize database
+            let db = init_database(None).expect("Failed to initialize database");
+
+            // Run migrations
+            run_migrations(db).expect("Failed to run migrations");
+
+            log::info!("Database initialized at {:?}", db.path());
+
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            commands::db_health_check,
+            commands::db_execute,
+            commands::db_query,
+            commands::db_insert,
+            commands::db_update,
+            commands::db_delete,
+            commands::db_select,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
