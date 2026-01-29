@@ -85,3 +85,57 @@ export async function getBudgetSummaries(month: MonthString): Promise<BudgetSumm
 export async function setBudgetsBatch(budgets: BudgetInput[]): Promise<number> {
   return invoke('set_budgets_batch', { budgets });
 }
+
+/**
+ * Set the same budget amount for a category across multiple months
+ * Useful for "Set for all future months" functionality
+ */
+export async function setFutureMonthsBudget(
+  categoryId: string,
+  startMonth: MonthString,
+  amountCents: number,
+  monthCount: number = 12
+): Promise<number> {
+  const budgets: BudgetInput[] = [];
+  let currentMonth = startMonth;
+
+  for (let i = 0; i < monthCount; i++) {
+    budgets.push({
+      categoryId,
+      month: currentMonth,
+      amountCents
+    });
+    currentMonth = getNextMonth(currentMonth);
+  }
+
+  return setBudgetsBatch(budgets);
+}
+
+/**
+ * Increase budgets by a percentage for a category across multiple months
+ * Useful for "Increase future months by %" functionality
+ */
+export async function increaseFutureMonthsBudget(
+  categoryId: string,
+  startMonth: MonthString,
+  baseCents: number,
+  percentage: number,
+  monthCount: number = 12
+): Promise<number> {
+  // Calculate the new amount using integer math
+  const increaseCents = Math.round((baseCents * percentage) / 100);
+  const newAmountCents = baseCents + increaseCents;
+
+  return setFutureMonthsBudget(categoryId, startMonth, newAmountCents, monthCount);
+}
+
+/**
+ * Helper to get the next month string
+ */
+function getNextMonth(month: MonthString): MonthString {
+  const [year, m] = month.split('-').map(Number);
+  if (m === 12) {
+    return `${year + 1}-01`;
+  }
+  return `${year}-${String(m + 1).padStart(2, '0')}`;
+}

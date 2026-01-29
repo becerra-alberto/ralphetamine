@@ -6,6 +6,7 @@
 	import { tooltip } from '$lib/actions/tooltip';
 	import Tooltip from '$lib/components/shared/Tooltip.svelte';
 	import BudgetCellTooltip from './BudgetCellTooltip.svelte';
+	import BudgetCellContextMenu from './BudgetCellContextMenu.svelte';
 	import CellInput from './CellInput.svelte';
 
 	export let budgetedCents: number = 0;
@@ -19,12 +20,24 @@
 	const dispatch = createEventDispatcher<{
 		expand: { categoryId: string; month: MonthString };
 		budgetChange: { categoryId: string; month: MonthString; amountCents: number };
-		navigate: { categoryId: string; month: MonthString; direction: 'next' | 'prev'; amountCents: number };
+		navigate: {
+			categoryId: string;
+			month: MonthString;
+			direction: 'next' | 'prev';
+			amountCents: number;
+		};
+		setFutureMonths: { categoryId: string; month: MonthString; amountCents: number };
+		increaseFutureMonths: { categoryId: string; month: MonthString; percentage: number };
 	}>();
 
 	// Edit mode state
 	let isEditing: boolean = false;
 	let hasInputError: boolean = false;
+
+	// Context menu state
+	let contextMenuVisible: boolean = false;
+	let contextMenuX: number = 0;
+	let contextMenuY: number = 0;
 
 	// Calculate budget status using the utility
 	$: statusResult = getBudgetStatusWithClass(actualCents, budgetedCents, categoryType);
@@ -34,7 +47,7 @@
 	 * Handle single click to expand cell
 	 */
 	function handleClick() {
-		if (!isEditing) {
+		if (!isEditing && !contextMenuVisible) {
 			dispatch('expand', { categoryId, month });
 		}
 	}
@@ -46,6 +59,18 @@
 		event.preventDefault();
 		event.stopPropagation();
 		enterEditMode();
+	}
+
+	/**
+	 * Handle right-click to open context menu
+	 */
+	function handleContextMenu(event: MouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		contextMenuX = event.clientX;
+		contextMenuY = event.clientY;
+		contextMenuVisible = true;
+		tooltipVisible = false;
 	}
 
 	/**
@@ -63,6 +88,27 @@
 		} else if (event.key === ' ') {
 			event.preventDefault();
 			dispatch('expand', { categoryId, month });
+		} else if (event.key === 'F10' && event.shiftKey) {
+			// Shift+F10 opens context menu (keyboard accessibility)
+			event.preventDefault();
+			openContextMenuFromKeyboard();
+		} else if (event.key === 'ContextMenu') {
+			// Menu key opens context menu
+			event.preventDefault();
+			openContextMenuFromKeyboard();
+		}
+	}
+
+	/**
+	 * Open context menu via keyboard (position near the cell)
+	 */
+	function openContextMenuFromKeyboard() {
+		if (cellRef) {
+			const rect = cellRef.getBoundingClientRect();
+			contextMenuX = rect.left + rect.width / 2;
+			contextMenuY = rect.top + rect.height / 2;
+			contextMenuVisible = true;
+			tooltipVisible = false;
 		}
 	}
 
@@ -74,6 +120,7 @@
 		hasInputError = false;
 		// Hide tooltip when editing
 		tooltipVisible = false;
+		contextMenuVisible = false;
 	}
 
 	/**
@@ -137,14 +184,43 @@
 		enterEditMode();
 	}
 
+	// Context menu event handlers
+	function handleContextMenuClose() {
+		contextMenuVisible = false;
+	}
+
+	function handleEditThisMonth() {
+		contextMenuVisible = false;
+		enterEditMode();
+	}
+
+	function handleSetFutureMonths(event: CustomEvent<{ amountCents: number }>) {
+		contextMenuVisible = false;
+		dispatch('setFutureMonths', {
+			categoryId,
+			month,
+			amountCents: event.detail.amountCents
+		});
+	}
+
+	function handleIncreaseFutureMonths(event: CustomEvent<{ percentage: number }>) {
+		contextMenuVisible = false;
+		dispatch('increaseFutureMonths', {
+			categoryId,
+			month,
+			percentage: event.detail.percentage
+		});
+	}
+
 	// Tooltip state
 	let tooltipVisible = false;
 	let cellElement: HTMLElement | null = null;
 	let isTooltipHovered = false;
+	let cellRef: HTMLElement | null = null;
 
 	function showTooltip(element: HTMLElement) {
-		// Don't show tooltip while editing
-		if (isEditing) return;
+		// Don't show tooltip while editing or context menu is open
+		if (isEditing || contextMenuVisible) return;
 		cellElement = element;
 		tooltipVisible = true;
 	}
@@ -166,6 +242,7 @@
 </script>
 
 <div
+	bind:this={cellRef}
 	class="budget-cell {statusClass}"
 	class:current-month={isCurrent}
 	class:expanded={isExpanded}
@@ -176,6 +253,7 @@
 	data-month={month}
 	on:click={handleClick}
 	on:dblclick={handleDoubleClick}
+	on:contextmenu={handleContextMenu}
 	on:keydown={handleKeydown}
 	use:tooltip={{ onShow: showTooltip, onHide: hideTooltip, showDelay: 200, hideDelay: 200 }}
 >
@@ -204,15 +282,21 @@
 			on:mouseleave={handleTooltipMouseLeave}
 			role="presentation"
 		>
-			<BudgetCellTooltip
-				{actualCents}
-				budgetCents={budgetedCents}
-				{categoryId}
-				{month}
-			/>
+			<BudgetCellTooltip {actualCents} budgetCents={budgetedCents} {categoryId} {month} />
 		</div>
 	</Tooltip>
 {/if}
+
+<BudgetCellContextMenu
+	visible={contextMenuVisible}
+	x={contextMenuX}
+	y={contextMenuY}
+	currentBudgetCents={budgetedCents}
+	on:close={handleContextMenuClose}
+	on:editThisMonth={handleEditThisMonth}
+	on:setFutureMonths={handleSetFutureMonths}
+	on:increaseFutureMonths={handleIncreaseFutureMonths}
+/>
 
 <style>
 	.budget-cell {

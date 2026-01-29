@@ -359,4 +359,152 @@ describe('Budget API', () => {
 			expect(result.amountCents).toBe(0);
 		});
 	});
+
+	describe('Story 3.3 - batch budget operations', () => {
+		describe('setBudgetsBatch', () => {
+			it('should invoke set_budgets_batch with array of budgets', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(3);
+
+				const { setBudgetsBatch } = await import('../../api/budgets');
+
+				const budgets: BudgetInput[] = [
+					{ categoryId: 'cat-1', month: '2025-01', amountCents: 40000 },
+					{ categoryId: 'cat-1', month: '2025-02', amountCents: 40000 },
+					{ categoryId: 'cat-1', month: '2025-03', amountCents: 40000 }
+				];
+
+				const result = await setBudgetsBatch(budgets);
+
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', { budgets });
+				expect(result).toBe(3);
+			});
+
+			it('should return count of affected rows', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(12);
+
+				const { setBudgetsBatch } = await import('../../api/budgets');
+
+				const budgets: BudgetInput[] = Array.from({ length: 12 }, (_, i) => ({
+					categoryId: 'cat-1',
+					month: `2025-${String(i + 1).padStart(2, '0')}`,
+					amountCents: 50000
+				}));
+
+				const result = await setBudgetsBatch(budgets);
+
+				expect(result).toBe(12);
+			});
+		});
+
+		describe('setFutureMonthsBudget', () => {
+			it('should set budget for 12 future months by default', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(12);
+
+				const { setFutureMonthsBudget } = await import('../../api/budgets');
+
+				const result = await setFutureMonthsBudget('cat-1', '2025-01', 40000);
+
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', {
+					budgets: expect.arrayContaining([
+						expect.objectContaining({ categoryId: 'cat-1', month: '2025-01', amountCents: 40000 }),
+						expect.objectContaining({ categoryId: 'cat-1', month: '2025-12', amountCents: 40000 })
+					])
+				});
+				expect(result).toBe(12);
+			});
+
+			it('should correctly calculate months that cross year boundary', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(12);
+
+				const { setFutureMonthsBudget } = await import('../../api/budgets');
+
+				await setFutureMonthsBudget('cat-1', '2025-06', 40000);
+
+				// Should include months from 2025-06 through 2026-05
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', {
+					budgets: expect.arrayContaining([
+						expect.objectContaining({ month: '2025-06' }),
+						expect.objectContaining({ month: '2025-12' }),
+						expect.objectContaining({ month: '2026-01' }),
+						expect.objectContaining({ month: '2026-05' })
+					])
+				});
+			});
+
+			it('should allow custom month count', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(6);
+
+				const { setFutureMonthsBudget } = await import('../../api/budgets');
+
+				const result = await setFutureMonthsBudget('cat-1', '2025-01', 40000, 6);
+
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', {
+					budgets: expect.any(Array)
+				});
+
+				// Verify the array has 6 elements
+				const call = vi.mocked(invoke).mock.calls[0];
+				const budgetsArg = (call[1] as { budgets: BudgetInput[] }).budgets;
+				expect(budgetsArg).toHaveLength(6);
+			});
+		});
+
+		describe('increaseFutureMonthsBudget', () => {
+			it('should increase budget by percentage for future months', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(12);
+
+				const { increaseFutureMonthsBudget } = await import('../../api/budgets');
+
+				// Base: 40000 cents (€400), increase 5% = €420 = 42000 cents
+				const result = await increaseFutureMonthsBudget('cat-1', '2025-01', 40000, 5);
+
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', {
+					budgets: expect.arrayContaining([
+						expect.objectContaining({ amountCents: 42000 })
+					])
+				});
+				expect(result).toBe(12);
+			});
+
+			it('should correctly round percentage calculations', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(12);
+
+				const { increaseFutureMonthsBudget } = await import('../../api/budgets');
+
+				// Base: 40050 cents (€400.50), increase 3% = €412.52 = 41252 cents
+				// 40050 * 3 / 100 = 1201.5, rounded = 1202
+				// 40050 + 1202 = 41252
+				await increaseFutureMonthsBudget('cat-1', '2025-01', 40050, 3);
+
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', {
+					budgets: expect.arrayContaining([
+						expect.objectContaining({ amountCents: 41252 })
+					])
+				});
+			});
+
+			it('should handle negative percentage (decrease)', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(12);
+
+				const { increaseFutureMonthsBudget } = await import('../../api/budgets');
+
+				// Base: 50000 cents (€500), decrease 10% = €450 = 45000 cents
+				await increaseFutureMonthsBudget('cat-1', '2025-01', 50000, -10);
+
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', {
+					budgets: expect.arrayContaining([
+						expect.objectContaining({ amountCents: 45000 })
+					])
+				});
+			});
+		});
+	});
 });

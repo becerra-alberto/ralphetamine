@@ -35,6 +35,8 @@
 		closeExpansion: void;
 		budgetChange: { categoryId: string; month: MonthString; amountCents: number };
 		navigate: { categoryId: string; month: MonthString; direction: 'next' | 'prev'; monthIndex: number; rowIndex: number };
+		setFutureMonths: { categoryId: string; month: MonthString; amountCents: number };
+		increaseFutureMonths: { categoryId: string; month: MonthString; percentage: number };
 	}>();
 
 	/**
@@ -96,6 +98,20 @@
 	}
 
 	/**
+	 * Handle set future months from context menu
+	 */
+	function handleSetFutureMonths(event: CustomEvent<{ categoryId: string; month: MonthString; amountCents: number }>) {
+		dispatch('setFutureMonths', event.detail);
+	}
+
+	/**
+	 * Handle increase future months from context menu
+	 */
+	function handleIncreaseFutureMonths(event: CustomEvent<{ categoryId: string; month: MonthString; percentage: number }>) {
+		dispatch('increaseFutureMonths', event.detail);
+	}
+
+	/**
 	 * Public method: Start editing a specific month's cell
 	 */
 	export function startEditingMonth(month: MonthString) {
@@ -144,6 +160,8 @@
 				on:expand={handleCellExpand}
 				on:budgetChange={handleBudgetChange}
 				on:navigate={handleCellNavigate}
+				on:setFutureMonths={handleSetFutureMonths}
+				on:increaseFutureMonths={handleIncreaseFutureMonths}
 			/>
 		{/each}
 	</div>

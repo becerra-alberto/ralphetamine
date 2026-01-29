@@ -24,7 +24,8 @@
 		calculateUncategorized12MTotals
 	} from '$lib/utils/budgetCalculations';
 	import { getTransactions } from '$lib/api/transactions';
-	import { setBudget } from '$lib/api/budgets';
+	import { setBudget, setFutureMonthsBudget, increaseFutureMonthsBudget } from '$lib/api/budgets';
+	import { toastStore } from '$lib/stores/toast';
 	import type { MiniTransaction } from './TransactionMiniList.svelte';
 	import MonthHeader from './MonthHeader.svelte';
 	import YearHeader from './YearHeader.svelte';
@@ -395,6 +396,98 @@
 			targetRow.startEditingMonth(targetMonth);
 		}
 	}
+
+	/**
+	 * Helper to calculate future months from a starting month
+	 */
+	function getFutureMonths(startMonth: MonthString, count: number): MonthString[] {
+		const result: MonthString[] = [];
+		let currentMonth = startMonth;
+
+		for (let i = 0; i < count; i++) {
+			result.push(currentMonth);
+			const [year, m] = currentMonth.split('-').map(Number);
+			if (m === 12) {
+				currentMonth = `${year + 1}-01`;
+			} else {
+				currentMonth = `${year}-${String(m + 1).padStart(2, '0')}`;
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * Handle "Set for all future months" from context menu
+	 */
+	async function handleSetFutureMonths(event: CustomEvent<{ categoryId: string; month: MonthString; amountCents: number }>) {
+		const { categoryId, month, amountCents } = event.detail;
+
+		try {
+			const updatedCount = await setFutureMonthsBudget(categoryId, month, amountCents, 12);
+			toastStore.success(`Updated ${updatedCount} months`);
+
+			// Optimistically update the budget store with new values
+			const futureMonths = getFutureMonths(month, 12);
+			const now = new Date().toISOString();
+			futureMonths.forEach((m) => {
+				budgetStore.updateBudget(categoryId, m, {
+					categoryId,
+					month: m,
+					amountCents,
+					note: null,
+					createdAt: now,
+					updatedAt: now
+				});
+			});
+		} catch (error) {
+			console.error('Failed to set future months:', error);
+			toastStore.error('Failed to update budgets');
+		}
+	}
+
+	/**
+	 * Handle "Increase future months by %" from context menu
+	 */
+	async function handleIncreaseFutureMonths(event: CustomEvent<{ categoryId: string; month: MonthString; percentage: number }>) {
+		const { categoryId, month, percentage } = event.detail;
+
+		// Get the current budget value for this cell
+		const cellKey = createCellKey(categoryId, month);
+		const cell = cellsMap.get(cellKey);
+		const baseCents = cell?.budgetedCents ?? 0;
+
+		if (baseCents === 0) {
+			toastStore.warning('Cannot increase: current budget is €0.00');
+			return;
+		}
+
+		// Calculate new amount
+		const increaseCents = Math.round((baseCents * percentage) / 100);
+		const newAmountCents = baseCents + increaseCents;
+
+		try {
+			const updatedCount = await increaseFutureMonthsBudget(categoryId, month, baseCents, percentage, 12);
+			toastStore.success(`Increased ${updatedCount} months by ${percentage}%`);
+
+			// Optimistically update the budget store with new values
+			const futureMonths = getFutureMonths(month, 12);
+			const now = new Date().toISOString();
+			futureMonths.forEach((m) => {
+				budgetStore.updateBudget(categoryId, m, {
+					categoryId,
+					month: m,
+					amountCents: newAmountCents,
+					note: null,
+					createdAt: now,
+					updatedAt: now
+				});
+			});
+		} catch (error) {
+			console.error('Failed to increase future months:', error);
+			toastStore.error('Failed to update budgets');
+		}
+	}
 </script>
 
 <svelte:window on:click={handleClickOutside} />
@@ -499,6 +592,8 @@
 										on:closeExpansion={closeExpansion}
 										on:budgetChange={handleBudgetChange}
 										on:navigate={handleCellNavigate}
+										on:setFutureMonths={handleSetFutureMonths}
+										on:increaseFutureMonths={handleIncreaseFutureMonths}
 									/>
 								{/each}
 							</div>
@@ -524,6 +619,8 @@
 							on:closeExpansion={closeExpansion}
 							on:budgetChange={handleBudgetChange}
 							on:navigate={handleCellNavigate}
+							on:setFutureMonths={handleSetFutureMonths}
+							on:increaseFutureMonths={handleIncreaseFutureMonths}
 						/>
 					{/each}
 				{/if}
