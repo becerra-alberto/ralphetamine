@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+coverage/
+.svelte-kit/
+build/
+ralph.log
+.claude/
+_bmad-output/
