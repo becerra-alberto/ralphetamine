@@ -1,61 +1,19 @@
-/// <reference types="node" />
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/svelte';
-import { writable, get, type Writable } from 'svelte/store';
-
-// Declare require for CommonJS compatibility in vi.hoisted
-declare const require: NodeJS.Require;
-
-// Create hoisted mock stores so they're available during vi.mock hoisting
-const { mockPageStore, mockCurrentRoute, mockIsCollapsed } = vi.hoisted(() => {
-	// eslint-disable-next-line @typescript-eslint/no-require-imports
-	const svelteStore = require('svelte/store') as typeof import('svelte/store');
-	const routeStore = svelteStore.writable<string>('/');
-	return {
-		mockPageStore: svelteStore.writable<{ url: { pathname: string } }>({ url: { pathname: '/' } }),
-		mockCurrentRoute: {
-			subscribe: routeStore.subscribe,
-			set: routeStore.set,
-			setRoute: (route: string) => routeStore.set(route),
-			updateFromPath: (path: string) => {
-				const validRoutes = ['/', '/budget', '/transactions', '/net-worth'];
-				const normalizedPath = path === '' ? '/' : path;
-				if (validRoutes.includes(normalizedPath)) {
-					routeStore.set(normalizedPath);
-				}
-			}
-		},
-		mockIsCollapsed: svelteStore.writable<boolean>(false)
-	};
-});
-
-vi.mock('$lib/stores/navigation', () => ({
-	navigationItems: [
-		{ route: '/', label: 'Home', icon: 'home', shortcut: '⌘1' },
-		{ route: '/budget', label: 'Budget', icon: 'budget', shortcut: '⌘2' },
-		{ route: '/transactions', label: 'Transactions', icon: 'transactions', shortcut: '⌘3' },
-		{ route: '/net-worth', label: 'Net Worth', icon: 'net-worth', shortcut: '⌘4' }
-	],
-	currentRoute: mockCurrentRoute,
-	isCollapsed: mockIsCollapsed
-}));
-
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn()
-}));
-
-vi.mock('$app/stores', () => ({
-	page: mockPageStore
-}));
-
 import Sidebar from '../../components/Sidebar.svelte';
+import { page } from '$app/stores';
+import { currentRoute, isCollapsed } from '$lib/stores/navigation';
+import type { Writable } from 'svelte/store';
+
+// Type assertions for the mock stores (using unknown as intermediate cast)
+const mockPage = page as unknown as Writable<{ url: { pathname: string } }>;
 
 describe('Sidebar Component', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockCurrentRoute.set('/');
-		mockIsCollapsed.set(false);
-		mockPageStore.set({ url: { pathname: '/' } });
+		currentRoute.set('/');
+		isCollapsed.set(false);
+		mockPage.set({ url: { pathname: '/' } });
 	});
 
 	describe('rendering', () => {
@@ -125,8 +83,8 @@ describe('Sidebar Component', () => {
 	describe('active state', () => {
 		it('should highlight active nav item with accent background', async () => {
 			// Set the page pathname first, then currentRoute updates via effect
-			mockPageStore.set({ url: { pathname: '/budget' } });
-			mockCurrentRoute.set('/budget');
+			mockPage.set({ url: { pathname: '/budget' } });
+			currentRoute.set('/budget');
 
 			const { getByTestId } = render(Sidebar, {
 				props: { collapsed: false }
@@ -140,8 +98,8 @@ describe('Sidebar Component', () => {
 		});
 
 		it('should show left border indicator on active item', async () => {
-			mockPageStore.set({ url: { pathname: '/transactions' } });
-			mockCurrentRoute.set('/transactions');
+			mockPage.set({ url: { pathname: '/transactions' } });
+			currentRoute.set('/transactions');
 
 			const { getByTestId } = render(Sidebar, {
 				props: { collapsed: false }
