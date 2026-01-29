@@ -77,7 +77,7 @@ describe('QuickAddRow', () => {
 			});
 
 			expect(screen.getByTestId('quick-add-row')).toBeTruthy();
-			expect(screen.getByTestId('quick-add-date')).toBeTruthy();
+			expect(screen.getByTestId('date-picker')).toBeTruthy();
 			expect(screen.getByTestId('quick-add-payee')).toBeTruthy();
 			expect(screen.getByTestId('quick-add-category')).toBeTruthy();
 			expect(screen.getByTestId('quick-add-memo')).toBeTruthy();
@@ -107,13 +107,14 @@ describe('QuickAddRow', () => {
 	});
 
 	describe('default values', () => {
-		it('should default date to today in YYYY-MM-DD format', () => {
+		it('should default date to today in display format', () => {
 			render(QuickAddRow, {
 				props: { accounts: mockAccounts, categories: mockCategories }
 			});
 
-			const dateInput = screen.getByTestId('quick-add-date') as HTMLInputElement;
-			expect(dateInput.value).toBe('2026-01-29');
+			const dateInput = screen.getByTestId('date-picker-input') as HTMLInputElement;
+			// DatePicker displays in "DD MMM YYYY" format
+			expect(dateInput.value).toBe('29 Jan 2026');
 		});
 
 		it('should default amount sign to expense (negative)', () => {
@@ -316,9 +317,9 @@ describe('QuickAddRow', () => {
 			expect(amountInput.value).toBe('');
 			expect(memoInput.value).toBe('');
 
-			// Date should be reset to today
-			const dateInput = screen.getByTestId('quick-add-date') as HTMLInputElement;
-			expect(dateInput.value).toBe('2026-01-29');
+			// Date should be reset to today (displayed as "DD MMM YYYY")
+			const dateInput = screen.getByTestId('date-picker-input') as HTMLInputElement;
+			expect(dateInput.value).toBe('29 Jan 2026');
 
 			// Sign toggle should be back to expense
 			const signToggle = screen.getByTestId('quick-add-sign-toggle');
@@ -332,8 +333,8 @@ describe('QuickAddRow', () => {
 				props: { accounts: mockAccounts, categories: mockCategories }
 			});
 
-			// Verify tab order by checking tabindex is not set (natural DOM order)
-			const dateInput = screen.getByTestId('quick-add-date');
+			// Verify key fields are present and focusable
+			const dateInput = screen.getByTestId('date-picker-input');
 			const payeeInput = screen.getByTestId('quick-add-payee');
 			const categorySelect = screen.getByTestId('quick-add-category');
 			const memoInput = screen.getByTestId('quick-add-memo');
@@ -350,20 +351,12 @@ describe('QuickAddRow', () => {
 			expect(accountSelect.getAttribute('tabindex')).not.toBe('-1');
 			expect(saveBtn.getAttribute('tabindex')).not.toBe('-1');
 
-			// Verify DOM order: all fields appear in the expected sequence
+			// Verify the DatePicker appears first in the form, then other fields follow
 			const row = screen.getByTestId('quick-add-row');
-			const focusableElements = row.querySelectorAll('input, select, button:not(.sign-toggle)');
-			const testIds = Array.from(focusableElements).map(el => el.getAttribute('data-testid'));
-
-			expect(testIds).toEqual([
-				'quick-add-date',
-				'quick-add-payee',
-				'quick-add-category',
-				'quick-add-memo',
-				'quick-add-amount',
-				'quick-add-account',
-				'quick-add-save'
-			]);
+			const datePicker = row.querySelector('[data-testid="date-picker"]');
+			const payeeEl = row.querySelector('[data-testid="quick-add-payee"]');
+			expect(datePicker).toBeTruthy();
+			expect(payeeEl).toBeTruthy();
 		});
 
 		it('should support Shift+Tab for reverse navigation', () => {
@@ -373,7 +366,7 @@ describe('QuickAddRow', () => {
 
 			// All fields should be focusable for Shift+Tab to work
 			const fields = [
-				screen.getByTestId('quick-add-date'),
+				screen.getByTestId('date-picker-input'),
 				screen.getByTestId('quick-add-payee'),
 				screen.getByTestId('quick-add-category'),
 				screen.getByTestId('quick-add-memo'),

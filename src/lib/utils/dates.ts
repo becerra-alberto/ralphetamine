@@ -335,3 +335,41 @@ export function getThisQuarterRangeArray(): MonthString[] {
   const { startMonth, endMonth } = getThisQuarterRange();
   return getMonthRange(startMonth, endMonth);
 }
+
+// ============================================
+// Date Display Formatting (Story 4.6)
+// ============================================
+
+const DISPLAY_MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Format an ISO date string (YYYY-MM-DD) to display format "DD MMM YYYY"
+ * e.g., "2025-01-28" → "28 Jan 2025"
+ */
+export function formatDateDisplay(isoDate: string): string {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return isoDate;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+
+  return `${day} ${DISPLAY_MONTH_SHORT[month - 1]} ${year}`;
+}
+
+/**
+ * Convert a date to ISO format (YYYY-MM-DD) for storage.
+ * Accepts a Date object or returns today's date as default.
+ */
+export function toISODate(date?: Date): string {
+  const d = date ?? new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Alias for formatDateDisplay - used by tests referencing "formatDate"
+ */
+export const formatDate = formatDateDisplay;

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { getTodayDate } from '$lib/types/transaction';
+	import DatePicker from '$lib/components/shared/DatePicker.svelte';
 	import type { Account } from '$lib/types/account';
 	import type { CategoryNode } from '$lib/types/ui';
 
@@ -34,7 +35,6 @@
 	let errors: { payee?: string; amount?: string; account?: string } = {};
 
 	// Element references for focus management
-	let dateInput: HTMLInputElement;
 	let payeeInput: HTMLInputElement;
 	let categorySelect: HTMLSelectElement;
 	let memoInput: HTMLInputElement;
@@ -182,14 +182,10 @@
 >
 	<div class="quick-add-fields">
 		<div class="field field-date">
-			<input
-				bind:this={dateInput}
-				bind:value={date}
-				type="date"
-				class="input input-date"
-				data-testid="quick-add-date"
-				aria-label="Transaction date"
-				on:keydown={handleKeydown}
+			<DatePicker
+				value={date}
+				label="Transaction date"
+				on:change={(e) => { date = e.detail.date; }}
 			/>
 		</div>
 

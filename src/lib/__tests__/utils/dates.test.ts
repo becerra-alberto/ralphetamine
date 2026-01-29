@@ -20,6 +20,8 @@ import {
 	getThisQuarterRange,
 	isValidDateRange,
 	formatDateRange,
+	formatDateDisplay,
+	toISODate,
 	DATE_RANGE_OPTIONS
 } from '../../utils/dates';
 
@@ -299,6 +301,41 @@ describe('Date Utilities', () => {
 			it('should format cross-year range', () => {
 				expect(formatDateRange('2024-02', '2025-01')).toBe('Feb 2024 - Jan 2025');
 			});
+		});
+	});
+
+	describe('formatDateDisplay (Story 4.6)', () => {
+		it('should format ISO date to "DD MMM YYYY" format', () => {
+			expect(formatDateDisplay('2025-01-28')).toBe('28 Jan 2025');
+		});
+
+		it('should format single-digit days without leading zero', () => {
+			expect(formatDateDisplay('2025-03-05')).toBe('5 Mar 2025');
+		});
+
+		it('should handle December correctly', () => {
+			expect(formatDateDisplay('2025-12-31')).toBe('31 Dec 2025');
+		});
+
+		it('should return input as-is for invalid format', () => {
+			expect(formatDateDisplay('invalid')).toBe('invalid');
+		});
+	});
+
+	describe('toISODate (Story 4.6)', () => {
+		it('should format Date object to YYYY-MM-DD', () => {
+			const date = new Date(2025, 0, 28); // Jan 28, 2025
+			expect(toISODate(date)).toBe('2025-01-28');
+		});
+
+		it('should pad single-digit month and day with zeros', () => {
+			const date = new Date(2025, 2, 5); // Mar 5, 2025
+			expect(toISODate(date)).toBe('2025-03-05');
+		});
+
+		it('should return today when no argument provided', () => {
+			const result = toISODate();
+			expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 		});
 	});
 });
