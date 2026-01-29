@@ -6,6 +6,9 @@
 	import SearchBar from '$lib/components/transactions/SearchBar.svelte';
 	import FilterPanel from '$lib/components/transactions/FilterPanel.svelte';
 	import UncategorizedBanner from '$lib/components/transactions/UncategorizedBanner.svelte';
+	import QuickAddRow from '$lib/components/transactions/QuickAddRow.svelte';
+	import { createTransaction } from '$lib/api/transactions';
+	import type { TransactionInput } from '$lib/types/transaction';
 	import {
 		transactionStore,
 		filterTransactionsBySearch,
@@ -292,6 +295,38 @@
 	}
 
 	let showUncategorizedOnly = false;
+	let lastUsedAccountId: string | null = null;
+
+	async function handleQuickAddSave(event: CustomEvent<{
+		date: string;
+		payee: string;
+		categoryId: string | null;
+		memo: string | null;
+		amountCents: number;
+		accountId: string;
+	}>) {
+		const { date, payee, categoryId, memo, amountCents, accountId } = event.detail;
+
+		try {
+			const input: TransactionInput = {
+				date,
+				payee,
+				amountCents,
+				accountId,
+				importSource: 'Manual'
+			};
+			if (categoryId) input.categoryId = categoryId;
+			if (memo) input.memo = memo;
+
+			await createTransaction(input);
+			lastUsedAccountId = accountId;
+
+			// Reload transactions to show the new one
+			await loadTransactions();
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to create transaction';
+		}
+	}
 
 	function handleCategorizeNow() {
 		// Clear other filters and show only uncategorized
@@ -381,6 +416,13 @@
 				</button>
 			</div>
 		{/if}
+
+		<QuickAddRow
+			{accounts}
+			{categories}
+			{lastUsedAccountId}
+			on:save={handleQuickAddSave}
+		/>
 
 		<div class="table-container">
 			{#if (searchQuery.length >= 2 || filterCount > 0) && filteredTransactions.length === 0 && !isLoading}
