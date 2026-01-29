@@ -364,3 +364,22 @@ Story 6.5: Implement Command Palette - COMPLETED
   - All 1768 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
   - Commit: 3562278
 Story 6.5: COMPLETED - feat(story-6.5): Implement Command Palette
+
+[LEARN] Story 6.5 was already fully implemented and committed by a prior run (commit 3562278). All source files, tests, and layout integration were in place. When encountering already-implemented stories, verify the commit exists on the current branch and run validation to confirm everything passes.
+[DONE] Story 6.5 - command palette - Thu 29 Jan 2026 15:48:16 CST
+
+Story 6.5: Implement Command Palette - COMPLETED
+  - Commit: 3562278
+Story 6.5: COMPLETED - feat(story-6.5): Implement Command Palette
+
+Story 6.6: Add Recent Commands History - COMPLETED
+  - storage.ts: localStorage helpers (getRecentCommandIds, addRecentCommandId, clearRecentCommandIds)
+  - commands.ts: Added getRecentCommands, addToRecentCommands, clearRecentCommands wrappers
+  - CommandPalette.svelte: Recent section with header, command list, Clear recent button
+  - Recent shown when search empty and history exists, hidden when typing
+  - Max 5 recent, deduplication (most recent to top), localStorage persistence
+  - Dark mode support
+  - Unit tests: storage.test.ts (9), commands.test.ts (+6), CommandPalette.test.ts (+7 recent tests)
+  - All 1790 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: 3b762cd
+Story 6.6: COMPLETED - feat(story-6.6): Add Recent Commands History
