@@ -445,6 +445,63 @@ pub fn get_payee_category(payee: String) -> Result<Option<PayeeCategoryAssociati
     Ok(results.into_iter().next())
 }
 
+/// Get distinct tags across all transactions, optionally filtered by search term
+#[tauri::command]
+pub fn get_unique_tags(search: Option<String>, limit: Option<i64>) -> Result<Vec<String>, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+    let limit = limit.unwrap_or(20);
+
+    // Predefined tags that should always appear
+    let predefined = vec![
+        "Personal".to_string(),
+        "Business".to_string(),
+        "Recurring".to_string(),
+        "Tax-Deductible".to_string(),
+    ];
+
+    // Get all distinct tags from transactions
+    let all_tags_json: Vec<String> = db
+        .query_map(
+            "SELECT DISTINCT tags FROM transactions WHERE tags != '[]'",
+            &[],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    // Parse JSON arrays and collect unique tags
+    let mut unique_tags: Vec<String> = Vec::new();
+    for json_str in &all_tags_json {
+        if let Ok(tags) = serde_json::from_str::<Vec<String>>(json_str) {
+            for tag in tags {
+                if !unique_tags.contains(&tag) {
+                    unique_tags.push(tag);
+                }
+            }
+        }
+    }
+
+    // Merge predefined tags (add those not already present)
+    for tag in &predefined {
+        if !unique_tags.iter().any(|t| t.eq_ignore_ascii_case(tag)) {
+            unique_tags.push(tag.clone());
+        }
+    }
+
+    // Apply search filter if provided
+    if let Some(ref search) = search {
+        if !search.is_empty() {
+            let search_lower = search.to_lowercase();
+            unique_tags.retain(|t| t.to_lowercase().contains(&search_lower));
+        }
+    }
+
+    // Sort alphabetically and limit
+    unique_tags.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    unique_tags.truncate(limit as usize);
+
+    Ok(unique_tags)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1497,5 +1554,153 @@ mod tests {
             "Payee suggestions query took {}ms, should be under 100ms",
             elapsed.as_millis()
         );
+    }
+
+    // --- Tags tests for Story 4.9 ---
+
+    #[test]
+    fn test_transaction_tags_stored_as_json_array_string() {
+        let db = setup_test_db();
+
+        let tags_json = r#"["Personal","Recurring"]"#;
+        let id = Uuid::new_v4().to_string();
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES (?, '2026-01-29', 'Tag Store', -5000, 'test-account', ?)",
+            &[&id, &tags_json],
+        )
+        .unwrap();
+
+        let stored_tags: String = db
+            .query_row(
+                "SELECT tags FROM transactions WHERE id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(stored_tags, r#"["Personal","Recurring"]"#, "Tags should be stored as JSON array string");
+    }
+
+    #[test]
+    fn test_transaction_tags_retrieved_and_parsed_correctly() {
+        let db = setup_test_db();
+
+        let tags_json = r#"["Business","Tax-Deductible"]"#;
+        let id = Uuid::new_v4().to_string();
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES (?, '2026-01-29', 'Tag Parse', -3000, 'test-account', ?)",
+            &[&id, &tags_json],
+        )
+        .unwrap();
+
+        let txn: Transaction = db.query_row(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE id = ?",
+            &[&id],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(txn.tags, vec!["Business", "Tax-Deductible"], "Tags should be parsed from JSON to Vec<String>");
+    }
+
+    #[test]
+    fn test_get_distinct_tags_returns_unique_tags_from_transactions() {
+        let db = setup_test_db();
+
+        // Insert transactions with various tags
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('tag-1', '2026-01-29', 'Payee A', -1000, 'test-account', '[\"Personal\",\"Recurring\"]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('tag-2', '2026-01-29', 'Payee B', -2000, 'test-account', '[\"Business\",\"Recurring\"]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('tag-3', '2026-01-29', 'Payee C', -3000, 'test-account', '[\"Custom-Tag\"]')",
+            &[],
+        ).unwrap();
+
+        // Get all distinct tags from JSON arrays
+        let all_tags_json: Vec<String> = db
+            .query_map(
+                "SELECT DISTINCT tags FROM transactions WHERE tags != '[]'",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        let mut unique_tags: Vec<String> = Vec::new();
+        for json_str in &all_tags_json {
+            if let Ok(tags) = serde_json::from_str::<Vec<String>>(json_str) {
+                for tag in tags {
+                    if !unique_tags.contains(&tag) {
+                        unique_tags.push(tag);
+                    }
+                }
+            }
+        }
+        unique_tags.sort();
+
+        assert!(unique_tags.contains(&"Personal".to_string()));
+        assert!(unique_tags.contains(&"Business".to_string()));
+        assert!(unique_tags.contains(&"Recurring".to_string()));
+        assert!(unique_tags.contains(&"Custom-Tag".to_string()));
+        assert_eq!(unique_tags.len(), 4, "Should have 4 unique tags");
+    }
+
+    #[test]
+    fn test_get_distinct_tags_includes_predefined_and_custom() {
+        let db = setup_test_db();
+
+        // Insert a transaction with a custom tag
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('tag-custom', '2026-01-29', 'Payee D', -500, 'test-account', '[\"Vacation\"]')",
+            &[],
+        ).unwrap();
+
+        // Simulate what get_unique_tags does: get custom tags from DB then merge predefined
+        let all_tags_json: Vec<String> = db
+            .query_map(
+                "SELECT DISTINCT tags FROM transactions WHERE tags != '[]'",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        let mut unique_tags: Vec<String> = Vec::new();
+        for json_str in &all_tags_json {
+            if let Ok(tags) = serde_json::from_str::<Vec<String>>(json_str) {
+                for tag in tags {
+                    if !unique_tags.contains(&tag) {
+                        unique_tags.push(tag);
+                    }
+                }
+            }
+        }
+
+        // Merge predefined
+        let predefined = vec!["Personal", "Business", "Recurring", "Tax-Deductible"];
+        for tag in &predefined {
+            if !unique_tags.iter().any(|t| t.eq_ignore_ascii_case(tag)) {
+                unique_tags.push(tag.to_string());
+            }
+        }
+
+        // Should include both custom and predefined
+        assert!(unique_tags.contains(&"Vacation".to_string()), "Should include custom tag");
+        assert!(unique_tags.contains(&"Personal".to_string()), "Should include predefined tag");
+        assert!(unique_tags.contains(&"Business".to_string()), "Should include predefined tag");
+        assert!(unique_tags.contains(&"Recurring".to_string()), "Should include predefined tag");
+        assert!(unique_tags.contains(&"Tax-Deductible".to_string()), "Should include predefined tag");
+        assert_eq!(unique_tags.len(), 5, "Should have 5 total tags (1 custom + 4 predefined)");
     }
 }

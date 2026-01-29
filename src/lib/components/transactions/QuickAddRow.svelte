@@ -4,11 +4,13 @@
 	import DatePicker from '$lib/components/shared/DatePicker.svelte';
 	import PayeeInput from '$lib/components/transactions/PayeeInput.svelte';
 	import CategorySelect from '$lib/components/transactions/CategorySelect.svelte';
+	import TagSelect from '$lib/components/shared/TagSelect.svelte';
 	import type { Account } from '$lib/types/account';
 	import type { CategoryNode } from '$lib/types/ui';
 
 	export let accounts: Account[] = [];
 	export let categories: CategoryNode[] = [];
+	export let availableTags: string[] = [];
 	export let lastUsedAccountId: string | null = null;
 
 	const dispatch = createEventDispatcher<{
@@ -19,6 +21,7 @@
 			memo: string | null;
 			amountCents: number;
 			accountId: string;
+			tags: string[];
 		};
 	}>();
 
@@ -27,6 +30,7 @@
 	let payee = '';
 	let categoryId = '';
 	let memo = '';
+	let tags: string[] = [];
 	let amountStr = '';
 	let isExpense = true;
 	let accountId = '';
@@ -103,7 +107,8 @@
 			categoryId: categoryId || null,
 			memo: memo.trim() || null,
 			amountCents: finalCents,
-			accountId
+			accountId,
+			tags
 		});
 
 		// Reset form
@@ -123,6 +128,7 @@
 		payee = '';
 		categoryId = '';
 		memo = '';
+		tags = [];
 		amountStr = '';
 		isExpense = true;
 		errors = {};
@@ -228,6 +234,16 @@
 				data-testid="quick-add-memo"
 				aria-label="Memo"
 				on:keydown={handleKeydown}
+			/>
+		</div>
+
+		<div class="field field-tags" data-testid="quick-add-tags">
+			<TagSelect
+				value={tags}
+				{availableTags}
+				placeholder="Tags..."
+				testId="quick-add-tag-select"
+				on:change={(e) => { tags = e.detail.tags; }}
 			/>
 		</div>
 
@@ -352,6 +368,11 @@
 	.field-memo {
 		flex: 1;
 		min-width: 80px;
+	}
+
+	.field-tags {
+		flex: 1;
+		min-width: 100px;
 	}
 
 	.field-amount {

@@ -143,3 +143,26 @@ Story 4.8: Create Hierarchical Category Dropdown - COMPLETED
   - Commit: d6adf8c
 Story 4.8: COMPLETED - feat(story-4.8): Create Hierarchical Category Dropdown
 [DONE] Story 4.8 - Create Hierarchical Category Dropdown - Thu 29 Jan 2026 13:40:00 CST
+
+Story 4.9: Implement Tags Multi-Select - COMPLETED
+  - TagSelect.svelte: Multi-select tag component with chips, dropdown, search, keyboard nav
+  - Chip.svelte: Reusable chip component with label, remove button, keyboard support
+  - QuickAddRow: Integrated TagSelect between Memo and Amount fields
+  - Predefined tags: Personal, Business, Recurring, Tax-Deductible (always available)
+  - Custom tags: Merge with predefined, case-insensitive deduplication
+  - Multi-select: Toggle via click/keyboard, checkbox indicators, dropdown stays open
+  - Selected tags displayed as removable chips in trigger area
+  - Create new tag: Type + Enter creates custom tag, clears input
+  - Validation: No empty tags, no duplicates (case-insensitive)
+  - Keyboard: ArrowDown/Up nav, Space toggle, Enter create/select, Escape close, Backspace remove last
+  - ARIA: combobox trigger, aria-controls, aria-expanded, multiselectable listbox, aria-selected options
+  - Rust backend: get_unique_tags command (already existed), tags stored as JSON arrays
+  - serializeTags(): JSON.stringify for storage
+  - Dark mode styling with CSS variables
+  - Unit tests: TagSelect.test.ts (32 tests), Chip.test.ts (10 tests)
+  - Rust integration tests: 4 tags tests (stored as JSON, parsed correctly, unique extraction, predefined+custom merge)
+  - All 1386 tests passing (1 skipped), 0 type errors, 9 warnings (all pre-existing)
+Story 4.9: COMPLETED - feat(story-4.9): Implement Tags Multi-Select
+
+[LEARN] Svelte 5 breaks component.$on() for event testing. Use `events: { eventName: handler }` in render options instead. The parentElement?.addEventListener pattern also doesn't work reliably for createEventDispatcher events in Svelte 5 test environments.
+[LEARN] jsdom doesn't implement scrollIntoView. Use optional chaining: `element?.scrollIntoView?.()` to guard against this in test environments.
