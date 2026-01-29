@@ -184,7 +184,9 @@ Story 5.1: Create Net Worth Summary Section - COMPLETED
   - Unit tests: NetWorthSummary.test.ts (14 tests), SummaryCard.test.ts (12 tests), netWorth.test.ts (15 tests)
   - Rust integration tests: 4 tests (correct totals, cents arithmetic, type aggregation, filtering)
   - All 1428 tests passing (1 skipped), 0 type errors, 9 warnings (all pre-existing)
+  - Commit: 60d7d4c
 Story 5.1: COMPLETED - feat(story-5.1): Create Net Worth Summary Section
+[DONE] Story 5.1 - Create Net Worth Summary Section - Thu 29 Jan 2026 14:00:00 CST
 
 [LEARN] Svelte 5 breaks component.$on() for event testing. Use `events: { eventName: handler }` in render options instead. The parentElement?.addEventListener pattern also doesn't work reliably for createEventDispatcher events in Svelte 5 test environments.
 [LEARN] jsdom doesn't implement scrollIntoView. Use optional chaining: `element?.scrollIntoView?.()` to guard against this in test environments.
