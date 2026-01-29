@@ -192,9 +192,220 @@ describe('Shortcuts Action', () => {
 		});
 	});
 
+	describe('letter navigation shortcuts', () => {
+		it('should call goto with "/budget" on Cmd+U', () => {
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'u',
+				metaKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).toHaveBeenCalledWith('/budget');
+			expect(event.preventDefault).toHaveBeenCalled();
+
+			action.destroy();
+		});
+
+		it('should call goto with "/transactions" on Cmd+T', () => {
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: 't',
+				metaKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).toHaveBeenCalledWith('/transactions');
+			expect(event.preventDefault).toHaveBeenCalled();
+
+			action.destroy();
+		});
+
+		it('should call goto with "/net-worth" on Cmd+W', () => {
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'w',
+				metaKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).toHaveBeenCalledWith('/net-worth');
+			expect(event.preventDefault).toHaveBeenCalled();
+
+			action.destroy();
+		});
+
+		it('should handle uppercase key press (Cmd+T vs Cmd+t)', () => {
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'T',
+				metaKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).toHaveBeenCalledWith('/transactions');
+
+			action.destroy();
+		});
+	});
+
+	describe('OS reserved keys', () => {
+		it('should NOT capture Cmd+Q (OS quit)', () => {
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'q',
+				metaKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).not.toHaveBeenCalled();
+			expect(event.preventDefault).not.toHaveBeenCalled();
+
+			action.destroy();
+		});
+
+		it('should NOT capture Cmd+H (OS hide)', () => {
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'h',
+				metaKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).not.toHaveBeenCalled();
+			expect(event.preventDefault).not.toHaveBeenCalled();
+
+			action.destroy();
+		});
+	});
+
+	describe('modal blocking', () => {
+		it('should block navigation shortcuts when modal is open', async () => {
+			// Import and set modal state
+			const { openModals } = await import('../../stores/modals');
+			openModals.open('test-modal');
+
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: '1',
+				metaKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).not.toHaveBeenCalled();
+
+			openModals.close('test-modal');
+			action.destroy();
+		});
+
+		it('should allow navigation shortcuts when modal is closed', async () => {
+			const { openModals } = await import('../../stores/modals');
+			openModals.closeAll();
+
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: '1',
+				metaKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).toHaveBeenCalledWith('/');
+
+			action.destroy();
+		});
+	});
+
+	describe('shift key handling', () => {
+		it('should not trigger non-shift shortcut when shift is held', () => {
+			const action = shortcuts(mockElement);
+
+			const handler = (addEventListenerSpy.mock.calls as MockCall[]).find(
+				(call) => call[0] === 'keydown'
+			)?.[1] as (e: KeyboardEvent) => void;
+
+			const event = new KeyboardEvent('keydown', {
+				key: '1',
+				metaKey: true,
+				shiftKey: true,
+				bubbles: true
+			});
+			Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+
+			handler(event);
+
+			expect(goto).not.toHaveBeenCalled();
+
+			action.destroy();
+		});
+	});
+
 	describe('custom shortcuts', () => {
 		it('should accept custom shortcuts configuration', () => {
-			const customShortcuts: ShortcutConfig[] = [{ key: 'h', meta: true, route: '/' }];
+			const customShortcuts: ShortcutConfig[] = [{ key: 'x', meta: true, route: '/' }];
 
 			const action = shortcuts(mockElement, customShortcuts);
 
@@ -203,7 +414,7 @@ describe('Shortcuts Action', () => {
 			)?.[1] as (e: KeyboardEvent) => void;
 
 			const event = new KeyboardEvent('keydown', {
-				key: 'h',
+				key: 'x',
 				metaKey: true,
 				bubbles: true
 			});
