@@ -1,14 +1,22 @@
 <script lang="ts">
+	import { createEventDispatcher } from 'svelte';
 	import { formatCentsCurrency } from '$lib/utils/currency';
 	import AccountRow from './AccountRow.svelte';
 	import type { AccountCategory } from '$lib/utils/accountGroups';
 
 	export let category: AccountCategory;
+	export let editable = false;
 	export let testId = 'liability-category';
+
+	const dispatch = createEventDispatcher();
 
 	// totalCents for liabilities is already absolute (from groupLiabilitiesByCategory)
 	$: formattedTotal = formatCentsCurrency(category.totalCents);
 	$: formattedPercent = `${category.percentOfTotal.toFixed(1)}%`;
+
+	function handleBalanceSave(event: CustomEvent) {
+		dispatch('balanceSave', event.detail);
+	}
 </script>
 
 <div class="liability-category" data-testid={testId}>
@@ -21,7 +29,7 @@
 	</div>
 	<div class="account-list" data-testid="{testId}-accounts">
 		{#each category.accounts as account, i (account.id)}
-			<AccountRow {account} showAbsoluteBalance={true} testId="{testId}-account-{i}" />
+			<AccountRow {account} {editable} showAbsoluteBalance={true} testId="{testId}-account-{i}" on:balanceSave={handleBalanceSave} />
 		{/each}
 	</div>
 </div>

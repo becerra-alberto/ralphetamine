@@ -3,35 +3,46 @@
 	import NetWorthSummary from '$lib/components/net-worth/NetWorthSummary.svelte';
 	import AssetsSection from '$lib/components/net-worth/AssetsSection.svelte';
 	import LiabilitiesSection from '$lib/components/net-worth/LiabilitiesSection.svelte';
+	import AddAccountModal from '$lib/components/net-worth/AddAccountModal.svelte';
 	import { netWorthStore } from '$lib/stores/netWorth';
-	import { getNetWorthSummary, saveNetWorthSnapshot, getMomChange } from '$lib/api/netWorth';
+	import {
+		getNetWorthSummary,
+		saveNetWorthSnapshot,
+		getMomChange,
+		updateAccountBalance,
+		createAccount
+	} from '$lib/api/netWorth';
 
 	let isLoading = true;
 	let error: string | null = null;
+	let showAddAccountModal = false;
+	let addAccountDefaultType = 'checking';
 
 	function getCurrentMonth(): string {
 		const now = new Date();
 		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 	}
 
+	async function refreshData() {
+		const summary = await getNetWorthSummary();
+		netWorthStore.setSummary(summary);
+
+		const currentMonth = getCurrentMonth();
+		await saveNetWorthSnapshot(
+			currentMonth,
+			summary.totalAssetsCents,
+			summary.totalLiabilitiesCents,
+			summary.netWorthCents
+		);
+
+		const momData = await getMomChange(currentMonth, summary.netWorthCents);
+		netWorthStore.setMomChange(momData);
+	}
+
 	onMount(async () => {
 		try {
 			netWorthStore.setLoading(true);
-			const summary = await getNetWorthSummary();
-			netWorthStore.setSummary(summary);
-
-			// Auto-snapshot current month
-			const currentMonth = getCurrentMonth();
-			await saveNetWorthSnapshot(
-				currentMonth,
-				summary.totalAssetsCents,
-				summary.totalLiabilitiesCents,
-				summary.netWorthCents
-			);
-
-			// Get month-over-month change
-			const momData = await getMomChange(currentMonth, summary.netWorthCents);
-			netWorthStore.setMomChange(momData);
+			await refreshData();
 		} catch (e) {
 			const message = e instanceof Error ? e.message : String(e);
 			netWorthStore.setError(message);
@@ -40,6 +51,39 @@
 			isLoading = false;
 		}
 	});
+
+	async function handleBalanceSave(event: CustomEvent<{ accountId: string; newBalanceCents: number }>) {
+		try {
+			await updateAccountBalance(event.detail.accountId, event.detail.newBalanceCents);
+			await refreshData();
+		} catch (e) {
+			const message = e instanceof Error ? e.message : String(e);
+			error = message;
+		}
+	}
+
+	function handleAddAccount(event: CustomEvent<{ defaultType: string }>) {
+		addAccountDefaultType = event.detail.defaultType;
+		showAddAccountModal = true;
+	}
+
+	async function handleAccountSubmit(event: CustomEvent<{
+		name: string;
+		accountType: string;
+		institution: string;
+		currency: string;
+		startingBalanceCents: number;
+	}>) {
+		try {
+			const { name, accountType, institution, currency, startingBalanceCents } = event.detail;
+			await createAccount(name, accountType, institution, currency, startingBalanceCents);
+			showAddAccountModal = false;
+			await refreshData();
+		} catch (e) {
+			const message = e instanceof Error ? e.message : String(e);
+			error = message;
+		}
+	}
 
 	$: hasAccounts = $netWorthStore.accounts.length > 0;
 </script>
@@ -68,14 +112,27 @@
 			<AssetsSection
 				accounts={$netWorthStore.accounts}
 				totalAssetsCents={$netWorthStore.totalAssetsCents}
+				editable={true}
+				on:balanceSave={handleBalanceSave}
+				on:addAccount={handleAddAccount}
 			/>
 			<LiabilitiesSection
 				accounts={$netWorthStore.accounts}
 				totalLiabilitiesCents={$netWorthStore.totalLiabilitiesCents}
+				editable={true}
+				on:balanceSave={handleBalanceSave}
+				on:addAccount={handleAddAccount}
 			/>
 		{/if}
 	{/if}
 </div>
+
+<AddAccountModal
+	isOpen={showAddAccountModal}
+	defaultType={addAccountDefaultType}
+	on:submit={handleAccountSubmit}
+	on:close={() => (showAddAccountModal = false)}
+/>
 
 <style>
 	.net-worth-page {

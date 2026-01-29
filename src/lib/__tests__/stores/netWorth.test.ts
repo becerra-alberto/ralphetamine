@@ -19,7 +19,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 350000
+		balanceCents: 350000,
+		lastBalanceUpdate: null
 	},
 	{
 		id: 'acc-savings',
@@ -29,7 +30,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 200000
+		balanceCents: 200000,
+		lastBalanceUpdate: null
 	},
 	{
 		id: 'acc-credit',
@@ -39,7 +41,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: -75000
+		balanceCents: -75000,
+		lastBalanceUpdate: null
 	}
 ];
 

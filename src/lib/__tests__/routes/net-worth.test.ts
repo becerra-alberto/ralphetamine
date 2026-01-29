@@ -17,7 +17,8 @@ vi.mock('$lib/api/netWorth', () => ({
 				currency: 'EUR',
 				isActive: true,
 				includeInNetWorth: true,
-				balanceCents: 350000
+				balanceCents: 350000,
+				lastBalanceUpdate: null
 			}
 		]
 	}),

@@ -15,6 +15,7 @@ export interface AccountWithBalance {
 	isActive: boolean;
 	includeInNetWorth: boolean;
 	balanceCents: number;
+	lastBalanceUpdate: string | null;
 }
 
 /** Net worth summary from backend */
@@ -74,4 +75,42 @@ export async function getMomChange(
 	currentNetWorthCents: number
 ): Promise<MomChangeData> {
 	return invoke('get_mom_change', { currentMonth, currentNetWorthCents });
+}
+
+/**
+ * Create a new account
+ */
+export async function createAccount(
+	name: string,
+	accountType: string,
+	institution: string,
+	currency: string,
+	startingBalanceCents: number
+): Promise<string> {
+	return invoke('create_account', {
+		name,
+		accountType,
+		institution,
+		currency,
+		startingBalanceCents
+	});
+}
+
+/**
+ * Update an account's balance
+ */
+export async function updateAccountBalance(
+	accountId: string,
+	newBalanceCents: number
+): Promise<void> {
+	return invoke('update_account_balance', { accountId, newBalanceCents });
+}
+
+/**
+ * Get balance history for an account
+ */
+export async function getBalanceHistory(
+	accountId: string
+): Promise<[number, string][]> {
+	return invoke('get_balance_history', { accountId });
 }

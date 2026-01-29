@@ -12,7 +12,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 350000
+		balanceCents: 350000,
+		lastBalanceUpdate: null
 	},
 	{
 		id: 'acc-savings',
@@ -22,7 +23,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 200000
+		balanceCents: 200000,
+		lastBalanceUpdate: null
 	},
 	{
 		id: 'acc-investment',
@@ -32,7 +34,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 150000
+		balanceCents: 150000,
+		lastBalanceUpdate: null
 	}
 ];
 
@@ -108,7 +111,8 @@ describe('AssetsSection', () => {
 				currency: 'EUR',
 				isActive: true,
 				includeInNetWorth: true,
-				balanceCents: -75000
+				balanceCents: -75000,
+				lastBalanceUpdate: null
 			}
 		];
 

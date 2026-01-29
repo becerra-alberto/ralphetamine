@@ -48,6 +48,9 @@ pub fn run() {
             commands::get_net_worth_summary,
             commands::save_net_worth_snapshot,
             commands::get_mom_change,
+            commands::create_account,
+            commands::update_account_balance,
+            commands::get_balance_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

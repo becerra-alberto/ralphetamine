@@ -18,7 +18,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 350000
+		balanceCents: 350000,
+		lastBalanceUpdate: null
 	},
 	{
 		id: 'acc-savings',
@@ -28,7 +29,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 200000
+		balanceCents: 200000,
+		lastBalanceUpdate: null
 	},
 	{
 		id: 'acc-investment',
@@ -38,7 +40,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 150000
+		balanceCents: 150000,
+		lastBalanceUpdate: null
 	},
 	{
 		id: 'acc-cash',
@@ -48,7 +51,8 @@ const mockAccounts: AccountWithBalance[] = [
 		currency: 'EUR',
 		isActive: true,
 		includeInNetWorth: true,
-		balanceCents: 5000
+		balanceCents: 5000,
+		lastBalanceUpdate: null
 	}
 ];
 
@@ -123,7 +127,8 @@ describe('accountGroups', () => {
 					currency: 'EUR',
 					isActive: true,
 					includeInNetWorth: true,
-					balanceCents: 100000
+					balanceCents: 100000,
+					lastBalanceUpdate: null
 				}
 			];
 
@@ -144,7 +149,8 @@ describe('accountGroups', () => {
 					currency: 'EUR',
 					isActive: true,
 					includeInNetWorth: true,
-					balanceCents: 100000
+					balanceCents: 100000,
+					lastBalanceUpdate: null
 				},
 				{
 					id: 'acc-2',
@@ -154,7 +160,8 @@ describe('accountGroups', () => {
 					currency: 'EUR',
 					isActive: true,
 					includeInNetWorth: true,
-					balanceCents: 0
+					balanceCents: 0,
+					lastBalanceUpdate: null
 				},
 				{
 					id: 'acc-3',
@@ -164,7 +171,8 @@ describe('accountGroups', () => {
 					currency: 'EUR',
 					isActive: true,
 					includeInNetWorth: true,
-					balanceCents: -5000
+					balanceCents: -5000,
+					lastBalanceUpdate: null
 				}
 			];
 
@@ -229,7 +237,8 @@ describe('accountGroups', () => {
 				currency: 'EUR',
 				isActive: true,
 				includeInNetWorth: true,
-				balanceCents: -75000
+				balanceCents: -75000,
+				lastBalanceUpdate: null
 			},
 			{
 				id: 'acc-credit-2',
@@ -239,7 +248,8 @@ describe('accountGroups', () => {
 				currency: 'EUR',
 				isActive: true,
 				includeInNetWorth: true,
-				balanceCents: -25000
+				balanceCents: -25000,
+				lastBalanceUpdate: null
 			}
 		];
 
@@ -286,7 +296,8 @@ describe('accountGroups', () => {
 					currency: 'EUR',
 					isActive: true,
 					includeInNetWorth: true,
-					balanceCents: 350000
+					balanceCents: 350000,
+					lastBalanceUpdate: null
 				}
 			];
 
@@ -312,7 +323,8 @@ describe('accountGroups', () => {
 					currency: 'EUR',
 					isActive: true,
 					includeInNetWorth: true,
-					balanceCents: 100000
+					balanceCents: 100000,
+					lastBalanceUpdate: null
 				}
 			];
 			const categories = groupLiabilitiesByCategory(noLiabilities, 0);

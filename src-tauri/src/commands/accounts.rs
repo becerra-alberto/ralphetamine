@@ -84,6 +84,7 @@ pub struct AccountWithBalance {
     pub is_active: bool,
     pub include_in_net_worth: bool,
     pub balance_cents: i64,
+    pub last_balance_update: Option<String>,
 }
 
 /// Net worth summary data
@@ -105,7 +106,7 @@ pub fn get_net_worth_summary() -> Result<NetWorthSummary, String> {
     let accounts: Vec<AccountWithBalance> = db
         .query_map(
             "SELECT a.id, a.name, a.type, a.institution, a.currency, a.is_active, a.include_in_net_worth,
-                    COALESCE(SUM(t.amount_cents), 0) as balance_cents
+                    COALESCE(SUM(t.amount_cents), 0) as balance_cents, a.last_balance_update
              FROM accounts a
              LEFT JOIN transactions t ON t.account_id = a.id
              WHERE a.is_active = 1 AND a.include_in_net_worth = 1
@@ -122,6 +123,7 @@ pub fn get_net_worth_summary() -> Result<NetWorthSummary, String> {
                     is_active: row.get::<_, i32>(5)? == 1,
                     include_in_net_worth: row.get::<_, i32>(6)? == 1,
                     balance_cents: row.get(7)?,
+                    last_balance_update: row.get(8)?,
                 })
             },
         )
@@ -259,6 +261,134 @@ pub fn get_mom_change(current_month: String, current_net_worth_cents: i64) -> Re
             })
         }
     }
+}
+
+/// Create a new account
+#[tauri::command]
+pub fn create_account(
+    name: String,
+    account_type: String,
+    institution: String,
+    currency: String,
+    starting_balance_cents: i64,
+) -> Result<String, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    let id = format!("acc-{}", uuid::Uuid::new_v4());
+
+    db.execute(
+        "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth, last_balance_update)
+         VALUES (?, ?, ?, ?, ?, 1, 1, datetime('now'))",
+        &[
+            &id as &dyn rusqlite::ToSql,
+            &name as &dyn rusqlite::ToSql,
+            &account_type as &dyn rusqlite::ToSql,
+            &institution as &dyn rusqlite::ToSql,
+            &currency as &dyn rusqlite::ToSql,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Create initial balance transaction
+    if starting_balance_cents != 0 {
+        let tx_id = format!("tx-init-{}", uuid::Uuid::new_v4());
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, memo, tags)
+             VALUES (?, date('now'), 'Starting Balance', ?, ?, 'Initial account balance', '[]')",
+            &[
+                &tx_id as &dyn rusqlite::ToSql,
+                &starting_balance_cents as &dyn rusqlite::ToSql,
+                &id as &dyn rusqlite::ToSql,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Record initial balance in history
+    db.execute(
+        "INSERT INTO account_balance_history (account_id, balance_cents)
+         VALUES (?, ?)",
+        &[
+            &id as &dyn rusqlite::ToSql,
+            &starting_balance_cents as &dyn rusqlite::ToSql,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(id)
+}
+
+/// Update an account's balance by creating an adjustment transaction
+#[tauri::command]
+pub fn update_account_balance(
+    account_id: String,
+    new_balance_cents: i64,
+) -> Result<(), String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    // Get current balance
+    let current_balance: i64 = db
+        .query_row(
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM transactions WHERE account_id = ?",
+            &[&account_id as &dyn rusqlite::ToSql],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let adjustment = new_balance_cents - current_balance;
+
+    if adjustment != 0 {
+        let tx_id = format!("tx-adj-{}", uuid::Uuid::new_v4());
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, memo, tags)
+             VALUES (?, date('now'), 'Balance Adjustment', ?, ?, 'Manual balance update', '[]')",
+            &[
+                &tx_id as &dyn rusqlite::ToSql,
+                &adjustment as &dyn rusqlite::ToSql,
+                &account_id as &dyn rusqlite::ToSql,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Update last_balance_update timestamp
+    db.execute(
+        "UPDATE accounts SET last_balance_update = datetime('now') WHERE id = ?",
+        &[&account_id as &dyn rusqlite::ToSql],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Record in balance history
+    db.execute(
+        "INSERT INTO account_balance_history (account_id, balance_cents)
+         VALUES (?, ?)",
+        &[
+            &account_id as &dyn rusqlite::ToSql,
+            &new_balance_cents as &dyn rusqlite::ToSql,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Get balance history for an account
+#[tauri::command]
+pub fn get_balance_history(account_id: String) -> Result<Vec<(i64, String)>, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    let history: Vec<(i64, String)> = db
+        .query_map(
+            "SELECT balance_cents, recorded_at FROM account_balance_history
+             WHERE account_id = ?
+             ORDER BY recorded_at DESC
+             LIMIT 50",
+            &[&account_id as &dyn rusqlite::ToSql],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(history)
 }
 
 #[cfg(test)]
@@ -439,6 +569,7 @@ mod tests {
                         is_active: row.get::<_, i32>(5)? == 1,
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
+                        last_balance_update: None,
                     })
                 },
             )
@@ -540,6 +671,7 @@ mod tests {
                         is_active: row.get::<_, i32>(5)? == 1,
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
+                        last_balance_update: None,
                     })
                 },
             )
@@ -740,6 +872,7 @@ mod tests {
                         is_active: row.get::<_, i32>(5)? == 1,
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
+                        last_balance_update: None,
                     })
                 },
             )
@@ -790,6 +923,7 @@ mod tests {
                         is_active: row.get::<_, i32>(5)? == 1,
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
+                        last_balance_update: None,
                     })
                 },
             )
@@ -836,6 +970,7 @@ mod tests {
                         is_active: row.get::<_, i32>(5)? == 1,
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
+                        last_balance_update: None,
                     })
                 },
             )
@@ -843,5 +978,231 @@ mod tests {
 
         assert_eq!(account.currency, "USD", "Currency should be USD");
         assert_eq!(account.balance_cents, -50000, "Balance should be -50000");
+    }
+
+    // --- Balance entry tests for Story 5.5 ---
+
+    #[test]
+    fn test_create_account_inserts_new_account_with_balance() {
+        let db = setup_test_db();
+
+        // Create account
+        let id = "acc-test-55";
+        db.execute(
+            "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth, last_balance_update)
+             VALUES (?, 'Test Savings', 'savings', 'TestBank', 'EUR', 1, 1, datetime('now'))",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Create starting balance transaction
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, memo, tags)
+             VALUES ('tx-init-55', date('now'), 'Starting Balance', 250000, ?, 'Initial account balance', '[]')",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Record in history
+        db.execute(
+            "INSERT INTO account_balance_history (account_id, balance_cents)
+             VALUES (?, 250000)",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Verify account exists
+        let name: String = db
+            .query_row("SELECT name FROM accounts WHERE id = ?", &[&id], |row| row.get(0))
+            .unwrap();
+        assert_eq!(name, "Test Savings");
+
+        // Verify balance
+        let balance: i64 = db
+            .query_row(
+                "SELECT COALESCE(SUM(amount_cents), 0) FROM transactions WHERE account_id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(balance, 250000, "Account should have 250000 cents starting balance");
+
+        // Verify history entry
+        let history_count: i32 = db
+            .query_row(
+                "SELECT COUNT(*) FROM account_balance_history WHERE account_id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(history_count, 1, "Should have one history entry");
+    }
+
+    #[test]
+    fn test_update_account_balance_creates_adjustment_and_history() {
+        let db = setup_test_db();
+
+        // Setup account with initial balance
+        let id = "acc-update-55";
+        db.execute(
+            "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth)
+             VALUES (?, 'Update Test', 'checking', 'Bank', 'EUR', 1, 1)",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('tx-init-update', '2025-01-01', 'Starting Balance', 100000, ?, '[]')",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Simulate update_account_balance: set new balance to 150000
+        let current_balance: i64 = db
+            .query_row(
+                "SELECT COALESCE(SUM(amount_cents), 0) FROM transactions WHERE account_id = ?",
+                &[&id as &dyn rusqlite::ToSql],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(current_balance, 100000);
+
+        let new_balance: i64 = 150000;
+        let adjustment = new_balance - current_balance;
+        assert_eq!(adjustment, 50000, "Adjustment should be 50000");
+
+        // Create adjustment transaction
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, memo, tags)
+             VALUES ('tx-adj-55', date('now'), 'Balance Adjustment', ?, ?, 'Manual balance update', '[]')",
+            &[&adjustment as &dyn rusqlite::ToSql, &id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Update last_balance_update
+        db.execute(
+            "UPDATE accounts SET last_balance_update = datetime('now') WHERE id = ?",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Record in history
+        db.execute(
+            "INSERT INTO account_balance_history (account_id, balance_cents)
+             VALUES (?, ?)",
+            &[&id as &dyn rusqlite::ToSql, &new_balance as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Verify new balance
+        let updated_balance: i64 = db
+            .query_row(
+                "SELECT COALESCE(SUM(amount_cents), 0) FROM transactions WHERE account_id = ?",
+                &[&id as &dyn rusqlite::ToSql],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(updated_balance, 150000, "Balance should be updated to 150000");
+
+        // Verify last_balance_update is set
+        let last_update: Option<String> = db
+            .query_row(
+                "SELECT last_balance_update FROM accounts WHERE id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(last_update.is_some(), "last_balance_update should be set");
+
+        // Verify history entry
+        let history: Vec<i64> = db
+            .query_map(
+                "SELECT balance_cents FROM account_balance_history WHERE account_id = ? ORDER BY recorded_at DESC",
+                &[&id as &dyn rusqlite::ToSql],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0], 150000);
+    }
+
+    #[test]
+    fn test_get_balance_history_returns_chronological_snapshots() {
+        let db = setup_test_db();
+
+        let id = "acc-history-55";
+        db.execute(
+            "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth)
+             VALUES (?, 'History Test', 'savings', 'Bank', 'EUR', 1, 1)",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Insert multiple history entries
+        db.execute(
+            "INSERT INTO account_balance_history (account_id, balance_cents, recorded_at)
+             VALUES (?, 100000, '2025-01-01 10:00:00')",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO account_balance_history (account_id, balance_cents, recorded_at)
+             VALUES (?, 150000, '2025-01-15 10:00:00')",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO account_balance_history (account_id, balance_cents, recorded_at)
+             VALUES (?, 200000, '2025-02-01 10:00:00')",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Query history (most recent first)
+        let history: Vec<(i64, String)> = db
+            .query_map(
+                "SELECT balance_cents, recorded_at FROM account_balance_history
+                 WHERE account_id = ?
+                 ORDER BY recorded_at DESC
+                 LIMIT 50",
+                &[&id as &dyn rusqlite::ToSql],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+
+        assert_eq!(history.len(), 3, "Should have 3 history entries");
+        assert_eq!(history[0].0, 200000, "Most recent should be 200000");
+        assert_eq!(history[1].0, 150000, "Second should be 150000");
+        assert_eq!(history[2].0, 100000, "Oldest should be 100000");
+    }
+
+    #[test]
+    fn test_last_updated_timestamp_set_on_balance_change() {
+        let db = setup_test_db();
+
+        let id = "acc-timestamp-55";
+        db.execute(
+            "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth)
+             VALUES (?, 'Timestamp Test', 'checking', 'Bank', 'EUR', 1, 1)",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Initially null
+        let initial_update: Option<String> = db
+            .query_row(
+                "SELECT last_balance_update FROM accounts WHERE id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(initial_update.is_none(), "last_balance_update should initially be NULL");
+
+        // Update timestamp
+        db.execute(
+            "UPDATE accounts SET last_balance_update = datetime('now') WHERE id = ?",
+            &[&id as &dyn rusqlite::ToSql],
+        ).unwrap();
+
+        // Now should be set
+        let updated: Option<String> = db
+            .query_row(
+                "SELECT last_balance_update FROM accounts WHERE id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(updated.is_some(), "last_balance_update should be set after update");
+
+        // Verify it's a valid datetime
+        let dt_str = updated.unwrap();
+        assert!(dt_str.len() >= 10, "Datetime string should be at least 10 chars");
     }
 }

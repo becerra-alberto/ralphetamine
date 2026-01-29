@@ -15,7 +15,8 @@ const creditCardsCategory: AccountCategory = {
 			currency: 'EUR',
 			isActive: true,
 			includeInNetWorth: true,
-			balanceCents: -75000
+			balanceCents: -75000,
+			lastBalanceUpdate: null
 		},
 		{
 			id: 'acc-credit-2',
@@ -25,7 +26,8 @@ const creditCardsCategory: AccountCategory = {
 			currency: 'EUR',
 			isActive: true,
 			includeInNetWorth: true,
-			balanceCents: -25000
+			balanceCents: -25000,
+			lastBalanceUpdate: null
 		}
 	],
 	totalCents: 100000, // absolute value: 75000 + 25000

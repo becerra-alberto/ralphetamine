@@ -186,6 +186,25 @@ BEGIN
 END;
 "#,
     },
+    Migration {
+        version: "004",
+        description: "Create account balance history table",
+        up: r#"
+-- Create account_balance_history table
+-- Stores historical balance snapshots for accounts (especially non-transaction-based ones)
+CREATE TABLE account_balance_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    balance_cents INTEGER NOT NULL,
+    recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_account_balance_history_account ON account_balance_history(account_id);
+CREATE INDEX idx_account_balance_history_date ON account_balance_history(recorded_at);
+
+-- Add last_balance_update column to accounts table
+ALTER TABLE accounts ADD COLUMN last_balance_update TEXT;
+"#,
+    },
 ];
 
 /// Run all pending migrations

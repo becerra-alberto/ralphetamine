@@ -11,7 +11,8 @@ const eurAccount: AccountWithBalance = {
 	currency: 'EUR',
 	isActive: true,
 	includeInNetWorth: true,
-	balanceCents: 350000
+	balanceCents: 350000,
+	lastBalanceUpdate: null
 };
 
 const usdAccount: AccountWithBalance = {
@@ -22,7 +23,8 @@ const usdAccount: AccountWithBalance = {
 	currency: 'USD',
 	isActive: true,
 	includeInNetWorth: true,
-	balanceCents: 1000000
+	balanceCents: 1000000,
+	lastBalanceUpdate: null
 };
 
 const noInstitution: AccountWithBalance = {
@@ -33,7 +35,8 @@ const noInstitution: AccountWithBalance = {
 	currency: 'EUR',
 	isActive: true,
 	includeInNetWorth: true,
-	balanceCents: 5000
+	balanceCents: 5000,
+	lastBalanceUpdate: null
 };
 
 describe('AccountRow', () => {
@@ -89,5 +92,37 @@ describe('AccountRow', () => {
 
 		expect(screen.getByTestId('custom-row')).toBeTruthy();
 		expect(screen.getByTestId('custom-row-name')).toBeTruthy();
+	});
+
+	it('should not show updated date when lastBalanceUpdate is null', () => {
+		render(AccountRow, { props: { account: eurAccount } });
+
+		expect(screen.queryByTestId('account-row-updated')).toBeNull();
+	});
+
+	it('should display "Updated: 28 Jan 2025" date format when lastBalanceUpdate is set', () => {
+		const accountWithUpdate: AccountWithBalance = {
+			...eurAccount,
+			lastBalanceUpdate: '2025-01-28T10:30:00'
+		};
+
+		render(AccountRow, { props: { account: accountWithUpdate } });
+
+		const updated = screen.getByTestId('account-row-updated');
+		expect(updated.textContent).toBe('Updated: 28 Jan 2025');
+	});
+
+	it('should display absolute balance when showAbsoluteBalance is true', () => {
+		const liability: AccountWithBalance = {
+			...eurAccount,
+			balanceCents: -75000
+		};
+
+		render(AccountRow, { props: { account: liability, showAbsoluteBalance: true } });
+
+		const balance = screen.getByTestId('account-row-balance');
+		expect(balance.textContent).toContain('750.00');
+		// Should not contain negative sign
+		expect(balance.textContent).not.toContain('-');
 	});
 });

@@ -15,7 +15,8 @@ const cashBankCategory: AccountCategory = {
 			currency: 'EUR',
 			isActive: true,
 			includeInNetWorth: true,
-			balanceCents: 350000
+			balanceCents: 350000,
+			lastBalanceUpdate: null
 		},
 		{
 			id: 'acc-2',
@@ -25,7 +26,8 @@ const cashBankCategory: AccountCategory = {
 			currency: 'EUR',
 			isActive: true,
 			includeInNetWorth: true,
-			balanceCents: 200000
+			balanceCents: 200000,
+			lastBalanceUpdate: null
 		}
 	],
 	totalCents: 550000,
@@ -44,7 +46,8 @@ const singleAccountCategory: AccountCategory = {
 			currency: 'EUR',
 			isActive: true,
 			includeInNetWorth: true,
-			balanceCents: 150000
+			balanceCents: 150000,
+			lastBalanceUpdate: null
 		}
 	],
 	totalCents: 150000,
