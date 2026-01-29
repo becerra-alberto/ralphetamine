@@ -346,3 +346,21 @@ Story 6.4: Create Returning User Dashboard - COMPLETED
   - All 1695 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
   - Commit: 0ed8b56
 Story 6.4: COMPLETED - feat(story-6.4): Create Returning User Dashboard
+
+[LEARN] Dashboard component handles its own data loading via onMount + getTransactionsForMonth. The +page.svelte keeps the onboarding/dashboard routing logic and wraps Dashboard in a data-testid="home-page" div so existing home route tests keep working. The calculateMonthSummary function sums positive amountCents as income and absolute negative amountCents as expenses - keeping all calculations in integer cents.
+[DONE] Story 6.4 - returning dashuoard - Thu 29 Jan 2026 15:40:42 CST
+
+Story 6.5: Implement Command Palette - COMPLETED
+  - fuzzySearch.ts: fuzzyScore + fuzzySearch utilities for character-by-character matching
+  - commands.ts: Command registry with 7 commands (4 navigation + 3 actions)
+  - CommandItem.svelte: Single command row with label, shortcut hint, highlight state, ARIA option role
+  - CommandList.svelte: Grouped list (Navigation/Actions), empty state, ARIA listbox
+  - CommandPalette.svelte: Full modal with search input, fuzzy filtering, ArrowUp/Down/Enter keyboard nav
+  - +layout.svelte: Global ⌘K handler toggles palette, execute dispatches command action
+  - Commands: Go to Home (⌘1), Budget (⌘U), Transactions (⌘T), Net Worth (⌘W), New Transaction (⌘N), Search (⌘F), Adjust Budgets (⌘⇧B)
+  - Auto-focus search input on open, Escape/backdrop click to close, footer hints
+  - Dark mode support
+  - Unit tests: fuzzySearch.test.ts (14), commands.test.ts (9), CommandItem.test.ts (9), CommandList.test.ts (9), CommandPalette.test.ts (16)
+  - All 1768 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: 3562278
+Story 6.5: COMPLETED - feat(story-6.5): Implement Command Palette
