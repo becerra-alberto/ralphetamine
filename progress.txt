@@ -91,3 +91,20 @@ Story 4.5: Implement Quick-Add Transaction Row - COMPLETED
   - Commit: 5858237
 Story 4.5: COMPLETED - feat(story-4.5): Implement Quick-Add Transaction Row
 [DONE] Story 4.5 - Implement Quick-Add Transaction Row - Thu 29 Jan 2026 12:44:02 CST
+
+Story 4.6: Add Date Picker with Auto-Fill - COMPLETED
+  - DatePicker.svelte: Reusable date picker with text input, calendar popup, toggle button
+  - Calendar.svelte: Calendar grid with month navigation, keyboard nav (arrows/Enter/Escape)
+  - dateParser.ts: Multi-format parsing (ISO, DD/MM/YYYY, DD MMM YYYY, today, yesterday, last friday)
+  - dates.ts: formatDate/formatDateDisplay (YYYY-MM-DD -> DD MMM YYYY), toISODate
+  - QuickAddRow: Replaced native <input type="date"> with DatePicker component
+  - Auto-fill: Defaults to today's date in DD MMM YYYY format
+  - Manual entry: Accepts various date formats, validates, shows error for invalid
+  - Calendar popup: Opens via toggle button or ArrowDown, keyboard navigation, Escape to close
+  - Natural language: "today", "yesterday", "last friday" parsed correctly
+  - Unit tests: dateParser.test.ts (29), datesFormatting.test.ts (10), Calendar.test.ts (27), DatePicker.test.ts (11)
+  - E2E tests: date-picker.spec.ts (5 scenarios)
+  - All 1163 tests passing (1 skipped), 0 type errors
+  - Commit: 9b8d17c
+Story 4.6: COMPLETED - feat(story-4.6): Add Date Picker with Auto-Fill
+[DONE] Story 4.6 - Add Date Picker with Auto-Fill - Thu 29 Jan 2026 13:08:00 CST
