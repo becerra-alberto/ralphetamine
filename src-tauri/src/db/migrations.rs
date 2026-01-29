@@ -205,6 +205,29 @@ CREATE INDEX idx_account_balance_history_date ON account_balance_history(recorde
 ALTER TABLE accounts ADD COLUMN last_balance_update TEXT;
 "#,
     },
+    Migration {
+        version: "005",
+        description: "Create user preferences table",
+        up: r#"
+-- Create user_preferences table
+-- Stores key-value user preferences including onboarding state
+CREATE TABLE user_preferences (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Create trigger to update updated_at timestamp on user_preferences
+CREATE TRIGGER trg_user_preferences_updated_at
+AFTER UPDATE ON user_preferences
+FOR EACH ROW
+BEGIN
+    UPDATE user_preferences SET updated_at = datetime('now')
+    WHERE key = NEW.key;
+END;
+"#,
+    },
 ];
 
 /// Run all pending migrations

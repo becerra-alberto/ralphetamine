@@ -51,6 +51,9 @@ pub fn run() {
             commands::create_account,
             commands::update_account_balance,
             commands::get_balance_history,
+            commands::check_onboarding_status,
+            commands::save_user_goals,
+            commands::complete_onboarding,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
