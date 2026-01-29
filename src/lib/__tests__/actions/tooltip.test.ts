@@ -123,18 +123,30 @@ describe('tooltip action', () => {
 	});
 
 	describe('update', () => {
-		it('should allow updating options', () => {
-			const action = tooltip(mockElement, { onShow, onHide, showDelay: 200 });
+		it('should allow updating callbacks', () => {
+			// Start with original callbacks
+			const action = tooltip(mockElement, { onShow, onHide });
 
+			// First verify original callback works
+			mockElement.dispatchEvent(new MouseEvent('mouseenter'));
+			vi.advanceTimersByTime(200);
+			expect(onShow).toHaveBeenCalledTimes(1);
+
+			// Now update with new callback
 			const newOnShow = vi.fn() as unknown as (element: HTMLElement) => void;
-			action.update({ onShow: newOnShow, onHide, showDelay: 200 });
+			action.update({ onShow: newOnShow, onHide });
 
-			// After update, trigger mouseenter with new callback
+			// Trigger leave then enter again
+			mockElement.dispatchEvent(new MouseEvent('mouseleave'));
+			vi.advanceTimersByTime(200);
+
 			mockElement.dispatchEvent(new MouseEvent('mouseenter'));
 			vi.advanceTimersByTime(200);
 
-			// The newOnShow should be called because options were updated
+			// New callback should be called
 			expect(newOnShow).toHaveBeenCalled();
+			// Original should still only have 1 call from before update
+			expect(onShow).toHaveBeenCalledTimes(1);
 		});
 	});
 });
