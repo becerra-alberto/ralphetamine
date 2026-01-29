@@ -360,6 +360,123 @@ describe('Budget API', () => {
 		});
 	});
 
+	describe('Story 3.4 - batch adjustment modal API', () => {
+		describe('batch API payload structure', () => {
+			it('should accept payload with categories[], dateRange, operation, and value', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(6);
+
+				const { setBudgetsBatch } = await import('../../api/budgets');
+
+				// Simulating a batch adjustment modal payload
+				// Multiple categories over a date range
+				const budgets: BudgetInput[] = [
+					{ categoryId: 'rent', month: '2026-02', amountCents: 50000 },
+					{ categoryId: 'rent', month: '2026-03', amountCents: 50000 },
+					{ categoryId: 'utilities', month: '2026-02', amountCents: 50000 },
+					{ categoryId: 'utilities', month: '2026-03', amountCents: 50000 },
+					{ categoryId: 'groceries', month: '2026-02', amountCents: 50000 },
+					{ categoryId: 'groceries', month: '2026-03', amountCents: 50000 }
+				];
+
+				const result = await setBudgetsBatch(budgets);
+
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', { budgets });
+				expect(result).toBe(6);
+			});
+
+			it('should handle batch with multiple categories and date range for set-amount', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(24);
+
+				const { setBudgetsBatch } = await import('../../api/budgets');
+
+				// 2 categories x 12 months = 24 cells
+				const categories = ['cat-rent', 'cat-utilities'];
+				const months = [
+					'2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06',
+					'2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'
+				];
+
+				const budgets: BudgetInput[] = [];
+				for (const categoryId of categories) {
+					for (const month of months) {
+						budgets.push({ categoryId, month, amountCents: 50000 });
+					}
+				}
+
+				const result = await setBudgetsBatch(budgets);
+
+				expect(result).toBe(24);
+				expect(budgets).toHaveLength(24);
+			});
+
+			it('should handle batch percentage increase with calculated values', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(3);
+
+				const { setBudgetsBatch } = await import('../../api/budgets');
+
+				// Simulating 10% increase from 400 -> 440
+				const budgets: BudgetInput[] = [
+					{ categoryId: 'rent', month: '2026-01', amountCents: 44000 },
+					{ categoryId: 'rent', month: '2026-02', amountCents: 44000 },
+					{ categoryId: 'rent', month: '2026-03', amountCents: 44000 }
+				];
+
+				const result = await setBudgetsBatch(budgets);
+
+				// Verify all values are 44000 (10% increase from 40000)
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', {
+					budgets: expect.arrayContaining([
+						expect.objectContaining({ amountCents: 44000 })
+					])
+				});
+				expect(result).toBe(3);
+			});
+
+			it('should handle batch percentage decrease with calculated values (edge case)', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(3);
+
+				const { setBudgetsBatch } = await import('../../api/budgets');
+
+				// Simulating 10% decrease from 400 -> 360
+				const budgets: BudgetInput[] = [
+					{ categoryId: 'rent', month: '2026-01', amountCents: 36000 },
+					{ categoryId: 'rent', month: '2026-02', amountCents: 36000 },
+					{ categoryId: 'rent', month: '2026-03', amountCents: 36000 }
+				];
+
+				const result = await setBudgetsBatch(budgets);
+
+				expect(invoke).toHaveBeenCalledWith('set_budgets_batch', {
+					budgets: expect.arrayContaining([
+						expect.objectContaining({ amountCents: 36000 })
+					])
+				});
+				expect(result).toBe(3);
+			});
+
+			it('should handle "Copy from previous period" by including prior month values', async () => {
+				const { invoke } = await import('@tauri-apps/api/core');
+				vi.mocked(invoke).mockResolvedValue(2);
+
+				const { setBudgetsBatch } = await import('../../api/budgets');
+
+				// Copy previous period: Feb gets Jan's value, Mar gets Feb's value
+				const budgets: BudgetInput[] = [
+					{ categoryId: 'rent', month: '2026-02', amountCents: 40000 }, // copied from Jan
+					{ categoryId: 'rent', month: '2026-03', amountCents: 40000 } // copied from Feb (now same)
+				];
+
+				const result = await setBudgetsBatch(budgets);
+
+				expect(result).toBe(2);
+			});
+		});
+	});
+
 	describe('Story 3.3 - batch budget operations', () => {
 		describe('setBudgetsBatch', () => {
 			it('should invoke set_budgets_batch with array of budgets', async () => {

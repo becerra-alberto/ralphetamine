@@ -4,16 +4,40 @@
 	import { onMount } from 'svelte';
 	import BudgetGrid from '$lib/components/budget/BudgetGrid.svelte';
 	import DateRangeSelector from '$lib/components/budget/DateRangeSelector.svelte';
+	import BudgetAdjustmentModal from '$lib/components/budget/BudgetAdjustmentModal.svelte';
 	import { budgetStore } from '$lib/stores/budget';
 	import { getDefaultDateRange, getMonthRange, isValidMonth } from '$lib/utils/dates';
 	import type { MonthString } from '$lib/types/budget';
+	import type { Category } from '$lib/types/category';
 
 	// Get initial range from URL params or use default
 	let startMonth: MonthString;
 	let endMonth: MonthString;
 
+	// Modal state
+	let showAdjustmentModal: boolean = false;
+	let categories: Category[] = [];
+
+	// Keyboard shortcut handler
+	function handleKeydown(event: KeyboardEvent) {
+		// Cmd+Shift+B (Mac) or Ctrl+Shift+B (Windows/Linux) - Open batch adjustment modal
+		if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'b') {
+			event.preventDefault();
+			openAdjustmentModal();
+		}
+	}
+
+	function openAdjustmentModal() {
+		showAdjustmentModal = true;
+	}
+
+	function closeAdjustmentModal() {
+		showAdjustmentModal = false;
+	}
+
 	// Initialize from URL params on mount
 	onMount(() => {
+		document.addEventListener('keydown', handleKeydown);
 		const params = $page.url.searchParams;
 		const urlStart = params.get('start');
 		const urlEnd = params.get('end');
@@ -29,7 +53,14 @@
 
 		// Update store with initial range
 		budgetStore.setDateRange(getMonthRange(startMonth, endMonth));
+
+		return () => {
+			document.removeEventListener('keydown', handleKeydown);
+		};
 	});
+
+	// Subscribe to get categories from store
+	$: categories = $budgetStore.categories;
 
 	// Handle date range changes
 	function handleRangeChange(event: CustomEvent<{ startMonth: MonthString; endMonth: MonthString }>) {
@@ -58,6 +89,14 @@
 			<h1 class="budget-title">Budget</h1>
 		</div>
 		<div class="header-right">
+			<button
+				type="button"
+				class="adjust-budgets-btn"
+				data-testid="adjust-budgets-btn"
+				on:click={openAdjustmentModal}
+			>
+				Adjust Budgets
+			</button>
 			{#if startMonth && endMonth}
 				<DateRangeSelector
 					{startMonth}
@@ -72,6 +111,13 @@
 		<BudgetGrid />
 	</main>
 </div>
+
+<!-- Budget Adjustment Modal -->
+<BudgetAdjustmentModal
+	open={showAdjustmentModal}
+	{categories}
+	on:close={closeAdjustmentModal}
+/>
 
 <style>
 	.budget-page {
@@ -97,6 +143,32 @@
 	.header-right {
 		display: flex;
 		align-items: center;
+		gap: 12px;
+	}
+
+	.adjust-budgets-btn {
+		display: inline-flex;
+		align-items: center;
+		padding: 8px 16px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--text-primary, #111827);
+		background: var(--bg-primary, #ffffff);
+		border: 1px solid var(--border-color, #e5e7eb);
+		border-radius: 6px;
+		cursor: pointer;
+		transition:
+			background 100ms ease,
+			border-color 100ms ease;
+	}
+
+	.adjust-budgets-btn:hover {
+		background: var(--bg-hover, #f3f4f6);
+	}
+
+	.adjust-budgets-btn:focus {
+		outline: 2px solid var(--color-accent, #4f46e5);
+		outline-offset: 2px;
 	}
 
 	.budget-title {
@@ -113,6 +185,13 @@
 
 	/* Dark mode */
 	:global(.dark) .budget-page {
+		--text-primary: #f9fafb;
+	}
+
+	:global(.dark) .adjust-budgets-btn {
+		--bg-primary: #1a1a1a;
+		--border-color: #2d2d2d;
+		--bg-hover: #2d2d2d;
 		--text-primary: #f9fafb;
 	}
 </style>

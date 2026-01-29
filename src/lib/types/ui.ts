@@ -27,3 +27,14 @@ export interface ToastState {
 	type: ToastType;
 	duration: number;
 }
+
+/**
+ * Preview item for batch budget adjustments
+ */
+export interface PreviewItem {
+	categoryId: string;
+	categoryName: string;
+	month: string; // MonthString format YYYY-MM
+	currentCents: number;
+	newCents: number;
+}

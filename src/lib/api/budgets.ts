@@ -139,3 +139,70 @@ function getNextMonth(month: MonthString): MonthString {
   }
   return `${year}-${String(m + 1).padStart(2, '0')}`;
 }
+
+/**
+ * Helper to get the previous month string
+ */
+function getPreviousMonth(month: MonthString): MonthString {
+  const [year, m] = month.split('-').map(Number);
+  if (m === 1) {
+    return `${year - 1}-12`;
+  }
+  return `${year}-${String(m - 1).padStart(2, '0')}`;
+}
+
+/**
+ * Batch adjustment operation types
+ */
+export type BatchOperation = 'set-amount' | 'increase-percent' | 'decrease-percent' | 'copy-previous';
+
+/**
+ * Batch adjustment request
+ */
+export interface BatchAdjustmentRequest {
+  categoryIds: string[];
+  startMonth: MonthString;
+  endMonth: MonthString;
+  operation: BatchOperation;
+  value?: number; // Amount in cents for set-amount, percentage for percent operations
+}
+
+/**
+ * Calculate the new amount for a batch adjustment operation
+ */
+export function calculateAdjustedAmount(
+  currentCents: number,
+  operation: BatchOperation,
+  value: number = 0
+): number {
+  switch (operation) {
+    case 'set-amount':
+      return value;
+    case 'increase-percent':
+      return Math.round(currentCents + (currentCents * value) / 100);
+    case 'decrease-percent':
+      return Math.max(0, Math.round(currentCents - (currentCents * value) / 100));
+    case 'copy-previous':
+      // For copy-previous, the caller should provide the previous value as currentCents
+      return currentCents;
+    default:
+      return currentCents;
+  }
+}
+
+/**
+ * Decrease budgets by a percentage for a category across multiple months
+ */
+export async function decreaseFutureMonthsBudget(
+  categoryId: string,
+  startMonth: MonthString,
+  baseCents: number,
+  percentage: number,
+  monthCount: number = 12
+): Promise<number> {
+  // Calculate the new amount using integer math
+  const decreaseCents = Math.round((baseCents * percentage) / 100);
+  const newAmountCents = Math.max(0, baseCents - decreaseCents);
+
+  return setFutureMonthsBudget(categoryId, startMonth, newAmountCents, monthCount);
+}
