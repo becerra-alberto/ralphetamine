@@ -3,6 +3,8 @@
  * Defines all available commands with their labels, shortcuts, and actions.
  */
 
+import { getRecentCommandIds, addRecentCommandId, clearRecentCommandIds } from '../utils/storage';
+
 export interface Command {
 	id: string;
 	label: string;
@@ -21,4 +23,27 @@ export function createCommandRegistry(navigate: (path: string) => void): Command
 		{ id: 'search-transactions', label: 'Search Transactions', shortcut: '⌘F', group: 'action', action: () => navigate('/transactions?action=search') },
 		{ id: 'adjust-budgets', label: 'Adjust Budgets', shortcut: '⌘⇧B', group: 'action', action: () => navigate('/budget?action=adjust') }
 	];
+}
+
+/**
+ * Get recent commands from localStorage, resolved against the command registry.
+ */
+export function getRecentCommands(commands: Command[]): Command[] {
+	const ids = getRecentCommandIds();
+	const commandMap = new Map(commands.map((c) => [c.id, c]));
+	return ids.map((id) => commandMap.get(id)).filter((c): c is Command => c !== undefined);
+}
+
+/**
+ * Record a command execution in recent history.
+ */
+export function addToRecentCommands(commandId: string): string[] {
+	return addRecentCommandId(commandId);
+}
+
+/**
+ * Clear recent commands history.
+ */
+export function clearRecentCommands(): void {
+	clearRecentCommandIds();
 }

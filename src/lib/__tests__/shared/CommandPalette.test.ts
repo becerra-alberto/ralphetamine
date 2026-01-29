@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import CommandPalette from '../../components/shared/CommandPalette.svelte';
 import type { Command } from '../../stores/commands';
 
+const STORAGE_KEY = 'stackz-recent-commands';
+
 const mockCommands: Command[] = [
 	{ id: 'go-home', label: 'Go to Home', shortcut: '⌘1', group: 'navigation', action: vi.fn() },
 	{ id: 'go-budget', label: 'Go to Budget', shortcut: '⌘U', group: 'navigation', action: vi.fn() },
@@ -15,6 +17,7 @@ const mockCommands: Command[] = [
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	localStorage.removeItem(STORAGE_KEY);
 });
 
 describe('CommandPalette', () => {
@@ -179,5 +182,97 @@ describe('CommandPalette', () => {
 		});
 
 		expect(screen.getByTestId('custom-palette')).toBeTruthy();
+	});
+
+	describe('Recent Commands', () => {
+		it('should show "Recent" section header when search is empty and recent commands exist', () => {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(['go-home', 'go-budget']));
+			render(CommandPalette, { props: { open: true, commands: mockCommands } });
+
+			expect(screen.getByTestId('command-palette-recent')).toBeTruthy();
+			expect(screen.getByTestId('command-palette-recent-label').textContent).toBe('Recent');
+		});
+
+		it('should hide "Recent" section when no recent commands exist', () => {
+			render(CommandPalette, { props: { open: true, commands: mockCommands } });
+
+			expect(screen.queryByTestId('command-palette-recent')).toBeNull();
+		});
+
+		it('should display maximum 5 recent commands', () => {
+			localStorage.setItem(
+				STORAGE_KEY,
+				JSON.stringify([
+					'go-home',
+					'go-budget',
+					'go-transactions',
+					'go-net-worth',
+					'new-transaction',
+					'search-transactions'
+				])
+			);
+			render(CommandPalette, { props: { open: true, commands: mockCommands } });
+
+			const recentSection = screen.getByTestId('command-palette-recent');
+			// Use role="option" to select only CommandItem buttons (not their children)
+			const recentItems = recentSection.querySelectorAll('[role="option"]');
+			expect(recentItems.length).toBeLessThanOrEqual(5);
+		});
+
+		it('should show most recently executed command first', () => {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(['go-budget', 'go-home']));
+			render(CommandPalette, { props: { open: true, commands: mockCommands } });
+
+			const recentSection = screen.getByTestId('command-palette-recent');
+			const items = recentSection.querySelectorAll('[role="option"]');
+			expect(items[0].getAttribute('data-testid')).toBe('command-palette-recent-item-go-budget');
+			expect(items[1].getAttribute('data-testid')).toBe('command-palette-recent-item-go-home');
+		});
+
+		it('should hide recent section when typing in search', async () => {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(['go-home']));
+			render(CommandPalette, { props: { open: true, commands: mockCommands } });
+
+			expect(screen.getByTestId('command-palette-recent')).toBeTruthy();
+
+			const input = screen.getByTestId('command-palette-input');
+			await fireEvent.input(input, { target: { value: 'budget' } });
+
+			await waitFor(() => {
+				expect(screen.queryByTestId('command-palette-recent')).toBeNull();
+			});
+		});
+
+		it('should re-show recent section when search is cleared', async () => {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(['go-home']));
+			render(CommandPalette, { props: { open: true, commands: mockCommands } });
+
+			const input = screen.getByTestId('command-palette-input');
+			await fireEvent.input(input, { target: { value: 'budget' } });
+
+			await waitFor(() => {
+				expect(screen.queryByTestId('command-palette-recent')).toBeNull();
+			});
+
+			await fireEvent.input(input, { target: { value: '' } });
+
+			await waitFor(() => {
+				expect(screen.getByTestId('command-palette-recent')).toBeTruthy();
+			});
+		});
+
+		it('should clear all recent commands when "Clear recent" is clicked', async () => {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(['go-home', 'go-budget']));
+			render(CommandPalette, { props: { open: true, commands: mockCommands } });
+
+			expect(screen.getByTestId('command-palette-recent')).toBeTruthy();
+
+			await fireEvent.click(screen.getByTestId('command-palette-clear-recent'));
+
+			await waitFor(() => {
+				expect(screen.queryByTestId('command-palette-recent')).toBeNull();
+			});
+			expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+		});
 	});
 });

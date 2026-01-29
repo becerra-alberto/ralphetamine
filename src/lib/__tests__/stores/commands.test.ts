@@ -1,5 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
-import { createCommandRegistry } from '../../stores/commands';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+	createCommandRegistry,
+	getRecentCommands,
+	addToRecentCommands,
+	clearRecentCommands
+} from '../../stores/commands';
+
+beforeEach(() => {
+	localStorage.clear();
+});
 
 describe('commands', () => {
 	it('should create registry with all commands', () => {
@@ -91,5 +100,66 @@ describe('commands', () => {
 
 		netWorth.action();
 		expect(navigate).toHaveBeenCalledWith('/net-worth');
+	});
+});
+
+describe('recent commands', () => {
+	it('should return empty recent commands when none recorded', () => {
+		const navigate = vi.fn();
+		const commands = createCommandRegistry(navigate);
+		expect(getRecentCommands(commands)).toEqual([]);
+	});
+
+	it('should add command to recent and retrieve it', () => {
+		const navigate = vi.fn();
+		const commands = createCommandRegistry(navigate);
+		addToRecentCommands('go-budget');
+		const recent = getRecentCommands(commands);
+		expect(recent).toHaveLength(1);
+		expect(recent[0].id).toBe('go-budget');
+	});
+
+	it('should move duplicate to top instead of duplicating', () => {
+		const navigate = vi.fn();
+		const commands = createCommandRegistry(navigate);
+		addToRecentCommands('go-budget');
+		addToRecentCommands('go-transactions');
+		addToRecentCommands('go-budget');
+		const recent = getRecentCommands(commands);
+		expect(recent).toHaveLength(2);
+		expect(recent[0].id).toBe('go-budget');
+		expect(recent[1].id).toBe('go-transactions');
+	});
+
+	it('should limit to 5 recent commands', () => {
+		const navigate = vi.fn();
+		const commands = createCommandRegistry(navigate);
+		addToRecentCommands('go-home');
+		addToRecentCommands('go-budget');
+		addToRecentCommands('go-transactions');
+		addToRecentCommands('go-net-worth');
+		addToRecentCommands('new-transaction');
+		addToRecentCommands('search-transactions');
+		const recent = getRecentCommands(commands);
+		expect(recent).toHaveLength(5);
+		expect(recent[0].id).toBe('search-transactions');
+	});
+
+	it('should clear recent commands', () => {
+		const navigate = vi.fn();
+		const commands = createCommandRegistry(navigate);
+		addToRecentCommands('go-budget');
+		clearRecentCommands();
+		expect(getRecentCommands(commands)).toEqual([]);
+	});
+
+	it('should skip unknown command IDs gracefully', () => {
+		const navigate = vi.fn();
+		const commands = createCommandRegistry(navigate);
+		addToRecentCommands('nonexistent-command');
+		addToRecentCommands('go-budget');
+		const recent = getRecentCommands(commands);
+		expect(recent).toHaveLength(1);
+		expect(recent[0].id).toBe('go-budget');
 	});
 });

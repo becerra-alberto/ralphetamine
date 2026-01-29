@@ -2,7 +2,9 @@
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 	import CommandList from './CommandList.svelte';
+	import CommandItem from './CommandItem.svelte';
 	import type { Command } from '../../stores/commands';
+	import { getRecentCommands, addToRecentCommands, clearRecentCommands } from '../../stores/commands';
 	import { fuzzySearch } from '../../utils/fuzzySearch';
 
 	export let open: boolean = false;
@@ -19,8 +21,10 @@
 	let inputElement: HTMLInputElement | null = null;
 	let paletteElement: HTMLElement | null = null;
 	let previousActiveElement: HTMLElement | null = null;
+	let recentCommands: Command[] = [];
 
 	$: filteredCommands = fuzzySearch(commands, searchQuery, (c) => c.label).map((r) => r.item);
+	$: showRecent = !searchQuery && recentCommands.length > 0;
 
 	$: if (searchQuery !== undefined) {
 		highlightedIndex = 0;
@@ -30,6 +34,7 @@
 		previousActiveElement = document.activeElement as HTMLElement;
 		searchQuery = '';
 		highlightedIndex = 0;
+		recentCommands = getRecentCommands(commands);
 		setTimeout(() => {
 			inputElement?.focus();
 		}, 0);
@@ -55,8 +60,14 @@
 	}
 
 	function executeCommand(command: Command) {
+		addToRecentCommands(command.id);
 		dispatch('execute', { command });
 		handleClose();
+	}
+
+	function handleClearRecent() {
+		clearRecentCommands();
+		recentCommands = [];
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -130,6 +141,30 @@
 				/>
 			</div>
 
+			{#if showRecent}
+				<div class="recent-section" data-testid="{testId}-recent">
+					<div class="recent-header">
+						<span class="recent-label" data-testid="{testId}-recent-label">Recent</span>
+						<button
+							class="clear-recent"
+							data-testid="{testId}-clear-recent"
+							on:click={handleClearRecent}
+						>
+							Clear recent
+						</button>
+					</div>
+					{#each recentCommands as command}
+						<CommandItem
+							label={command.label}
+							shortcut={command.shortcut || ''}
+							highlighted={false}
+							testId="{testId}-recent-item-{command.id}"
+							on:select={() => executeCommand(command)}
+						/>
+					{/each}
+				</div>
+			{/if}
+
 			<div class="palette-commands">
 				<CommandList
 					commands={filteredCommands}
@@ -200,6 +235,42 @@
 		color: var(--text-secondary, #6b7280);
 	}
 
+	.recent-section {
+		border-bottom: 1px solid var(--border-color, #e5e7eb);
+	}
+
+	.recent-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8px 16px 4px;
+	}
+
+	.recent-label {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-secondary, #6b7280);
+	}
+
+	.clear-recent {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: var(--text-secondary, #6b7280);
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 2px 4px;
+		border-radius: 4px;
+		font-family: inherit;
+	}
+
+	.clear-recent:hover {
+		color: var(--danger, #ef4444);
+		background: var(--bg-secondary, #f9fafb);
+	}
+
 	.palette-footer {
 		padding: 8px 16px;
 		border-top: 1px solid var(--border-color, #e5e7eb);
@@ -234,6 +305,14 @@
 
 	:global(.dark) .search-input {
 		color: var(--text-primary, #f9fafb);
+	}
+
+	:global(.dark) .recent-section {
+		border-color: #2d2d2d;
+	}
+
+	:global(.dark) .clear-recent:hover {
+		background: #2d2d2d;
 	}
 
 	:global(.dark) .palette-footer {
