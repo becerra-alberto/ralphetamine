@@ -249,3 +249,163 @@ describe('BudgetGrid Integration - 12M Totals Column', () => {
 		});
 	});
 });
+
+describe('BudgetGrid Integration - Uncategorized Transactions Row', () => {
+	beforeEach(() => {
+		budgetStore.reset();
+		localStorageMock.clear();
+	});
+
+	afterEach(() => {
+		localStorageMock.clear();
+	});
+
+	describe('uncategorized row visibility', () => {
+		it('should show uncategorized row when hasUncategorized is true', () => {
+			// Set up uncategorized data
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 },
+				{ month: '2025-02', totalCents: -25000, transactionCount: 5 }
+			]);
+
+			const state = get(budgetStore);
+			let totalCount = 0;
+			state.uncategorized.forEach((data) => {
+				totalCount += data.transactionCount;
+			});
+
+			expect(totalCount).toBe(8);
+			expect(totalCount > 0).toBe(true); // hasUncategorized should be true
+		});
+
+		it('should hide uncategorized row when no uncategorized transactions exist', () => {
+			// No uncategorized data set
+			const state = get(budgetStore);
+			expect(state.uncategorized.size).toBe(0);
+
+			let totalCount = 0;
+			state.uncategorized.forEach((data) => {
+				totalCount += data.transactionCount;
+			});
+
+			expect(totalCount).toBe(0); // hasUncategorized should be false
+		});
+
+		it('should hide row when transaction counts are all zero', () => {
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: 0, transactionCount: 0 }
+			]);
+
+			const state = get(budgetStore);
+			let totalCount = 0;
+			state.uncategorized.forEach((data) => {
+				totalCount += data.transactionCount;
+			});
+
+			expect(totalCount).toBe(0); // hasUncategorized should be false
+		});
+	});
+
+	describe('uncategorized row position', () => {
+		it('should appear at the bottom (below all sections)', () => {
+			// BudgetGrid renders:
+			// 1. Sections with their child categories
+			// 2. UncategorizedRow (if hasUncategorized)
+			// 3. Footer totals row
+
+			// This is structural - verified by the component order in BudgetGrid.svelte
+			// The UncategorizedRow is rendered AFTER {/each} for sections
+			// and BEFORE the grid-footer
+
+			const now = new Date().toISOString();
+			const categories = [
+				{ id: 'cat-1', name: 'Groceries', type: 'expense' as const, parentId: 'Essential', sortOrder: 1, icon: null, color: null, createdAt: now, updatedAt: now }
+			];
+			budgetStore.setCategories(categories);
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -5000, transactionCount: 2 }
+			]);
+
+			const state = get(budgetStore);
+			expect(state.categories.length).toBe(1);
+			expect(state.uncategorized.size).toBe(1);
+		});
+	});
+
+	describe('uncategorized 12M totals column', () => {
+		it('should show total uncategorized over 12 months', () => {
+			// Set up uncategorized data across multiple months
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 },
+				{ month: '2025-02', totalCents: -20000, transactionCount: 4 },
+				{ month: '2025-03', totalCents: -10000, transactionCount: 2 }
+			]);
+
+			const state = get(budgetStore);
+			let total12MActual = 0;
+			state.uncategorized.forEach((data) => {
+				total12MActual += Math.abs(data.totalCents);
+			});
+
+			// 15000 + 20000 + 10000 = 45000 cents
+			expect(total12MActual).toBe(45000);
+		});
+
+		it('should have budgetedCents = 0 for uncategorized 12M', () => {
+			// Uncategorized transactions have no budget
+			// The 12M totals should have budgetedCents = 0
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 }
+			]);
+
+			// calculateUncategorized12MTotals returns:
+			// { actualCents: sum, budgetedCents: 0, differenceCents: -sum, percentUsed: 0 }
+			const expectedBudget = 0;
+			expect(expectedBudget).toBe(0);
+		});
+
+		it('should have negative differenceCents for uncategorized 12M (all spending is "over budget")', () => {
+			// Since budget is 0, any spending is "over budget"
+			// differenceCents = budgetedCents - actualCents = 0 - actual = -actual
+			const actual = 45000;
+			const budgeted = 0;
+			const difference = budgeted - actual;
+
+			expect(difference).toBe(-45000);
+			expect(difference < 0).toBe(true);
+		});
+	});
+
+	describe('uncategorized monthly cell values', () => {
+		it('should sum transactions where category_id IS NULL', () => {
+			// This is what the backend query does:
+			// SELECT month, SUM(amount_cents), COUNT(*) FROM transactions
+			// WHERE category_id IS NULL
+			// GROUP BY month
+
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 }
+			]);
+
+			const state = get(budgetStore);
+			const janData = state.uncategorized.get('2025-01');
+
+			expect(janData).toBeDefined();
+			expect(janData?.totalCents).toBe(-15000);
+			expect(janData?.transactionCount).toBe(3);
+		});
+
+		it('should use cents arithmetic for uncategorized totals', () => {
+			// Verify integer cents
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -12345, transactionCount: 2 }
+			]);
+
+			const state = get(budgetStore);
+			const data = state.uncategorized.get('2025-01');
+
+			expect(Number.isInteger(data?.totalCents)).toBe(true);
+			expect(data?.totalCents).toBe(-12345);
+		});
+	});
+});

@@ -8,7 +8,10 @@ import {
 	isEmpty,
 	monthlyTotals,
 	createCellKey,
-	parseCellKey
+	parseCellKey,
+	hasUncategorized,
+	uncategorizedTotals,
+	uncategorizedCount
 } from '../../stores/budget';
 import type { Category } from '../../types/category';
 import type { Budget } from '../../types/budget';
@@ -308,6 +311,101 @@ describe('Derived Stores', () => {
 
 			const totals = get(monthlyTotals);
 			expect(totals.get('2025-01')).toEqual({ budgeted: 50000, actual: 35000 });
+		});
+	});
+});
+
+describe('Uncategorized Transactions', () => {
+	beforeEach(() => {
+		budgetStore.reset();
+	});
+
+	describe('setUncategorized', () => {
+		it('should set uncategorized transaction data', () => {
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 },
+				{ month: '2025-02', totalCents: -25000, transactionCount: 5 }
+			]);
+
+			const state = get(budgetStore);
+			expect(state.uncategorized.get('2025-01')).toEqual({
+				month: '2025-01',
+				totalCents: -15000,
+				transactionCount: 3
+			});
+		});
+
+		it('should query WHERE category_id IS NULL (conceptually)', () => {
+			// This tests that the store correctly handles uncategorized data
+			// In a real scenario, the backend queries WHERE category_id IS NULL
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 }
+			]);
+
+			const state = get(budgetStore);
+			const data = state.uncategorized.get('2025-01');
+			expect(data).toBeDefined();
+			expect(data?.totalCents).toBe(-15000);
+		});
+
+		it('should use cents arithmetic for totals', () => {
+			// Verify amounts are in cents (integer arithmetic)
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15050, transactionCount: 2 }
+			]);
+
+			const state = get(budgetStore);
+			const data = state.uncategorized.get('2025-01');
+			// 15050 cents = $150.50
+			expect(data?.totalCents).toBe(-15050);
+			expect(Number.isInteger(data?.totalCents)).toBe(true);
+		});
+	});
+
+	describe('hasUncategorized', () => {
+		it('should return false when no uncategorized transactions', () => {
+			expect(get(hasUncategorized)).toBe(false);
+		});
+
+		it('should return true when uncategorized transactions exist', () => {
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 }
+			]);
+			expect(get(hasUncategorized)).toBe(true);
+		});
+
+		it('should return false when transaction count is 0', () => {
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: 0, transactionCount: 0 }
+			]);
+			expect(get(hasUncategorized)).toBe(false);
+		});
+	});
+
+	describe('uncategorizedTotals', () => {
+		it('should return uncategorized data map', () => {
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 }
+			]);
+
+			const totals = get(uncategorizedTotals);
+			expect(totals.has('2025-01')).toBe(true);
+			expect(totals.get('2025-01')?.totalCents).toBe(-15000);
+		});
+	});
+
+	describe('uncategorizedCount', () => {
+		it('should return total count of uncategorized transactions', () => {
+			budgetStore.setUncategorized([
+				{ month: '2025-01', totalCents: -15000, transactionCount: 3 },
+				{ month: '2025-02', totalCents: -25000, transactionCount: 5 }
+			]);
+
+			expect(get(uncategorizedCount)).toBe(8);
+		});
+
+		it('should return 0 when no uncategorized transactions', () => {
+			expect(get(uncategorizedCount)).toBe(0);
 		});
 	});
 });

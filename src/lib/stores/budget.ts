@@ -29,6 +29,15 @@ export interface CategoryRowData {
 }
 
 /**
+ * Uncategorized transaction data for a month
+ */
+export interface UncategorizedData {
+	month: MonthString;
+	totalCents: number;
+	transactionCount: number;
+}
+
+/**
  * Budget grid state
  */
 export interface BudgetGridState {
@@ -36,6 +45,7 @@ export interface BudgetGridState {
 	categories: Category[];
 	budgets: Map<string, Budget>;
 	actuals: Map<string, number>;
+	uncategorized: Map<MonthString, UncategorizedData>;
 	isLoading: boolean;
 	error: string | null;
 }
@@ -61,6 +71,7 @@ const initialState: BudgetGridState = {
 	categories: [],
 	budgets: new Map(),
 	actuals: new Map(),
+	uncategorized: new Map(),
 	isLoading: false,
 	error: null
 };
@@ -117,6 +128,21 @@ function createBudgetStore() {
 				actualMap.set(key, actual.totalCents);
 			});
 			update((state) => ({ ...state, actuals: actualMap }));
+		},
+
+		/**
+		 * Set uncategorized transactions data
+		 */
+		setUncategorized: (data: Array<{ month: MonthString; totalCents: number; transactionCount: number }>) => {
+			const uncategorizedMap = new Map<MonthString, UncategorizedData>();
+			data.forEach((item) => {
+				uncategorizedMap.set(item.month, {
+					month: item.month,
+					totalCents: item.totalCents,
+					transactionCount: item.transactionCount
+				});
+			});
+			update((state) => ({ ...state, uncategorized: uncategorizedMap }));
 		},
 
 		/**
@@ -228,3 +254,31 @@ export const monthlyTotals: Readable<Map<MonthString, { budgeted: number; actual
 
 		return totals;
 	});
+
+/**
+ * Derived store for uncategorized totals by month
+ */
+export const uncategorizedTotals: Readable<Map<MonthString, UncategorizedData>> =
+	derived(budgetStore, ($budgetStore) => $budgetStore.uncategorized);
+
+/**
+ * Derived store to check if there are any uncategorized transactions
+ */
+export const hasUncategorized: Readable<boolean> = derived(budgetStore, ($budgetStore) => {
+	let total = 0;
+	$budgetStore.uncategorized.forEach((data) => {
+		total += data.transactionCount;
+	});
+	return total > 0;
+});
+
+/**
+ * Derived store for total uncategorized transaction count
+ */
+export const uncategorizedCount: Readable<number> = derived(budgetStore, ($budgetStore) => {
+	let total = 0;
+	$budgetStore.uncategorized.forEach((data) => {
+		total += data.transactionCount;
+	});
+	return total;
+});

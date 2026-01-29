@@ -116,3 +116,32 @@ export function get12MDifferenceClass(differenceCents: number): string {
 	}
 	return 'difference-neutral'; // Exactly on budget
 }
+
+/**
+ * Calculate 12M totals for uncategorized transactions
+ * Uses the uncategorized data from the store
+ */
+export function calculateUncategorized12MTotals(
+	trailing12MMonths: MonthString[],
+	uncategorizedMap: Map<MonthString, { totalCents: number; transactionCount: number }>
+): Trailing12MTotals {
+	let actualCents = 0;
+
+	trailing12MMonths.forEach((month) => {
+		const data = uncategorizedMap.get(month);
+		if (data) {
+			actualCents += Math.abs(data.totalCents);
+		}
+	});
+
+	// No budget for uncategorized, so difference is negative of actual
+	// Convert -0 to 0 for consistency
+	const differenceCents = actualCents === 0 ? 0 : -actualCents;
+
+	return {
+		actualCents,
+		budgetedCents: 0,
+		differenceCents,
+		percentUsed: 0
+	};
+}

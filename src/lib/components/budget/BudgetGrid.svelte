@@ -5,7 +5,10 @@
 		currentMonth,
 		isEmpty,
 		monthlyTotals,
-		createCellKey
+		createCellKey,
+		hasUncategorized,
+		uncategorizedTotals,
+		uncategorizedCount
 	} from '$lib/stores/budget';
 	import { budgetUIStore } from '$lib/stores/budgetUI';
 	import {
@@ -17,15 +20,17 @@
 		getTrailing12MRange,
 		calculate12MTotals,
 		calculateSection12MTotals,
-		calculateGrand12MTotals
+		calculateGrand12MTotals,
+		calculateUncategorized12MTotals
 	} from '$lib/utils/budgetCalculations';
 	import MonthHeader from './MonthHeader.svelte';
 	import YearHeader from './YearHeader.svelte';
 	import CategoryRow from './CategoryRow.svelte';
 	import SectionHeader from './SectionHeader.svelte';
 	import TotalsColumn from './TotalsColumn.svelte';
+	import UncategorizedRow from './UncategorizedRow.svelte';
 	import { formatCentsCurrency } from '$lib/types/budget';
-	import type { BudgetCell } from '$lib/stores/budget';
+	import type { BudgetCell, UncategorizedData } from '$lib/stores/budget';
 	import type { MonthString } from '$lib/types/budget';
 
 	// Get reactive values from stores
@@ -37,6 +42,9 @@
 	$: current = $currentMonth;
 	$: empty = $isEmpty;
 	$: collapsedSections = $budgetUIStore.collapsedSections;
+	$: showUncategorized = $hasUncategorized;
+	$: uncategorizedData = $uncategorizedTotals;
+	$: totalUncategorizedCount = $uncategorizedCount;
 
 	// Group categories into sections
 	$: sections = groupCategoriesBySections($budgetStore.categories);
@@ -168,6 +176,24 @@
 		trailing12MMonths,
 		extended12MCellsMap
 	);
+
+	/**
+	 * Get uncategorized 12M totals
+	 */
+	$: uncategorized12MTotals = calculateUncategorized12MTotals(trailing12MMonths, uncategorizedData);
+
+	/**
+	 * Convert uncategorized data to monthly totals format for UncategorizedRow
+	 */
+	function getUncategorizedMonthlyTotals(): Map<MonthString, { totalCents: number; transactionCount: number }> {
+		const result = new Map<MonthString, { totalCents: number; transactionCount: number }>();
+		uncategorizedData.forEach((data, month) => {
+			result.set(month, { totalCents: data.totalCents, transactionCount: data.transactionCount });
+		});
+		return result;
+	}
+
+	$: uncategorizedMonthlyTotals = getUncategorizedMonthlyTotals();
 </script>
 
 <div class="budget-grid-container" role="region" aria-label="Budget Grid">
@@ -277,6 +303,17 @@
 							totals12M={category12MTotals}
 						/>
 					{/each}
+				{/if}
+
+				<!-- Uncategorized transactions row (shown at bottom when there are uncategorized transactions) -->
+				{#if showUncategorized}
+					<UncategorizedRow
+						{months}
+						currentMonth={current}
+						monthlyTotals={uncategorizedMonthlyTotals}
+						totalTransactionCount={totalUncategorizedCount}
+						totals12M={uncategorized12MTotals}
+					/>
 				{/if}
 			</div>
 

@@ -5,6 +5,7 @@ import {
 	calculateSection12MTotals,
 	calculateGrand12MTotals,
 	get12MDifferenceClass,
+	calculateUncategorized12MTotals,
 	type Trailing12MTotals
 } from '../../utils/budgetCalculations';
 import type { BudgetCell } from '../../stores/budget';
@@ -251,6 +252,80 @@ describe('Budget Calculations', () => {
 
 		it('should return difference-neutral when exactly on budget', () => {
 			expect(get12MDifferenceClass(0)).toBe('difference-neutral');
+		});
+	});
+
+	describe('calculateUncategorized12MTotals', () => {
+		it('should sum uncategorized totals over 12 months using absolute values', () => {
+			const uncategorizedMap = new Map([
+				['2025-01', { totalCents: -10000, transactionCount: 2 }],
+				['2025-02', { totalCents: -15000, transactionCount: 3 }],
+				['2025-03', { totalCents: -5000, transactionCount: 1 }]
+			]);
+
+			const trailing12M = ['2025-01', '2025-02', '2025-03'];
+			const totals = calculateUncategorized12MTotals(trailing12M, uncategorizedMap);
+
+			// Should use absolute values: 10000 + 15000 + 5000 = 30000
+			expect(totals.actualCents).toBe(30000);
+		});
+
+		it('should return 0 budgetedCents (no budget for uncategorized)', () => {
+			const uncategorizedMap = new Map([
+				['2025-01', { totalCents: -10000, transactionCount: 2 }]
+			]);
+
+			const trailing12M = ['2025-01'];
+			const totals = calculateUncategorized12MTotals(trailing12M, uncategorizedMap);
+
+			expect(totals.budgetedCents).toBe(0);
+		});
+
+		it('should calculate difference as negative of actual (no budget)', () => {
+			const uncategorizedMap = new Map([
+				['2025-01', { totalCents: -10000, transactionCount: 2 }]
+			]);
+
+			const trailing12M = ['2025-01'];
+			const totals = calculateUncategorized12MTotals(trailing12M, uncategorizedMap);
+
+			// Difference = budget (0) - actual (10000) = -10000
+			expect(totals.differenceCents).toBe(-10000);
+		});
+
+		it('should return 0 percentUsed (no budget)', () => {
+			const uncategorizedMap = new Map([
+				['2025-01', { totalCents: -10000, transactionCount: 2 }]
+			]);
+
+			const trailing12M = ['2025-01'];
+			const totals = calculateUncategorized12MTotals(trailing12M, uncategorizedMap);
+
+			expect(totals.percentUsed).toBe(0);
+		});
+
+		it('should handle months with no uncategorized transactions', () => {
+			const uncategorizedMap = new Map<string, { totalCents: number; transactionCount: number }>();
+
+			const trailing12M = ['2025-01', '2025-02'];
+			const totals = calculateUncategorized12MTotals(trailing12M, uncategorizedMap);
+
+			expect(totals.actualCents).toBe(0);
+			expect(totals.differenceCents).toBe(0);
+		});
+
+		it('should only include months in the trailing 12M range', () => {
+			const uncategorizedMap = new Map([
+				['2025-01', { totalCents: -10000, transactionCount: 2 }],
+				['2024-01', { totalCents: -5000, transactionCount: 1 }] // Not in range
+			]);
+
+			// Only include 2025-01
+			const trailing12M = ['2025-01'];
+			const totals = calculateUncategorized12MTotals(trailing12M, uncategorizedMap);
+
+			// Should only include 2025-01, not 2024-01
+			expect(totals.actualCents).toBe(10000);
 		});
 	});
 });
