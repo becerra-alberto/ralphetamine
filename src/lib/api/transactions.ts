@@ -134,6 +134,31 @@ export async function getUniquePayees(search?: string, limit?: number): Promise<
   return invoke('get_unique_payees', { search, limit: limit || 20 });
 }
 
+export interface PayeeSuggestion {
+  payee: string;
+  frequency: number;
+}
+
+export interface PayeeCategoryAssociation {
+  payee: string;
+  categoryId: string;
+  count: number;
+}
+
+/**
+ * Get payee suggestions sorted by frequency
+ */
+export async function getPayeeSuggestions(search?: string, limit?: number): Promise<PayeeSuggestion[]> {
+  return invoke('get_payee_suggestions', { search, limit: limit || 10 });
+}
+
+/**
+ * Get the most-used category for a given payee
+ */
+export async function getPayeeCategory(payee: string): Promise<PayeeCategoryAssociation | null> {
+  return invoke('get_payee_category', { payee });
+}
+
 /**
  * Get unique tags for autocomplete
  */

@@ -11,6 +11,12 @@ vi.mock('$lib/types/transaction', async () => {
 	};
 });
 
+// Mock Tauri API calls used by PayeeInput
+vi.mock('$lib/api/transactions', () => ({
+	getPayeeSuggestions: vi.fn().mockResolvedValue([]),
+	getPayeeCategory: vi.fn().mockResolvedValue(null)
+}));
+
 const mockAccounts = [
 	{
 		id: 'acc-1',
@@ -61,6 +67,11 @@ const mockCategories = [
 	}
 ];
 
+// The PayeeInput uses Autocomplete with testId="payee-autocomplete"
+// So the input's data-testid is "payee-autocomplete-input"
+const PAYEE_INPUT_TESTID = 'payee-autocomplete-input';
+const PAYEE_WRAPPER_TESTID = 'payee-autocomplete';
+
 describe('QuickAddRow', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
@@ -78,7 +89,7 @@ describe('QuickAddRow', () => {
 
 			expect(screen.getByTestId('quick-add-row')).toBeTruthy();
 			expect(screen.getByTestId('date-picker')).toBeTruthy();
-			expect(screen.getByTestId('quick-add-payee')).toBeTruthy();
+			expect(screen.getByTestId(PAYEE_WRAPPER_TESTID)).toBeTruthy();
 			expect(screen.getByTestId('quick-add-category')).toBeTruthy();
 			expect(screen.getByTestId('quick-add-memo')).toBeTruthy();
 			expect(screen.getByTestId('quick-add-amount')).toBeTruthy();
@@ -191,7 +202,7 @@ describe('QuickAddRow', () => {
 			}) as EventListener);
 
 			// Fill in required fields
-			const payeeInput = screen.getByTestId('quick-add-payee');
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID);
 			const amountInput = screen.getByTestId('quick-add-amount');
 
 			await fireEvent.input(payeeInput, { target: { value: 'Test Payee' } });
@@ -230,7 +241,7 @@ describe('QuickAddRow', () => {
 			});
 
 			// Fill payee but not amount
-			const payeeInput = screen.getByTestId('quick-add-payee');
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID);
 			await fireEvent.input(payeeInput, { target: { value: 'Test Payee' } });
 
 			const saveBtn = screen.getByTestId('quick-add-save');
@@ -246,7 +257,7 @@ describe('QuickAddRow', () => {
 			});
 
 			// Fill payee and amount
-			const payeeInput = screen.getByTestId('quick-add-payee');
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID);
 			const amountInput = screen.getByTestId('quick-add-amount');
 			await fireEvent.input(payeeInput, { target: { value: 'Test Payee' } });
 			await fireEvent.input(amountInput, { target: { value: '50.00' } });
@@ -267,8 +278,8 @@ describe('QuickAddRow', () => {
 			const saveBtn = screen.getByTestId('quick-add-save');
 			await fireEvent.click(saveBtn);
 
-			// Payee is the first required field, it should have focus
-			const payeeInput = screen.getByTestId('quick-add-payee');
+			// Payee is the first required field, its input should have focus
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID);
 			expect(document.activeElement).toBe(payeeInput);
 		});
 
@@ -284,9 +295,12 @@ describe('QuickAddRow', () => {
 			// Error should be visible
 			expect(screen.getByTestId('error-payee')).toBeTruthy();
 
-			// Start typing in payee
-			const payeeInput = screen.getByTestId('quick-add-payee');
-			await fireEvent.input(payeeInput, { target: { value: 'T' } });
+			// Start typing in payee - PayeeInput dispatches input after debounce
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID);
+			await fireEvent.input(payeeInput, { target: { value: 'Te' } });
+
+			// Advance past the debounce timer (150ms) so the input event propagates
+			await vi.advanceTimersByTimeAsync(200);
 
 			// Error should be cleared
 			expect(screen.queryByTestId('error-payee')).toBeNull();
@@ -300,7 +314,7 @@ describe('QuickAddRow', () => {
 			});
 
 			// Fill required fields
-			const payeeInput = screen.getByTestId('quick-add-payee') as HTMLInputElement;
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID) as HTMLInputElement;
 			const amountInput = screen.getByTestId('quick-add-amount') as HTMLInputElement;
 			const memoInput = screen.getByTestId('quick-add-memo') as HTMLInputElement;
 
@@ -335,7 +349,7 @@ describe('QuickAddRow', () => {
 
 			// Verify key fields are present and focusable
 			const dateInput = screen.getByTestId('date-picker-input');
-			const payeeInput = screen.getByTestId('quick-add-payee');
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID);
 			const categorySelect = screen.getByTestId('quick-add-category');
 			const memoInput = screen.getByTestId('quick-add-memo');
 			const amountInput = screen.getByTestId('quick-add-amount');
@@ -354,7 +368,7 @@ describe('QuickAddRow', () => {
 			// Verify the DatePicker appears first in the form, then other fields follow
 			const row = screen.getByTestId('quick-add-row');
 			const datePicker = row.querySelector('[data-testid="date-picker"]');
-			const payeeEl = row.querySelector('[data-testid="quick-add-payee"]');
+			const payeeEl = row.querySelector('[data-testid="' + PAYEE_WRAPPER_TESTID + '"]');
 			expect(datePicker).toBeTruthy();
 			expect(payeeEl).toBeTruthy();
 		});
@@ -367,7 +381,7 @@ describe('QuickAddRow', () => {
 			// All fields should be focusable for Shift+Tab to work
 			const fields = [
 				screen.getByTestId('date-picker-input'),
-				screen.getByTestId('quick-add-payee'),
+				screen.getByTestId(PAYEE_INPUT_TESTID),
 				screen.getByTestId('quick-add-category'),
 				screen.getByTestId('quick-add-memo'),
 				screen.getByTestId('quick-add-amount'),
@@ -386,17 +400,18 @@ describe('QuickAddRow', () => {
 			});
 
 			// Fill required fields
-			const payeeInput = screen.getByTestId('quick-add-payee');
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID);
 			const amountInput = screen.getByTestId('quick-add-amount');
 
 			await fireEvent.input(payeeInput, { target: { value: 'Test Payee' } });
 			await fireEvent.input(amountInput, { target: { value: '50.00' } });
 
-			// Press Enter in payee field
-			await fireEvent.keyDown(payeeInput, { key: 'Enter' });
+			// Press Enter in memo field (which uses handleKeydown directly)
+			const memoInput = screen.getByTestId('quick-add-memo');
+			await fireEvent.keyDown(memoInput, { key: 'Enter' });
 
 			// After enter, if save succeeded, fields should reset
-			const payeeAfter = screen.getByTestId('quick-add-payee') as HTMLInputElement;
+			const payeeAfter = screen.getByTestId(PAYEE_INPUT_TESTID) as HTMLInputElement;
 			expect(payeeAfter.value).toBe('');
 		});
 	});
@@ -408,7 +423,7 @@ describe('QuickAddRow', () => {
 			});
 
 			// Fill required fields
-			const payeeInput = screen.getByTestId('quick-add-payee');
+			const payeeInput = screen.getByTestId(PAYEE_INPUT_TESTID);
 			const amountInput = screen.getByTestId('quick-add-amount');
 
 			await fireEvent.input(payeeInput, { target: { value: 'Test Payee' } });

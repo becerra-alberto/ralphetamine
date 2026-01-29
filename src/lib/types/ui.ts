@@ -57,3 +57,12 @@ export interface TagInfo {
 	name: string;
 	count: number;
 }
+
+/**
+ * Autocomplete item for dropdown suggestions
+ */
+export interface AutocompleteItem {
+	label: string;
+	value: string;
+	detail?: string;
+}

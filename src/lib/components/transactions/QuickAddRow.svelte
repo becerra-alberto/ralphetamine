@@ -2,6 +2,7 @@
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { getTodayDate } from '$lib/types/transaction';
 	import DatePicker from '$lib/components/shared/DatePicker.svelte';
+	import PayeeInput from '$lib/components/transactions/PayeeInput.svelte';
 	import type { Account } from '$lib/types/account';
 	import type { CategoryNode } from '$lib/types/ui';
 
@@ -35,7 +36,7 @@
 	let errors: { payee?: string; amount?: string; account?: string } = {};
 
 	// Element references for focus management
-	let payeeInput: HTMLInputElement;
+	let payeeInputRef: PayeeInput;
 	let categorySelect: HTMLSelectElement;
 	let memoInput: HTMLInputElement;
 	let amountInput: HTMLInputElement;
@@ -91,7 +92,7 @@
 
 	function focusFirstInvalidField() {
 		if (errors.payee) {
-			payeeInput?.focus();
+			payeeInputRef?.focus();
 		} else if (errors.amount) {
 			amountInput?.focus();
 		} else if (errors.account) {
@@ -152,11 +153,24 @@
 		isExpense = !isExpense;
 	}
 
+	function handlePayeeSelect(event: CustomEvent<{ payee: string; categoryId: string | null }>) {
+		payee = event.detail.payee;
+		if (event.detail.categoryId && !categoryId) {
+			categoryId = event.detail.categoryId;
+		}
+		// Move focus to next field (category)
+		categorySelect?.focus();
+	}
+
+	function handlePayeeEnter() {
+		handleSave();
+	}
+
 	// Cmd+N shortcut handler
 	function handleGlobalKeydown(event: KeyboardEvent) {
 		if ((event.metaKey || event.ctrlKey) && event.key === 'n') {
 			event.preventDefault();
-			payeeInput?.focus();
+			payeeInputRef?.focus();
 		}
 	}
 
@@ -169,7 +183,7 @@
 	});
 
 	export function focusPayee() {
-		payeeInput?.focus();
+		payeeInputRef?.focus();
 	}
 </script>
 
@@ -190,17 +204,12 @@
 		</div>
 
 		<div class="field field-payee">
-			<input
-				bind:this={payeeInput}
+			<PayeeInput
+				bind:this={payeeInputRef}
 				bind:value={payee}
-				type="text"
-				class="input input-payee"
-				class:error={errors.payee}
-				placeholder="Payee"
-				data-testid="quick-add-payee"
-				aria-label="Payee"
-				aria-invalid={!!errors.payee}
-				on:keydown={handleKeydown}
+				hasError={!!errors.payee}
+				on:select={handlePayeeSelect}
+				on:enter={handlePayeeEnter}
 				on:input={() => { if (errors.payee) errors.payee = undefined; }}
 			/>
 			{#if errors.payee}
