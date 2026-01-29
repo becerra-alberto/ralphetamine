@@ -207,5 +207,25 @@ Story 5.2: Add Month-over-Month Change Indicator - COMPLETED
 Story 5.2: COMPLETED - feat(story-5.2): Add Month-over-Month Change Indicator
 [DONE] Story 5.2 - Add Month-over-Month Change Indicator - Thu 29 Jan 2026 14:25:00 CST
 
+Story 5.3: Display Asset Categories - COMPLETED
+  - accountGroups.ts: groupAccountsByCategory, getAccountCategoryKey, getCategoryLabel utilities
+  - AccountRow.svelte: Individual account display with name, institution, balance, currency badge
+  - AssetCategory.svelte: Category header with label, total, percentage, and account list
+  - AssetsSection.svelte: Section with "Assets" title, grouped categories, empty state
+  - Categories: Cash & Bank (checking/savings/cash), Investments (investment), Retirement (retirement)
+  - Empty categories hidden automatically, only non-zero balance accounts shown
+  - Percentage of total assets shown per category (rounded to 1 decimal)
+  - Non-EUR accounts show currency badge (e.g., USD)
+  - Integrated into net-worth page below summary section
+  - Dark mode support
+  - Unit tests: accountGroups.test.ts (16 tests), AccountRow.test.ts (8 tests), AssetCategory.test.ts (8 tests), AssetsSection.test.ts (8 tests)
+  - All 1509 tests passing (1 skipped), 0 type errors, 9 warnings (all pre-existing)
+  - Commit: 93648cd
+Story 5.3: COMPLETED - feat(story-5.3): Display Asset Categories
+[DONE] Story 5.3 - Display Asset Categories - Thu 29 Jan 2026 14:30:00 CST
+
 [LEARN] Svelte 5 breaks component.$on() for event testing. Use `events: { eventName: handler }` in render options instead. The parentElement?.addEventListener pattern also doesn't work reliably for createEventDispatcher events in Svelte 5 test environments.
 [LEARN] jsdom doesn't implement scrollIntoView. Use optional chaining: `element?.scrollIntoView?.()` to guard against this in test environments.
+
+[LEARN] Story 4.2 was already fully implemented and committed. Always check git log first before implementing to avoid duplicate work.
+[DONE] Story 4.2 - transaction search - Thu 29 Jan 2026 14:25:09 CST
