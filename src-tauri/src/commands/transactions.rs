@@ -502,6 +502,43 @@ pub fn get_unique_tags(search: Option<String>, limit: Option<i64>) -> Result<Vec
     Ok(unique_tags)
 }
 
+/// Monthly summary for dashboard display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonthlySummary {
+    pub income_cents: i64,
+    pub expenses_cents: i64,
+    pub balance_cents: i64,
+}
+
+/// Get income, expenses, and balance for a given month (YYYY-MM)
+#[tauri::command]
+pub fn get_monthly_summary(month: String) -> Result<MonthlySummary, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    let income_cents: i64 = db
+        .query_row(
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM transactions WHERE date LIKE ? AND amount_cents > 0",
+            &[&format!("{}%", month)],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let expenses_cents: i64 = db
+        .query_row(
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM transactions WHERE date LIKE ? AND amount_cents < 0",
+            &[&format!("{}%", month)],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(MonthlySummary {
+        income_cents,
+        expenses_cents: expenses_cents.abs(),
+        balance_cents: income_cents + expenses_cents,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

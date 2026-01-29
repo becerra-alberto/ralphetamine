@@ -12,10 +12,18 @@ vi.mock('$lib/api/onboarding', () => ({
 	completeOnboarding: (...args: unknown[]) => mockCompleteOnboarding(...args)
 }));
 
+// Mock the transactions API (used by Dashboard component)
+const mockGetTransactionsForMonth = vi.fn();
+
+vi.mock('$lib/api/transactions', () => ({
+	getTransactionsForMonth: (...args: unknown[]) => mockGetTransactionsForMonth(...args)
+}));
+
 import HomePage from '../../../routes/+page.svelte';
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	mockGetTransactionsForMonth.mockResolvedValue([]);
 });
 
 describe('Home Page', () => {
@@ -36,7 +44,7 @@ describe('Home Page', () => {
 			expect(screen.getByTestId('home-page')).toBeTruthy();
 		});
 
-		expect(screen.getByText('Home Dashboard')).toBeTruthy();
+		expect(screen.getByTestId('dashboard')).toBeTruthy();
 	});
 
 	it('shows onboarding wizard when not completed', async () => {
@@ -59,17 +67,29 @@ describe('Home Page', () => {
 		});
 	});
 
-	it('contains navigation links when dashboard is shown', async () => {
+	it('shows command palette prompt when dashboard is displayed', async () => {
 		mockCheckOnboardingStatus.mockResolvedValue({ isCompleted: true, goals: [] });
 
-		const { container } = render(HomePage);
+		render(HomePage);
 
 		await waitFor(() => {
 			expect(screen.getByTestId('home-page')).toBeTruthy();
 		});
 
-		expect(container.querySelector('a[href="/budget"]')).toBeTruthy();
-		expect(container.querySelector('a[href="/transactions"]')).toBeTruthy();
-		expect(container.querySelector('a[href="/net-worth"]')).toBeTruthy();
+		const cmdText = screen.getByTestId('dashboard-cmd-text');
+		expect(cmdText.textContent).toContain('⌘K');
+		expect(cmdText.textContent).toContain('to get started');
+	});
+
+	it('shows quick shortcuts when dashboard is displayed', async () => {
+		mockCheckOnboardingStatus.mockResolvedValue({ isCompleted: true, goals: [] });
+
+		render(HomePage);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('home-page')).toBeTruthy();
+		});
+
+		expect(screen.getByTestId('dashboard-shortcuts')).toBeTruthy();
 	});
 });
