@@ -17,8 +17,90 @@ pub struct Migration {
 
 /// All migrations in order
 pub const MIGRATIONS: &[Migration] = &[
-    // Initial migration creates the migrations tracking table
-    // Additional migrations will be added in future stories
+    Migration {
+        version: "001",
+        description: "Create core tables (categories, accounts)",
+        up: r#"
+-- Create categories table
+CREATE TABLE categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    parent_id TEXT REFERENCES categories(id),
+    type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
+    icon TEXT,
+    color TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_categories_parent ON categories(parent_id);
+CREATE INDEX idx_categories_type ON categories(type);
+
+-- Create accounts table
+CREATE TABLE accounts (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('checking', 'savings', 'credit', 'investment', 'cash')),
+    institution TEXT NOT NULL,
+    currency TEXT NOT NULL CHECK (currency IN ('EUR', 'USD', 'CAD')) DEFAULT 'EUR',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    include_in_net_worth INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_accounts_type ON accounts(type);
+CREATE INDEX idx_accounts_active ON accounts(is_active);
+
+-- Seed default categories
+-- Income section
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-income', 'Income', NULL, 'income', 1);
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-income-salary', 'Salary', 'cat-income', 'income', 1),
+    ('cat-income-freelance', 'Freelance', 'cat-income', 'income', 2),
+    ('cat-income-investments', 'Investments', 'cat-income', 'income', 3),
+    ('cat-income-other', 'Other Income', 'cat-income', 'income', 4);
+
+-- Housing section
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-housing', 'Housing', NULL, 'expense', 2);
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-housing-rent', 'Rent/Mortgage', 'cat-housing', 'expense', 1),
+    ('cat-housing-vve', 'VVE Fees', 'cat-housing', 'expense', 2),
+    ('cat-housing-gas', 'Gas & Electricity', 'cat-housing', 'expense', 3),
+    ('cat-housing-water', 'Water', 'cat-housing', 'expense', 4),
+    ('cat-housing-insurance', 'Home Insurance', 'cat-housing', 'expense', 5);
+
+-- Essential section
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-essential', 'Essential', NULL, 'expense', 3);
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-essential-groceries', 'Groceries', 'cat-essential', 'expense', 1),
+    ('cat-essential-health', 'Health/Medical', 'cat-essential', 'expense', 2),
+    ('cat-essential-phone', 'Phone/Internet', 'cat-essential', 'expense', 3),
+    ('cat-essential-transport', 'Transportation', 'cat-essential', 'expense', 4),
+    ('cat-essential-insurance', 'Insurance', 'cat-essential', 'expense', 5);
+
+-- Lifestyle section
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-lifestyle', 'Lifestyle', NULL, 'expense', 4);
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-lifestyle-entertainment', 'Entertainment', 'cat-lifestyle', 'expense', 1),
+    ('cat-lifestyle-dining', 'Dining Out', 'cat-lifestyle', 'expense', 2),
+    ('cat-lifestyle-subscriptions', 'Subscriptions', 'cat-lifestyle', 'expense', 3),
+    ('cat-lifestyle-shopping', 'Shopping', 'cat-lifestyle', 'expense', 4),
+    ('cat-lifestyle-travel', 'Travel', 'cat-lifestyle', 'expense', 5);
+
+-- Savings section
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-savings', 'Savings', NULL, 'expense', 5);
+INSERT INTO categories (id, name, parent_id, type, sort_order) VALUES
+    ('cat-savings-emergency', 'Emergency Fund', 'cat-savings', 'expense', 1),
+    ('cat-savings-investments', 'Investments', 'cat-savings', 'expense', 2),
+    ('cat-savings-retirement', 'Retirement', 'cat-savings', 'expense', 3),
+    ('cat-savings-goals', 'Goals', 'cat-savings', 'expense', 4);
+"#,
+    },
 ];
 
 /// Run all pending migrations
@@ -228,5 +310,133 @@ mod tests {
         let db = Database::new_in_memory().unwrap();
         let applied = get_applied_migrations(&db).unwrap();
         assert!(applied.is_empty());
+    }
+
+    #[test]
+    fn test_categories_table_has_all_required_columns() {
+        let db = Database::new_in_memory().unwrap();
+        run_migrations(&db).unwrap();
+
+        // Query pragma to get column info
+        let columns: Vec<String> = db
+            .query_map(
+                "SELECT name FROM pragma_table_info('categories')",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert!(columns.contains(&"id".to_string()));
+        assert!(columns.contains(&"name".to_string()));
+        assert!(columns.contains(&"parent_id".to_string()));
+        assert!(columns.contains(&"type".to_string()));
+        assert!(columns.contains(&"icon".to_string()));
+        assert!(columns.contains(&"color".to_string()));
+        assert!(columns.contains(&"sort_order".to_string()));
+        assert!(columns.contains(&"created_at".to_string()));
+        assert!(columns.contains(&"updated_at".to_string()));
+    }
+
+    #[test]
+    fn test_categories_type_check_constraint_rejects_invalid() {
+        let db = Database::new_in_memory().unwrap();
+        run_migrations(&db).unwrap();
+
+        let result = db.execute(
+            "INSERT INTO categories (id, name, type) VALUES ('test', 'Test', 'invalid_type')",
+            &[],
+        );
+
+        assert!(result.is_err(), "Should reject invalid category type");
+    }
+
+    #[test]
+    fn test_categories_parent_id_foreign_key_works() {
+        let db = Database::new_in_memory().unwrap();
+        run_migrations(&db).unwrap();
+
+        // Insert with valid parent should work
+        db.execute(
+            "INSERT INTO categories (id, name, parent_id, type) VALUES ('child-test', 'Child Test', 'cat-income', 'income')",
+            &[],
+        )
+        .unwrap();
+
+        // Insert with invalid parent should fail (foreign key constraint)
+        let result = db.execute(
+            "INSERT INTO categories (id, name, parent_id, type) VALUES ('orphan', 'Orphan', 'nonexistent', 'income')",
+            &[],
+        );
+
+        assert!(result.is_err(), "Should reject invalid parent_id");
+    }
+
+    #[test]
+    fn test_accounts_table_has_all_required_columns() {
+        let db = Database::new_in_memory().unwrap();
+        run_migrations(&db).unwrap();
+
+        let columns: Vec<String> = db
+            .query_map(
+                "SELECT name FROM pragma_table_info('accounts')",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert!(columns.contains(&"id".to_string()));
+        assert!(columns.contains(&"name".to_string()));
+        assert!(columns.contains(&"type".to_string()));
+        assert!(columns.contains(&"institution".to_string()));
+        assert!(columns.contains(&"currency".to_string()));
+        assert!(columns.contains(&"is_active".to_string()));
+        assert!(columns.contains(&"include_in_net_worth".to_string()));
+        assert!(columns.contains(&"created_at".to_string()));
+        assert!(columns.contains(&"updated_at".to_string()));
+    }
+
+    #[test]
+    fn test_accounts_type_check_constraint_rejects_invalid() {
+        let db = Database::new_in_memory().unwrap();
+        run_migrations(&db).unwrap();
+
+        let result = db.execute(
+            "INSERT INTO accounts (id, name, type, institution) VALUES ('test', 'Test', 'invalid', 'Bank')",
+            &[],
+        );
+
+        assert!(result.is_err(), "Should reject invalid account type");
+    }
+
+    #[test]
+    fn test_accounts_currency_check_constraint_rejects_invalid() {
+        let db = Database::new_in_memory().unwrap();
+        run_migrations(&db).unwrap();
+
+        let result = db.execute(
+            "INSERT INTO accounts (id, name, type, institution, currency) VALUES ('test', 'Test', 'checking', 'Bank', 'GBP')",
+            &[],
+        );
+
+        assert!(result.is_err(), "Should reject invalid currency");
+    }
+
+    #[test]
+    fn test_indexes_exist() {
+        let db = Database::new_in_memory().unwrap();
+        run_migrations(&db).unwrap();
+
+        let indexes: Vec<String> = db
+            .query_map(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert!(indexes.contains(&"idx_categories_parent".to_string()));
+        assert!(indexes.contains(&"idx_categories_type".to_string()));
+        assert!(indexes.contains(&"idx_accounts_type".to_string()));
+        assert!(indexes.contains(&"idx_accounts_active".to_string()));
     }
 }

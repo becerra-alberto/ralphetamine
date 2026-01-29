@@ -33,6 +33,8 @@ pub fn run() {
             commands::db_update,
             commands::db_delete,
             commands::db_select,
+            commands::get_categories,
+            commands::get_accounts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
