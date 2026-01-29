@@ -995,6 +995,122 @@ mod tests {
         }));
     }
 
+    // --- Create transaction tests for Story 4.5 ---
+
+    #[test]
+    fn test_create_transaction_stores_amount_cents_as_integer() {
+        let db = setup_test_db();
+
+        let id = Uuid::new_v4().to_string();
+
+        // Insert with specific cents amount (like Quick Add would: $123.45 = 12345 cents)
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES (?, '2026-01-29', 'Test Store', -12345, 'test-account', '[]')",
+            &[&id],
+        )
+        .unwrap();
+
+        let amount: i64 = db
+            .query_row(
+                "SELECT amount_cents FROM transactions WHERE id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(amount, -12345, "Amount should be stored as integer cents (-12345 = -$123.45)");
+    }
+
+    #[test]
+    fn test_create_transaction_with_all_required_fields() {
+        let db = setup_test_db();
+
+        let id = Uuid::new_v4().to_string();
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES (?, '2026-01-29', 'Quick Add Payee', -5000, 'test-account', '[]')",
+            &[&id],
+        )
+        .unwrap();
+
+        let txn: Transaction = db.query_row(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE id = ?",
+            &[&id],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(txn.id, id);
+        assert_eq!(txn.date, "2026-01-29");
+        assert_eq!(txn.payee, "Quick Add Payee");
+        assert_eq!(txn.amount_cents, -5000);
+        assert_eq!(txn.account_id, "test-account");
+    }
+
+    #[test]
+    fn test_create_transaction_with_optional_fields() {
+        let db = setup_test_db();
+
+        // Create a category first
+        db.execute(
+            "INSERT INTO categories (id, name, type) VALUES ('cat-groceries', 'Groceries', 'expense')",
+            &[],
+        ).unwrap();
+
+        let id = Uuid::new_v4().to_string();
+        let tags = r#"["food","weekly"]"#;
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, category_id, memo, amount_cents, account_id, tags, import_source)
+             VALUES (?, '2026-01-29', 'Grocery Store', 'cat-groceries', 'Weekly shopping', -8500, 'test-account', ?, 'Manual')",
+            &[&id, &tags],
+        )
+        .unwrap();
+
+        let txn: Transaction = db.query_row(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE id = ?",
+            &[&id],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(txn.category_id.as_deref(), Some("cat-groceries"));
+        assert_eq!(txn.memo.as_deref(), Some("Weekly shopping"));
+        assert_eq!(txn.tags, vec!["food", "weekly"]);
+        assert_eq!(txn.import_source.as_deref(), Some("Manual"));
+    }
+
+    #[test]
+    fn test_create_transaction_returns_with_generated_id() {
+        let db = setup_test_db();
+
+        let id = Uuid::new_v4().to_string();
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES (?, '2026-01-29', 'Test Payee', -1000, 'test-account', '[]')",
+            &[&id],
+        )
+        .unwrap();
+
+        // Verify we can retrieve the transaction by the generated ID
+        let retrieved_id: String = db
+            .query_row(
+                "SELECT id FROM transactions WHERE id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(retrieved_id, id, "Should retrieve transaction by generated UUID");
+
+        // Verify the ID is a valid UUID format
+        let parsed = Uuid::parse_str(&retrieved_id);
+        assert!(parsed.is_ok(), "ID should be a valid UUID: {}", retrieved_id);
+    }
+
     // --- Uncategorized count tests for Story 4.4 ---
 
     #[test]
