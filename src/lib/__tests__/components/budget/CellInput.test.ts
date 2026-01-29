@@ -340,9 +340,7 @@ describe('CellInput', () => {
 			expect(preventDefaultSpy).toHaveBeenCalled();
 		});
 
-		it('should emit navigate event with direction "next" on Tab', async () => {
-			// In Svelte 5, we can test navigation behavior via DOM observation
-			// since $on is no longer available
+		it('should handle Tab key with valid input (no error)', async () => {
 			render(CellInput, {
 				props: {
 					valueCents: 40000
@@ -359,7 +357,7 @@ describe('CellInput', () => {
 			expect(wrapper.classList.contains('has-error')).toBe(false);
 		});
 
-		it('should emit navigate event with direction "prev" on Shift+Tab', async () => {
+		it('should handle Shift+Tab key with valid input (no error)', async () => {
 			render(CellInput, {
 				props: {
 					valueCents: 40000
