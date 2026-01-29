@@ -64,11 +64,11 @@
 				role="cell"
 				data-month={month}
 			>
-				<span class="cell-budgeted">
-					{formatCentsCurrency(monthTotals.budgetedCents)}
-				</span>
 				<span class="cell-actual">
 					{formatCentsCurrency(monthTotals.actualCents)}
+				</span>
+				<span class="cell-budgeted">
+					{formatCentsCurrency(monthTotals.budgetedCents)}
 				</span>
 			</div>
 		{/each}
@@ -149,13 +149,13 @@
 		background: var(--bg-highlight, #eff6ff);
 	}
 
-	.cell-budgeted {
+	.cell-actual {
 		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--text-primary, #111827);
 	}
 
-	.cell-actual {
+	.cell-budgeted {
 		font-size: 0.75rem;
 		color: var(--text-secondary, #6b7280);
 	}

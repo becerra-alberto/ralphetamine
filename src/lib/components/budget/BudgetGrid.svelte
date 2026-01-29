@@ -211,11 +211,11 @@
 								class:current-month={month === current}
 								role="cell"
 							>
-								<span class="total-budgeted">
-									{formatCentsCurrency(monthTotal?.budgeted ?? 0)}
-								</span>
 								<span class="total-actual">
 									{formatCentsCurrency(monthTotal?.actual ?? 0)}
+								</span>
+								<span class="total-budgeted">
+									{formatCentsCurrency(monthTotal?.budgeted ?? 0)}
 								</span>
 							</div>
 						{/each}
@@ -386,11 +386,11 @@
 		background: var(--bg-highlight, #eff6ff);
 	}
 
-	.total-budgeted {
+	.total-actual {
 		color: var(--text-primary, #111827);
 	}
 
-	.total-actual {
+	.total-budgeted {
 		font-size: 0.875rem;
 		color: var(--text-secondary, #6b7280);
 	}
