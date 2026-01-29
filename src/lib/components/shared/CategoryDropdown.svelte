@@ -83,7 +83,7 @@
 		close();
 	}
 
-	function handleClear(event: MouseEvent) {
+	function handleClear(event: MouseEvent | KeyboardEvent) {
 		event.stopPropagation();
 		dispatch('clear');
 		dispatch('select', { categoryId: null, categoryName: '' });
@@ -253,7 +253,6 @@
 						<li
 							class="section-header"
 							data-testid="{testId}-header-{item.id}"
-							aria-disabled="true"
 							role="presentation"
 						>
 							<span class="header-name">{item.name}</span>
