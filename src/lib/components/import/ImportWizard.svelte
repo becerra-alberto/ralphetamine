@@ -2,7 +2,9 @@
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 	import FileSelection from './FileSelection.svelte';
+	import ColumnMapping from './ColumnMapping.svelte';
 	import type { CsvParseResult } from '$lib/utils/csvParser';
+	import type { ColumnMapping as ColumnMappingType } from '$lib/utils/columnDetection';
 
 	export let open: boolean = false;
 	export let testId: string = 'import-wizard';
@@ -10,6 +12,14 @@
 	const dispatch = createEventDispatcher<{
 		close: void;
 		fileReady: { data: CsvParseResult; fileName: string };
+		mappingsReady: {
+			data: CsvParseResult;
+			fileName: string;
+			mappings: ColumnMappingType[];
+			saveTemplate: boolean;
+			templateName: string;
+			useInflowOutflow: boolean;
+		};
 	}>();
 
 	let currentStep = 1;
@@ -17,7 +27,16 @@
 	let fileData: CsvParseResult | null = null;
 	let fileName: string | null = null;
 
+	// Step 2 state
+	let mappings: ColumnMappingType[] = [];
+	let mappingsValid = false;
+	let mappingErrors: string[] = [];
+	let saveTemplate = false;
+	let templateName = '';
+	let useInflowOutflow = false;
+
 	$: hasFile = fileData !== null;
+	$: canProceed = currentStep === 1 ? hasFile : currentStep === 2 ? mappingsValid : false;
 
 	function handleClose() {
 		dispatch('close');
@@ -28,6 +47,12 @@
 		currentStep = 1;
 		fileData = null;
 		fileName = null;
+		mappings = [];
+		mappingsValid = false;
+		mappingErrors = [];
+		saveTemplate = false;
+		templateName = '';
+		useInflowOutflow = false;
 	}
 
 	function handleBackdropClick(event: MouseEvent) {
@@ -49,9 +74,34 @@
 		fileName = event.detail.fileName;
 	}
 
+	function handleMappingsChange(event: CustomEvent<{
+		mappings: ColumnMappingType[];
+		valid: boolean;
+		errors: string[];
+		saveTemplate: boolean;
+		templateName: string;
+		useInflowOutflow: boolean;
+	}>) {
+		mappings = event.detail.mappings;
+		mappingsValid = event.detail.valid;
+		mappingErrors = event.detail.errors;
+		saveTemplate = event.detail.saveTemplate;
+		templateName = event.detail.templateName;
+		useInflowOutflow = event.detail.useInflowOutflow;
+	}
+
 	function handleNext() {
-		if (currentStep < totalSteps && hasFile) {
-			dispatch('fileReady', { data: fileData!, fileName: fileName! });
+		if (currentStep === 1 && hasFile) {
+			currentStep = 2;
+		} else if (currentStep === 2 && mappingsValid) {
+			dispatch('mappingsReady', {
+				data: fileData!,
+				fileName: fileName!,
+				mappings,
+				saveTemplate,
+				templateName,
+				useInflowOutflow
+			});
 			handleClose();
 		}
 	}
@@ -81,6 +131,7 @@
 	>
 		<div
 			class="wizard-panel"
+			class:wizard-panel--wide={currentStep === 2}
 			role="dialog"
 			aria-modal="true"
 			aria-label="Import Transactions"
@@ -114,6 +165,12 @@
 						testId="{testId}-file-selection"
 						on:fileReady={handleFileReady}
 					/>
+				{:else if currentStep === 2 && fileData}
+					<ColumnMapping
+						data={fileData}
+						testId="{testId}-column-mapping"
+						on:mappingsChange={handleMappingsChange}
+					/>
 				{/if}
 			</div>
 
@@ -135,7 +192,7 @@
 				<button
 					type="button"
 					class="btn-next"
-					disabled={!hasFile}
+					disabled={!canProceed}
 					data-testid="{testId}-next"
 					on:click={handleNext}
 				>
@@ -168,6 +225,10 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.wizard-panel--wide {
+		max-width: 780px;
 	}
 
 	.wizard-header {
