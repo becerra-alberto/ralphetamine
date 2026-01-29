@@ -72,14 +72,14 @@ describe('BudgetCell Performance', () => {
 				props: {
 					month: '2025-01',
 					budgetedCents: 50000,
-					actualCents: -25000, // 50% = status-good
+					actualCents: -25000, // 50% = status-success
 					isCurrent: false,
 					categoryType: 'expense'
 				}
 			});
 
 			const cell = container.querySelector('[data-testid="budget-cell"]');
-			expect(cell?.classList.contains('status-good')).toBe(true);
+			expect(cell?.classList.contains('status-success')).toBe(true);
 
 			// The reactive statement $: statusClass = getStatusClass() should only
 			// recalculate when its dependencies change
@@ -97,7 +97,7 @@ describe('BudgetCell Performance', () => {
 			});
 
 			const cell2 = container2.querySelector('[data-testid="budget-cell"]');
-			expect(cell2?.classList.contains('status-good')).toBe(true);
+			expect(cell2?.classList.contains('status-success')).toBe(true);
 		});
 
 		it('should recalculate status when actualCents changes', () => {
@@ -106,14 +106,14 @@ describe('BudgetCell Performance', () => {
 				props: {
 					month: '2025-01',
 					budgetedCents: 50000,
-					actualCents: -25000, // 50% = status-good
+					actualCents: -25000, // 50% = status-success
 					isCurrent: false,
 					categoryType: 'expense'
 				}
 			});
 
 			const cell = container.querySelector('[data-testid="budget-cell"]');
-			expect(cell?.classList.contains('status-good')).toBe(true);
+			expect(cell?.classList.contains('status-success')).toBe(true);
 
 			cleanup();
 

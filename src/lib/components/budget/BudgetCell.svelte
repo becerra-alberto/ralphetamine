@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { MonthString } from '$lib/types/budget';
 	import { formatCentsCurrency } from '$lib/utils/currency';
+	import { getBudgetStatusWithClass } from '$lib/utils/budgetStatus';
 
 	export let budgetedCents: number = 0;
 	export let actualCents: number = 0;
@@ -8,30 +9,9 @@
 	export let isCurrent: boolean = false;
 	export let categoryType: 'expense' | 'income' | 'transfer' = 'expense';
 
-	/**
-	 * Get color indicator class based on budget usage
-	 * For expenses: over budget is bad (danger)
-	 * For income: under target is bad
-	 */
-	function getStatusClass(): string {
-		if (budgetedCents === 0) return '';
-
-		if (categoryType === 'income') {
-			// For income, actual >= budget is good
-			const percentAchieved = (actualCents / budgetedCents) * 100;
-			if (percentAchieved >= 100) return 'status-good';
-			if (percentAchieved >= 75) return 'status-warning';
-			return 'status-danger';
-		} else {
-			// For expenses, actual <= budget is good
-			const percentUsed = (Math.abs(actualCents) / budgetedCents) * 100;
-			if (percentUsed <= 75) return 'status-good';
-			if (percentUsed <= 100) return 'status-warning';
-			return 'status-danger';
-		}
-	}
-
-	$: statusClass = getStatusClass();
+	// Calculate budget status using the utility
+	$: statusResult = getBudgetStatusWithClass(actualCents, budgetedCents, categoryType);
+	$: statusClass = statusResult.className;
 </script>
 
 <div
@@ -78,17 +58,37 @@
 		color: var(--text-secondary, #6b7280);
 	}
 
-	/* Status indicators */
-	.status-good .cell-actual {
+	/* Status indicators - Background colors with subtle opacity */
+	.status-success {
+		background: rgba(16, 185, 129, 0.1); /* --color-success at 10% opacity */
+		border-left: 3px solid var(--color-success, #10b981);
+	}
+
+	.status-success .cell-actual {
 		color: var(--color-success, #10b981);
+	}
+
+	.status-warning {
+		background: rgba(245, 158, 11, 0.1); /* --color-warning at 10% opacity */
+		border-left: 3px solid var(--color-warning, #f59e0b);
 	}
 
 	.status-warning .cell-actual {
 		color: var(--color-warning, #f59e0b);
 	}
 
+	.status-danger {
+		background: rgba(239, 68, 68, 0.1); /* --color-danger at 10% opacity */
+		border-left: 3px solid var(--color-danger, #ef4444);
+	}
+
 	.status-danger .cell-actual {
 		color: var(--color-danger, #ef4444);
+	}
+
+	.status-neutral {
+		background: rgba(107, 114, 128, 0.05); /* --text-secondary at 5% opacity */
+		border-left: 3px solid var(--text-secondary, #6b7280);
 	}
 
 	/* Dark mode */

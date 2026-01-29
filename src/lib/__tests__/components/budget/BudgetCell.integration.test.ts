@@ -63,7 +63,7 @@ describe('BudgetCell Integration', () => {
 			expect(budgeted.textContent).toContain('5,000.00');
 		});
 
-		it('should show status-good when income exceeds target', () => {
+		it('should show status-success when income exceeds target', () => {
 			render(BudgetCell, {
 				props: {
 					month: '2025-01',
@@ -75,7 +75,7 @@ describe('BudgetCell Integration', () => {
 			});
 
 			const cell = screen.getByTestId('budget-cell');
-			expect(cell.classList.contains('status-good')).toBe(true);
+			expect(cell.classList.contains('status-success')).toBe(true);
 		});
 
 		it('should show status-danger when income is significantly below target', () => {
@@ -109,7 +109,7 @@ describe('BudgetCell Integration', () => {
 
 			const cell = screen.getByTestId('budget-cell');
 			// 50% < 75% should be good
-			expect(cell.classList.contains('status-good')).toBe(true);
+			expect(cell.classList.contains('status-success')).toBe(true);
 		});
 	});
 
@@ -149,6 +149,144 @@ describe('BudgetCell Integration', () => {
 
 			expect(actual.textContent).toContain('19.99');
 			expect(budgeted.textContent).toContain('19.99');
+		});
+	});
+
+	describe('color coding based on budget status', () => {
+		it('should apply status-success class when expense is under budget', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 100000, // €1000 budget
+					actualCents: -50000, // €500 spent = 50% (under budget)
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('status-success')).toBe(true);
+		});
+
+		it('should apply status-danger class when expense is over budget', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 100000, // €1000 budget
+					actualCents: -120000, // €1200 spent = 120% (over budget)
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('status-danger')).toBe(true);
+		});
+
+		it('should apply status-warning class when expense is approaching budget', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 100000, // €1000 budget
+					actualCents: -95000, // €950 spent = 95% (approaching)
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('status-warning')).toBe(true);
+		});
+
+		it('should apply status-neutral class when expense is on budget', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 100000, // €1000 budget
+					actualCents: -100000, // €1000 spent = 100% (on budget)
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('status-neutral')).toBe(true);
+		});
+
+		it('should not apply status class when no budget is set', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 0, // No budget
+					actualCents: -50000,
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('status-success')).toBe(false);
+			expect(cell.classList.contains('status-danger')).toBe(false);
+			expect(cell.classList.contains('status-warning')).toBe(false);
+			expect(cell.classList.contains('status-neutral')).toBe(false);
+		});
+	});
+
+	describe('color coding updates with transaction changes', () => {
+		it('should reflect status change when actualCents prop changes', async () => {
+			const { rerender } = render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 100000,
+					actualCents: -50000, // 50% = under budget
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			let cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('status-success')).toBe(true);
+
+			// Simulate transaction change - now over budget
+			await rerender({
+				month: '2025-01',
+				budgetedCents: 100000,
+				actualCents: -120000, // 120% = over budget
+				isCurrent: false,
+				categoryType: 'expense'
+			});
+
+			cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('status-danger')).toBe(true);
+			expect(cell.classList.contains('status-success')).toBe(false);
+		});
+
+		it('should update display when multiple transactions accumulate', async () => {
+			// Start with one transaction
+			const { rerender } = render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 100000,
+					actualCents: -30000, // €300 = 30%
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			let actual = screen.getByTestId('cell-actual');
+			expect(actual.textContent).toContain('300.00');
+
+			// Add more transactions (simulated by changing actualCents)
+			await rerender({
+				month: '2025-01',
+				budgetedCents: 100000,
+				actualCents: -75000, // €750 = 75% (under, closer to budget)
+				isCurrent: false,
+				categoryType: 'expense'
+			});
+
+			actual = screen.getByTestId('cell-actual');
+			expect(actual.textContent).toContain('750.00');
 		});
 	});
 
