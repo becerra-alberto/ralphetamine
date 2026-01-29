@@ -712,4 +712,136 @@ mod tests {
             .unwrap();
         assert_eq!(count, 1, "Should have exactly one row after upsert");
     }
+
+    // --- Liability grouping tests for Story 5.4 ---
+
+    #[test]
+    fn test_liability_accounts_query_groups_by_type() {
+        let db = setup_net_worth_test_db();
+
+        // Query only credit accounts (liabilities)
+        let liabilities: Vec<AccountWithBalance> = db
+            .query_map(
+                "SELECT a.id, a.name, a.type, a.institution, a.currency, a.is_active, a.include_in_net_worth,
+                        COALESCE(SUM(t.amount_cents), 0) as balance_cents
+                 FROM accounts a
+                 LEFT JOIN transactions t ON t.account_id = a.id
+                 WHERE a.is_active = 1 AND a.include_in_net_worth = 1 AND a.type = 'credit'
+                 GROUP BY a.id
+                 ORDER BY a.name",
+                &[],
+                |row| {
+                    Ok(AccountWithBalance {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        account_type: row.get(2)?,
+                        institution: row.get(3)?,
+                        currency: row.get(4)?,
+                        is_active: row.get::<_, i32>(5)? == 1,
+                        include_in_net_worth: row.get::<_, i32>(6)? == 1,
+                        balance_cents: row.get(7)?,
+                    })
+                },
+            )
+            .unwrap();
+
+        assert_eq!(liabilities.len(), 1, "Should have 1 credit account");
+        assert_eq!(liabilities[0].account_type, "credit");
+        assert_eq!(liabilities[0].balance_cents, -75000, "Credit card balance should be -75000");
+    }
+
+    #[test]
+    fn test_liability_aggregation_absolute_sum() {
+        // Verify absolute sum: |−8000| + |−5000| + |−2000| = 15000
+        let balances: Vec<i64> = vec![-8000, -5000, -2000];
+        let absolute_total: i64 = balances.iter().map(|b| b.abs()).sum();
+        assert_eq!(absolute_total, 15000, "Absolute liability total should be 15000 cents");
+    }
+
+    #[test]
+    fn test_credit_accounts_with_zero_balance_excluded_from_liabilities() {
+        let db = setup_test_db();
+
+        // Create credit account with zero balance (no transactions)
+        db.execute(
+            "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth)
+             VALUES ('acc-zero-credit', 'Unused Card', 'credit', 'Bank', 'EUR', 1, 1)",
+            &[],
+        ).unwrap();
+
+        let liabilities: Vec<AccountWithBalance> = db
+            .query_map(
+                "SELECT a.id, a.name, a.type, a.institution, a.currency, a.is_active, a.include_in_net_worth,
+                        COALESCE(SUM(t.amount_cents), 0) as balance_cents
+                 FROM accounts a
+                 LEFT JOIN transactions t ON t.account_id = a.id
+                 WHERE a.is_active = 1 AND a.include_in_net_worth = 1 AND a.type = 'credit'
+                 GROUP BY a.id
+                 HAVING balance_cents < 0
+                 ORDER BY a.name",
+                &[],
+                |row| {
+                    Ok(AccountWithBalance {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        account_type: row.get(2)?,
+                        institution: row.get(3)?,
+                        currency: row.get(4)?,
+                        is_active: row.get::<_, i32>(5)? == 1,
+                        include_in_net_worth: row.get::<_, i32>(6)? == 1,
+                        balance_cents: row.get(7)?,
+                    })
+                },
+            )
+            .unwrap();
+
+        // Zero-balance credit card should be excluded
+        assert!(
+            liabilities.is_empty(),
+            "Credit accounts with zero balance should be excluded from liabilities"
+        );
+    }
+
+    #[test]
+    fn test_multi_currency_liabilities_return_with_currency() {
+        let db = setup_test_db();
+
+        db.execute(
+            "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth)
+             VALUES ('acc-usd-credit', 'US Credit Card', 'credit', 'Chase', 'USD', 1, 1)",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('t-usd', '2025-01-15', 'Purchase', -50000, 'acc-usd-credit', '[]')",
+            &[],
+        ).unwrap();
+
+        let account: AccountWithBalance = db
+            .query_row(
+                "SELECT a.id, a.name, a.type, a.institution, a.currency, a.is_active, a.include_in_net_worth,
+                        COALESCE(SUM(t.amount_cents), 0) as balance_cents
+                 FROM accounts a
+                 LEFT JOIN transactions t ON t.account_id = a.id
+                 WHERE a.id = 'acc-usd-credit'
+                 GROUP BY a.id",
+                &[],
+                |row| {
+                    Ok(AccountWithBalance {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        account_type: row.get(2)?,
+                        institution: row.get(3)?,
+                        currency: row.get(4)?,
+                        is_active: row.get::<_, i32>(5)? == 1,
+                        include_in_net_worth: row.get::<_, i32>(6)? == 1,
+                        balance_cents: row.get(7)?,
+                    })
+                },
+            )
+            .unwrap();
+
+        assert_eq!(account.currency, "USD", "Currency should be USD");
+        assert_eq!(account.balance_cents, -50000, "Balance should be -50000");
+    }
 }

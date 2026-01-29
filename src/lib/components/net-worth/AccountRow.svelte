@@ -4,11 +4,13 @@
 	import type { AccountWithBalance } from '$lib/api/netWorth';
 
 	export let account: AccountWithBalance;
+	export let showAbsoluteBalance = false;
 	export let testId = 'account-row';
 
 	$: currency = (account.currency || 'EUR') as CurrencyCode;
 	$: isNonEur = currency !== 'EUR';
-	$: formattedBalance = formatCentsCurrency(account.balanceCents, currency);
+	$: displayCents = showAbsoluteBalance ? Math.abs(account.balanceCents) : account.balanceCents;
+	$: formattedBalance = formatCentsCurrency(displayCents, currency);
 </script>
 
 <div class="account-row" data-testid={testId}>

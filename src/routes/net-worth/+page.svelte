@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import NetWorthSummary from '$lib/components/net-worth/NetWorthSummary.svelte';
 	import AssetsSection from '$lib/components/net-worth/AssetsSection.svelte';
+	import LiabilitiesSection from '$lib/components/net-worth/LiabilitiesSection.svelte';
 	import { netWorthStore } from '$lib/stores/netWorth';
 	import { getNetWorthSummary, saveNetWorthSnapshot, getMomChange } from '$lib/api/netWorth';
 
@@ -67,6 +68,10 @@
 			<AssetsSection
 				accounts={$netWorthStore.accounts}
 				totalAssetsCents={$netWorthStore.totalAssetsCents}
+			/>
+			<LiabilitiesSection
+				accounts={$netWorthStore.accounts}
+				totalLiabilitiesCents={$netWorthStore.totalLiabilitiesCents}
 			/>
 		{/if}
 	{/if}

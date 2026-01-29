@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
 	groupAccountsByCategory,
 	getAccountCategoryKey,
-	getCategoryLabel
+	getCategoryLabel,
+	groupLiabilitiesByCategory,
+	getLiabilityCategoryKey,
+	getLiabilityCategoryLabel
 } from '../../utils/accountGroups';
 import type { AccountWithBalance } from '../../api/netWorth';
 
@@ -211,6 +214,143 @@ describe('accountGroups', () => {
 
 		it('should return correct label for retirement', () => {
 			expect(getCategoryLabel('retirement')).toBe('Retirement');
+		});
+	});
+
+	// --- Liability grouping tests ---
+
+	describe('groupLiabilitiesByCategory', () => {
+		const liabilityAccounts: AccountWithBalance[] = [
+			{
+				id: 'acc-credit-1',
+				name: 'Visa Card',
+				type: 'credit',
+				institution: 'Visa',
+				currency: 'EUR',
+				isActive: true,
+				includeInNetWorth: true,
+				balanceCents: -75000
+			},
+			{
+				id: 'acc-credit-2',
+				name: 'Mastercard',
+				type: 'credit',
+				institution: 'MC',
+				currency: 'EUR',
+				isActive: true,
+				includeInNetWorth: true,
+				balanceCents: -25000
+			}
+		];
+
+		it('should group credit accounts into Credit Cards category', () => {
+			const categories = groupLiabilitiesByCategory(liabilityAccounts, 100000);
+			const creditCards = categories.find((c) => c.key === 'credit_cards');
+
+			expect(creditCards).toBeDefined();
+			expect(creditCards!.label).toBe('Credit Cards');
+			expect(creditCards!.accounts).toHaveLength(2);
+		});
+
+		it('should calculate category total as absolute sum', () => {
+			const categories = groupLiabilitiesByCategory(liabilityAccounts, 100000);
+			const creditCards = categories.find((c) => c.key === 'credit_cards');
+
+			// |−75000| + |−25000| = 100000
+			expect(creditCards!.totalCents).toBe(100000);
+		});
+
+		it('should calculate percentage of total liabilities', () => {
+			const categories = groupLiabilitiesByCategory(liabilityAccounts, 100000);
+			const creditCards = categories.find((c) => c.key === 'credit_cards');
+
+			expect(creditCards!.percentOfTotal).toBe(100.0);
+		});
+
+		it('should handle totalLiabilities=0 with 0% not NaN', () => {
+			const categories = groupLiabilitiesByCategory(liabilityAccounts, 0);
+			for (const cat of categories) {
+				expect(cat.percentOfTotal).toBe(0);
+				expect(Number.isNaN(cat.percentOfTotal)).toBe(false);
+			}
+		});
+
+		it('should exclude positive balance accounts', () => {
+			const mixed: AccountWithBalance[] = [
+				...liabilityAccounts,
+				{
+					id: 'acc-checking',
+					name: 'Checking',
+					type: 'checking',
+					institution: 'Bank',
+					currency: 'EUR',
+					isActive: true,
+					includeInNetWorth: true,
+					balanceCents: 350000
+				}
+			];
+
+			const categories = groupLiabilitiesByCategory(mixed, 100000);
+			expect(categories).toHaveLength(1);
+			expect(categories[0].key).toBe('credit_cards');
+		});
+
+		it('should hide empty liability categories', () => {
+			// Only credit accounts, no loans or mortgages
+			const categories = groupLiabilitiesByCategory(liabilityAccounts, 100000);
+			expect(categories).toHaveLength(1);
+			expect(categories[0].key).toBe('credit_cards');
+		});
+
+		it('should return empty array when no liabilities', () => {
+			const noLiabilities: AccountWithBalance[] = [
+				{
+					id: 'acc-1',
+					name: 'Checking',
+					type: 'checking',
+					institution: 'Bank',
+					currency: 'EUR',
+					isActive: true,
+					includeInNetWorth: true,
+					balanceCents: 100000
+				}
+			];
+			const categories = groupLiabilitiesByCategory(noLiabilities, 0);
+			expect(categories).toHaveLength(0);
+		});
+	});
+
+	describe('getLiabilityCategoryKey', () => {
+		it('should map credit to credit_cards', () => {
+			expect(getLiabilityCategoryKey('credit')).toBe('credit_cards');
+		});
+
+		it('should map loan to loans', () => {
+			expect(getLiabilityCategoryKey('loan')).toBe('loans');
+		});
+
+		it('should map mortgage to mortgages', () => {
+			expect(getLiabilityCategoryKey('mortgage')).toBe('mortgages');
+		});
+
+		it('should return null for asset types', () => {
+			expect(getLiabilityCategoryKey('checking')).toBeNull();
+			expect(getLiabilityCategoryKey('savings')).toBeNull();
+			expect(getLiabilityCategoryKey('investment')).toBeNull();
+		});
+	});
+
+	describe('getLiabilityCategoryLabel', () => {
+		it('should return "Credit Cards" for credit_cards', () => {
+			expect(getLiabilityCategoryLabel('credit_cards')).toBe('Credit Cards');
+		});
+
+		it('should return "Loans" for loans', () => {
+			expect(getLiabilityCategoryLabel('loans')).toBe('Loans');
+		});
+
+		it('should return "Mortgages" for mortgages', () => {
+			expect(getLiabilityCategoryLabel('mortgages')).toBe('Mortgages');
 		});
 	});
 });
