@@ -162,6 +162,7 @@ Story 4.9: Implement Tags Multi-Select - COMPLETED
   - Unit tests: TagSelect.test.ts (32 tests), Chip.test.ts (10 tests)
   - Rust integration tests: 4 tags tests (stored as JSON, parsed correctly, unique extraction, predefined+custom merge)
   - All 1386 tests passing (1 skipped), 0 type errors, 9 warnings (all pre-existing)
+  - Commit: b140519
 Story 4.9: COMPLETED - feat(story-4.9): Implement Tags Multi-Select
 
 [LEARN] Svelte 5 breaks component.$on() for event testing. Use `events: { eventName: handler }` in render options instead. The parentElement?.addEventListener pattern also doesn't work reliably for createEventDispatcher events in Svelte 5 test environments.
