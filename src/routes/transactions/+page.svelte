@@ -3,9 +3,10 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import TransactionTable from '$lib/components/transactions/TransactionTable.svelte';
+	import SearchBar from '$lib/components/transactions/SearchBar.svelte';
 	import {
 		transactionStore,
-		totalPages,
+		filterTransactionsBySearch,
 		type TransactionWithDisplay,
 		type SortableColumn
 	} from '$lib/stores/transactions';
@@ -22,9 +23,15 @@
 	$: totalItems = storeState.pagination.totalItems;
 	$: sortColumn = storeState.sort.column;
 	$: sortDirection = storeState.sort.direction;
-	$: transactions = storeState.transactions;
+	$: allTransactions = storeState.transactions;
+	$: searchQuery = storeState.filters.search;
 	$: selectedId = storeState.selectedId;
 	$: expandedId = storeState.expandedId;
+
+	// Apply search filter to transactions
+	$: filteredTransactions = filterTransactionsBySearch(allTransactions, searchQuery);
+	$: transactions = filteredTransactions;
+	$: displayedTotalItems = searchQuery.length >= 2 ? filteredTransactions.length : totalItems;
 
 	// Load transactions on mount and when pagination/sort changes
 	onMount(() => {
@@ -60,15 +67,7 @@
 				sortDirection
 			});
 
-			// Transform transactions to include display names
-			// TODO: In future, fetch categories and accounts to get real names
-			const transactionsWithDisplay: TransactionWithDisplay[] = result.items.map((t) => ({
-				...t,
-				categoryName: null, // Will be populated when categories API is integrated
-				accountName: 'Unknown' // Will be populated when accounts API is integrated
-			}));
-
-			transactionStore.setTransactions(transactionsWithDisplay, result.totalCount);
+			transactionStore.setTransactions(result.items, result.totalCount);
 			error = null;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load transactions';
@@ -120,6 +119,14 @@
 	function handleRowExpand(event: CustomEvent<{ id: string }>) {
 		transactionStore.toggleExpanded(event.detail.id);
 	}
+
+	function handleSearch(event: CustomEvent<{ query: string }>) {
+		transactionStore.setSearch(event.detail.query);
+	}
+
+	function handleSearchClear() {
+		transactionStore.clearSearch();
+	}
 </script>
 
 <svelte:head>
@@ -130,7 +137,13 @@
 	<header class="page-header">
 		<h1 class="page-title">Transactions</h1>
 		<div class="header-actions">
-			<!-- Future: Add transaction button, filters, etc. -->
+			<SearchBar
+				value={searchQuery}
+				filteredCount={filteredTransactions.length}
+				totalCount={totalItems}
+				on:search={handleSearch}
+				on:clear={handleSearchClear}
+			/>
 		</div>
 	</header>
 
@@ -142,21 +155,27 @@
 	{/if}
 
 	<div class="table-container">
-		<TransactionTable
-			{transactions}
-			{totalItems}
-			{currentPage}
-			{itemsPerPage}
-			{sortColumn}
-			{sortDirection}
-			{isLoading}
-			{selectedId}
-			{expandedId}
-			on:pageChange={handlePageChange}
-			on:sort={handleSort}
-			on:rowClick={handleRowClick}
-			on:rowExpand={handleRowExpand}
-		/>
+		{#if searchQuery.length >= 2 && filteredTransactions.length === 0 && !isLoading}
+			<div class="no-results" data-testid="no-results">
+				<p>No transactions match '{searchQuery}'</p>
+			</div>
+		{:else}
+			<TransactionTable
+				{transactions}
+				totalItems={displayedTotalItems}
+				{currentPage}
+				{itemsPerPage}
+				{sortColumn}
+				{sortDirection}
+				{isLoading}
+				{selectedId}
+				{expandedId}
+				on:pageChange={handlePageChange}
+				on:sort={handleSort}
+				on:rowClick={handleRowClick}
+				on:rowExpand={handleRowExpand}
+			/>
+		{/if}
 	</div>
 </div>
 
@@ -215,6 +234,19 @@
 
 	.error-banner button:hover {
 		opacity: 0.9;
+	}
+
+	.no-results {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 200px;
+		color: var(--text-secondary, #6b7280);
+		font-size: 0.875rem;
+	}
+
+	.no-results p {
+		margin: 0;
 	}
 
 	/* Dark mode */
