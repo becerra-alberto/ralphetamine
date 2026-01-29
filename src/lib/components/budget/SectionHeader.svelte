@@ -1,15 +1,18 @@
 <script lang="ts">
 	import type { MonthString } from '$lib/types/budget';
 	import type { CategorySection, SectionTotals } from '$lib/utils/categoryGroups';
+	import type { Trailing12MTotals } from '$lib/utils/budgetCalculations';
 	import { getSectionStatusClass } from '$lib/utils/categoryGroups';
 	import { formatCentsCurrency } from '$lib/types/budget';
 	import { budgetUIStore } from '$lib/stores/budgetUI';
 	import { get } from 'svelte/store';
+	import TotalsColumn from './TotalsColumn.svelte';
 
 	export let section: CategorySection;
 	export let months: MonthString[];
 	export let currentMonth: MonthString;
 	export let totals: Map<MonthString, SectionTotals>;
+	export let totals12M: Trailing12MTotals | undefined = undefined;
 	export let isCollapsed: boolean;
 
 	/**
@@ -73,6 +76,11 @@
 			</div>
 		{/each}
 	</div>
+
+	<!-- 12M totals column for section -->
+	{#if totals12M}
+		<TotalsColumn totals={totals12M} isSectionHeader={true} />
+	{/if}
 </div>
 
 <style>

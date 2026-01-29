@@ -13,10 +13,17 @@
 		calculateAllSectionTotals,
 		type CategorySection
 	} from '$lib/utils/categoryGroups';
+	import {
+		getTrailing12MRange,
+		calculate12MTotals,
+		calculateSection12MTotals,
+		calculateGrand12MTotals
+	} from '$lib/utils/budgetCalculations';
 	import MonthHeader from './MonthHeader.svelte';
 	import YearHeader from './YearHeader.svelte';
 	import CategoryRow from './CategoryRow.svelte';
 	import SectionHeader from './SectionHeader.svelte';
+	import TotalsColumn from './TotalsColumn.svelte';
 	import { formatCentsCurrency } from '$lib/types/budget';
 	import type { BudgetCell } from '$lib/stores/budget';
 	import type { MonthString } from '$lib/types/budget';
@@ -99,6 +106,68 @@
 	function getSectionTotals(section: CategorySection) {
 		return calculateAllSectionTotals(section, months, cellsMap);
 	}
+
+	// Calculate trailing 12M range from the end of the visible months
+	$: trailing12MMonths = months.length > 0 ? getTrailing12MRange(months[months.length - 1]) : [];
+
+	// Extended cells map that includes trailing 12M months (may extend beyond visible)
+	$: extended12MCellsMap = createExtended12MCellsMap($budgetStore.budgets, $budgetStore.actuals, trailing12MMonths);
+
+	/**
+	 * Create an extended cells map for 12M calculations
+	 * This includes months that might be outside the visible range
+	 */
+	function createExtended12MCellsMap(
+		budgets: Map<string, { amountCents: number }>,
+		actuals: Map<string, number>,
+		trailing12M: MonthString[]
+	): Map<string, BudgetCell> {
+		const map = new Map<string, BudgetCell>();
+		const allCategories = $budgetStore.categories;
+
+		allCategories.forEach((category) => {
+			trailing12M.forEach((month) => {
+				const key = createCellKey(category.id, month);
+				const budget = budgets.get(key);
+				const actualCents = actuals.get(key) ?? 0;
+				const budgetedCents = budget?.amountCents ?? 0;
+
+				map.set(key, {
+					categoryId: category.id,
+					month,
+					budgetedCents,
+					actualCents,
+					remainingCents: budgetedCents - Math.abs(actualCents)
+				});
+			});
+		});
+
+		return map;
+	}
+
+	/**
+	 * Get 12M totals for a category
+	 */
+	function getCategory12MTotals(categoryId: string) {
+		return calculate12MTotals(categoryId, trailing12MMonths, extended12MCellsMap);
+	}
+
+	/**
+	 * Get 12M totals for a section
+	 */
+	function getSection12MTotals(section: CategorySection) {
+		const categoryIds = section.children.map((c) => c.id);
+		return calculateSection12MTotals(categoryIds, trailing12MMonths, extended12MCellsMap);
+	}
+
+	/**
+	 * Get grand 12M totals (all categories)
+	 */
+	$: grand12MTotals = calculateGrand12MTotals(
+		$budgetStore.categories.map((c) => c.id),
+		trailing12MMonths,
+		extended12MCellsMap
+	);
 </script>
 
 <div class="budget-grid-container" role="region" aria-label="Budget Grid">
@@ -128,6 +197,9 @@
 						/>
 					{/each}
 				</div>
+
+				<!-- 12M header spacer -->
+				<div class="totals-header-spacer"></div>
 			</div>
 
 			<!-- Month headers row -->
@@ -141,6 +213,11 @@
 						/>
 					{/each}
 				</div>
+				<!-- 12M totals header -->
+				<TotalsColumn
+					totals={{ actualCents: 0, budgetedCents: 0, differenceCents: 0, percentUsed: 0 }}
+					isHeader={true}
+				/>
 			</div>
 
 			<!-- Data rows -->
@@ -157,12 +234,14 @@
 					{#each sections as section (section.id)}
 						{@const isExpanded = isSectionExpanded(section)}
 						{@const sectionTotals = getSectionTotals(section)}
+						{@const section12MTotals = getSection12MTotals(section)}
 
 						<SectionHeader
 							{section}
 							{months}
 							currentMonth={current}
 							totals={sectionTotals}
+							totals12M={section12MTotals}
 							isCollapsed={!isExpanded}
 						/>
 
@@ -174,11 +253,13 @@
 								data-section-id={section.id}
 							>
 								{#each section.children as childCategory (childCategory.id)}
+									{@const category12MTotals = getCategory12MTotals(childCategory.id)}
 									<CategoryRow
 										category={childCategory}
 										cells={getCategoryCells(childCategory.id)}
 										{months}
 										currentMonth={current}
+										totals12M={category12MTotals}
 									/>
 								{/each}
 							</div>
@@ -187,11 +268,13 @@
 				{:else}
 					<!-- Fallback: render flat category list when no sections exist -->
 					{#each $budgetStore.categories as category (category.id)}
+						{@const category12MTotals = getCategory12MTotals(category.id)}
 						<CategoryRow
 							{category}
 							cells={getCategoryCells(category.id)}
 							{months}
 							currentMonth={current}
+							totals12M={category12MTotals}
 						/>
 					{/each}
 				{/if}
@@ -220,6 +303,11 @@
 							</div>
 						{/each}
 					</div>
+					<!-- 12M grand total -->
+					<TotalsColumn
+						totals={grand12MTotals}
+						isGrandTotal={true}
+					/>
 				</div>
 			{/if}
 		</div>
@@ -280,6 +368,14 @@
 	.year-headers {
 		display: flex;
 		flex: 1;
+	}
+
+	.totals-header-spacer {
+		min-width: 140px;
+		width: 140px;
+		background: var(--bg-secondary, #f9fafb);
+		border-bottom: 1px solid var(--border-color, #e5e7eb);
+		border-left: 2px solid var(--color-accent, #4f46e5);
 	}
 
 	.month-headers-row {

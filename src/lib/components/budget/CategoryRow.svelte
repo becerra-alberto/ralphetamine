@@ -2,12 +2,15 @@
 	import type { Category } from '$lib/types/category';
 	import type { MonthString } from '$lib/types/budget';
 	import type { BudgetCell as BudgetCellType } from '$lib/stores/budget';
+	import type { Trailing12MTotals } from '$lib/utils/budgetCalculations';
 	import BudgetCell from './BudgetCell.svelte';
+	import TotalsColumn from './TotalsColumn.svelte';
 
 	export let category: Category;
 	export let cells: Map<MonthString, BudgetCellType>;
 	export let months: MonthString[];
 	export let currentMonth: MonthString;
+	export let totals12M: Trailing12MTotals | undefined = undefined;
 </script>
 
 <div
@@ -35,6 +38,11 @@
 			/>
 		{/each}
 	</div>
+
+	<!-- 12M totals column -->
+	{#if totals12M}
+		<TotalsColumn totals={totals12M} />
+	{/if}
 </div>
 
 <style>
