@@ -3,6 +3,7 @@
 	import { getTodayDate } from '$lib/types/transaction';
 	import DatePicker from '$lib/components/shared/DatePicker.svelte';
 	import PayeeInput from '$lib/components/transactions/PayeeInput.svelte';
+	import CategorySelect from '$lib/components/transactions/CategorySelect.svelte';
 	import type { Account } from '$lib/types/account';
 	import type { CategoryNode } from '$lib/types/ui';
 
@@ -37,7 +38,7 @@
 
 	// Element references for focus management
 	let payeeInputRef: PayeeInput;
-	let categorySelect: HTMLSelectElement;
+	let categorySelectRef: CategorySelect;
 	let memoInput: HTMLInputElement;
 	let amountInput: HTMLInputElement;
 	let accountSelect: HTMLSelectElement;
@@ -49,21 +50,6 @@
 			accountId = lastUsedAccountId || accounts[0].id;
 		}
 	}
-
-	// Flatten categories for dropdown
-	function flattenCategories(nodes: CategoryNode[], prefix = ''): { id: string; name: string }[] {
-		const result: { id: string; name: string }[] = [];
-		for (const node of nodes) {
-			const displayName = prefix ? `${prefix} > ${node.name}` : node.name;
-			result.push({ id: node.id, name: displayName });
-			if (node.children && node.children.length > 0) {
-				result.push(...flattenCategories(node.children, displayName));
-			}
-		}
-		return result;
-	}
-
-	$: flatCategories = flattenCategories(categories);
 
 	function dollarsToCents(dollars: string): number {
 		const cleaned = dollars.replace(/[^0-9.]/g, '');
@@ -158,8 +144,14 @@
 		if (event.detail.categoryId && !categoryId) {
 			categoryId = event.detail.categoryId;
 		}
-		// Move focus to next field (category)
-		categorySelect?.focus();
+		// Move focus to next field (memo, since category dropdown is click-based)
+		memoInput?.focus();
+	}
+
+	function handleCategorySelect(event: CustomEvent<{ categoryId: string | null }>) {
+		categoryId = event.detail.categoryId || '';
+		// Move focus to memo after selecting category
+		memoInput?.focus();
 	}
 
 	function handlePayeeEnter() {
@@ -217,20 +209,13 @@
 			{/if}
 		</div>
 
-		<div class="field field-category">
-			<select
-				bind:this={categorySelect}
-				bind:value={categoryId}
-				class="input input-category"
-				data-testid="quick-add-category"
-				aria-label="Category"
-				on:keydown={handleKeydown}
-			>
-				<option value="">No category</option>
-				{#each flatCategories as cat}
-					<option value={cat.id}>{cat.name}</option>
-				{/each}
-			</select>
+		<div class="field field-category" data-testid="quick-add-category">
+			<CategorySelect
+				bind:this={categorySelectRef}
+				{categories}
+				value={categoryId || null}
+				on:select={handleCategorySelect}
+			/>
 		</div>
 
 		<div class="field field-memo">

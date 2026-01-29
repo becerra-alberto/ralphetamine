@@ -7,6 +7,7 @@
 import type { Category } from '$lib/types/category';
 import type { MonthString } from '$lib/types/budget';
 import type { BudgetCell } from '$lib/stores/budget';
+import type { CategoryNode } from '$lib/types/ui';
 
 /**
  * Budget section names in display order
@@ -179,4 +180,143 @@ export function createDefaultSections(): Omit<Category, 'id' | 'createdAt' | 'up
 		color: null,
 		sortOrder: index
 	}));
+}
+
+// --- Category Dropdown Utilities ---
+
+/**
+ * Flattened category item for dropdown display
+ */
+export interface CategoryDropdownItem {
+	id: string;
+	name: string;
+	parentId: string | null;
+	type: string;
+	icon?: string | null;
+	color?: string | null;
+	isHeader: boolean;
+}
+
+/**
+ * Flatten hierarchical CategoryNode tree into a display list with section headers.
+ * Headers are non-selectable, children are selectable.
+ */
+export function flattenCategoryTree(categories: CategoryNode[]): CategoryDropdownItem[] {
+	const result: CategoryDropdownItem[] = [];
+	for (const parent of categories) {
+		result.push({
+			id: parent.id,
+			name: parent.name,
+			parentId: null,
+			type: parent.type,
+			isHeader: true
+		});
+		for (const child of parent.children) {
+			result.push({
+				id: child.id,
+				name: child.name,
+				parentId: child.parentId,
+				type: child.type,
+				isHeader: false
+			});
+		}
+	}
+	return result;
+}
+
+/**
+ * Get only selectable (non-header) items from flattened list
+ */
+export function getSelectableItems(items: CategoryDropdownItem[]): CategoryDropdownItem[] {
+	return items.filter((item) => !item.isHeader);
+}
+
+/**
+ * Filter categories by search query, preserving section headers when children match.
+ */
+export function filterCategoryTree(
+	categories: CategoryNode[],
+	query: string
+): CategoryDropdownItem[] {
+	if (!query.trim()) {
+		return flattenCategoryTree(categories);
+	}
+
+	const lowerQuery = query.toLowerCase();
+	const result: CategoryDropdownItem[] = [];
+
+	for (const parent of categories) {
+		const matchingChildren = parent.children.filter((child) =>
+			child.name.toLowerCase().includes(lowerQuery)
+		);
+
+		const parentMatches = parent.name.toLowerCase().includes(lowerQuery);
+
+		if (matchingChildren.length > 0 || parentMatches) {
+			result.push({
+				id: parent.id,
+				name: parent.name,
+				parentId: null,
+				type: parent.type,
+				isHeader: true
+			});
+
+			const childrenToAdd = parentMatches ? parent.children : matchingChildren;
+			for (const child of childrenToAdd) {
+				result.push({
+					id: child.id,
+					name: child.name,
+					parentId: child.parentId,
+					type: child.type,
+					isHeader: false
+				});
+			}
+		}
+	}
+
+	return result;
+}
+
+/**
+ * Group flat categories by parent_id into a hierarchical tree.
+ * Useful when receiving flat list from API and needing tree structure.
+ */
+export function groupCategoriesByParent(
+	flatCategories: Array<{ id: string; name: string; parentId: string | null; type: string }>
+): CategoryNode[] {
+	const parentMap = new Map<string, CategoryNode>();
+	const roots: CategoryNode[] = [];
+
+	// First pass: create root nodes
+	for (const cat of flatCategories) {
+		if (cat.parentId === null) {
+			const node: CategoryNode = {
+				id: cat.id,
+				name: cat.name,
+				parentId: null,
+				type: cat.type,
+				children: []
+			};
+			parentMap.set(cat.id, node);
+			roots.push(node);
+		}
+	}
+
+	// Second pass: attach children
+	for (const cat of flatCategories) {
+		if (cat.parentId !== null) {
+			const parent = parentMap.get(cat.parentId);
+			if (parent) {
+				parent.children.push({
+					id: cat.id,
+					name: cat.name,
+					parentId: cat.parentId,
+					type: cat.type,
+					children: []
+				});
+			}
+		}
+	}
+
+	return roots;
 }
