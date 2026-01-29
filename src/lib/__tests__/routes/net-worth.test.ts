@@ -1,23 +1,42 @@
-import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/svelte';
 import NetWorthPage from '../../../routes/net-worth/+page.svelte';
 
-describe('Net Worth Page', () => {
-	it('renders "Net Worth View" text', () => {
-		const { getByText } = render(NetWorthPage);
+// Mock the Tauri API to prevent actual invoke calls
+vi.mock('$lib/api/netWorth', () => ({
+	getNetWorthSummary: vi.fn().mockResolvedValue({
+		totalAssetsCents: 550000,
+		totalLiabilitiesCents: 75000,
+		netWorthCents: 475000,
+		accounts: [
+			{
+				id: 'acc-1',
+				name: 'Checking',
+				type: 'checking',
+				institution: 'Bank',
+				currency: 'EUR',
+				isActive: true,
+				includeInNetWorth: true,
+				balanceCents: 350000
+			}
+		]
+	}),
+	getAccounts: vi.fn().mockResolvedValue([])
+}));
 
-		expect(getByText('Net Worth View')).toBeTruthy();
+describe('Net Worth Page', () => {
+	it('renders "Net Worth" heading', () => {
+		render(NetWorthPage);
+		expect(screen.getByText('Net Worth')).toBeTruthy();
 	});
 
 	it('renders with correct data-testid', () => {
-		const { getByTestId } = render(NetWorthPage);
-
-		expect(getByTestId('net-worth-page')).toBeTruthy();
+		render(NetWorthPage);
+		expect(screen.getByTestId('net-worth-page')).toBeTruthy();
 	});
 
-	it('contains placeholder text about Epic 5', () => {
-		const { getByText } = render(NetWorthPage);
-
-		expect(getByText(/Epic 5/)).toBeTruthy();
+	it('shows loading state initially', () => {
+		render(NetWorthPage);
+		expect(screen.getByTestId('net-worth-loading')).toBeTruthy();
 	});
 });

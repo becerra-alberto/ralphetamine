@@ -45,6 +45,7 @@ pub fn run() {
             commands::get_payee_suggestions,
             commands::get_payee_category,
             commands::get_unique_tags,
+            commands::get_net_worth_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

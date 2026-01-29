@@ -11,6 +11,8 @@ import {
 	validateCentsConversion,
 	getCurrencySymbol,
 	isValidCentsAmount,
+	convertCentsToBase,
+	DEFAULT_EXCHANGE_RATES,
 	CURRENCIES,
 	DEFAULT_CURRENCY
 } from '../../utils/currency';
@@ -241,6 +243,58 @@ describe('Currency Utilities', () => {
 	describe('DEFAULT_CURRENCY', () => {
 		it('should be EUR', () => {
 			expect(DEFAULT_CURRENCY).toBe('EUR');
+		});
+	});
+
+	describe('convertCentsToBase', () => {
+		it('should return same value for EUR (base currency)', () => {
+			expect(convertCentsToBase(100000, 'EUR')).toBe(100000);
+		});
+
+		it('should convert USD to EUR using default rate', () => {
+			// Default USD rate is 0.92
+			const result = convertCentsToBase(100000, 'USD');
+			expect(result).toBe(Math.round(100000 * 0.92));
+		});
+
+		it('should convert CAD to EUR using default rate', () => {
+			// Default CAD rate is 0.68
+			const result = convertCentsToBase(100000, 'CAD');
+			expect(result).toBe(Math.round(100000 * 0.68));
+		});
+
+		it('should use custom exchange rates when provided', () => {
+			const customRates = { EUR: 1.0, USD: 0.85, CAD: 0.65 };
+			const result = convertCentsToBase(100000, 'USD', customRates);
+			expect(result).toBe(Math.round(100000 * 0.85));
+		});
+
+		it('should handle zero amount', () => {
+			expect(convertCentsToBase(0, 'USD')).toBe(0);
+		});
+
+		it('should handle negative amounts for currency conversion', () => {
+			const result = convertCentsToBase(-50000, 'USD');
+			expect(result).toBe(Math.round(-50000 * 0.92));
+		});
+
+		it('should use integer arithmetic (round result)', () => {
+			// Verify no floating point issues - result should be an integer
+			const result = convertCentsToBase(33333, 'USD');
+			expect(Number.isInteger(result)).toBe(true);
+		});
+	});
+
+	describe('DEFAULT_EXCHANGE_RATES', () => {
+		it('should have EUR rate of 1.0', () => {
+			expect(DEFAULT_EXCHANGE_RATES.EUR).toBe(1.0);
+		});
+
+		it('should have rates for USD and CAD', () => {
+			expect(DEFAULT_EXCHANGE_RATES.USD).toBeDefined();
+			expect(DEFAULT_EXCHANGE_RATES.CAD).toBeDefined();
+			expect(DEFAULT_EXCHANGE_RATES.USD).toBeGreaterThan(0);
+			expect(DEFAULT_EXCHANGE_RATES.CAD).toBeGreaterThan(0);
 		});
 	});
 

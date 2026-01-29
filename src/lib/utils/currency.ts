@@ -137,3 +137,27 @@ export function getCurrencySymbol(currency: CurrencyCode = DEFAULT_CURRENCY): st
 export function isValidCentsAmount(value: unknown): value is number {
 	return typeof value === 'number' && Number.isInteger(value) && Number.isFinite(value);
 }
+
+/**
+ * Default exchange rates to EUR (base currency)
+ * These are stored defaults; in future, will be fetched/configurable.
+ */
+export const DEFAULT_EXCHANGE_RATES: Record<CurrencyCode, number> = {
+	EUR: 1.0,
+	USD: 0.92,
+	CAD: 0.68
+};
+
+/**
+ * Convert cents from one currency to EUR base currency
+ * Uses integer arithmetic to avoid floating point issues
+ */
+export function convertCentsToBase(
+	cents: number,
+	fromCurrency: CurrencyCode,
+	rates: Record<CurrencyCode, number> = DEFAULT_EXCHANGE_RATES
+): number {
+	if (fromCurrency === 'EUR') return cents;
+	const rate = rates[fromCurrency] ?? 1.0;
+	return Math.round(cents * rate);
+}
