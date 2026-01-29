@@ -399,3 +399,19 @@ Story 6.7: Implement Global Keyboard Shortcuts - COMPLETED
   - All 1825 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
   - Commit: a27c955
 Story 6.7: COMPLETED - feat(story-6.7): Implement Global Keyboard Shortcuts
+
+[LEARN] When implementing global keyboard shortcuts in a SvelteKit app with Svelte 5, use two separate action functions: one for navigation shortcuts (use:shortcuts on AppShell) and one for action shortcuts (use:globalShortcuts on layout wrapper). The modal store (writable Set) with a derived isModalOpen boolean provides clean modal-awareness. Cmd+K and Cmd+/ should bypass modal blocking since they toggle their own modals. Context-aware Cmd+F uses $page.url.pathname to determine which view-specific search to trigger.
+[DONE] Story 6.7 - gloual shortcuts - Thu 29 Jan 2026 16:14:05 CST
+
+Story 7.1: Create CSV Import Wizard - File Selection - COMPLETED
+  - csvParser.ts: CSV parsing with auto delimiter detection (comma/semicolon/tab), quoted fields, escaped quotes, FileReader-based file reading
+  - FileDropZone.svelte: Drag & drop zone with visual drag-over state, click-to-select via native file picker, CSV validation
+  - CsvPreview.svelte: Table preview of first 5 rows with column headers and row count
+  - FileSelection.svelte: Step 1 UI with title/subtitle, file name display, error messages, preview integration
+  - ImportWizard.svelte: 3-step modal wizard with step indicator, Next (disabled until file), Back, Escape/backdrop close
+  - Transactions page: Import button in header toolbar, ⌘I keyboard shortcut to open wizard
+  - Dark mode support for all components
+  - Unit tests: csvParser.test.ts (31), FileDropZone.test.ts (11), CsvPreview.test.ts (9), ImportWizard.test.ts (12)
+  - All 1927 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: b5063a2
+Story 7.1: COMPLETED - feat(story-7.1): Create CSV Import Wizard - File Selection
