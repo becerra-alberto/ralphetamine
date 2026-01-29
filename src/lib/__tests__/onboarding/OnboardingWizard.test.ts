@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import OnboardingWizard from '../../components/onboarding/OnboardingWizard.svelte';
 
 describe('OnboardingWizard', () => {
@@ -103,7 +103,18 @@ describe('OnboardingWizard', () => {
 		expect(finishCalled).toBe(true);
 	});
 
-	it('should dispatch skip event when Skip setup is clicked', async () => {
+	it('should show skip confirmation dialog when Skip setup is clicked', async () => {
+		render(OnboardingWizard, { props: {} });
+
+		await fireEvent.click(screen.getByTestId('onboarding-wizard-skip'));
+
+		expect(screen.getByText('Skip setup?')).toBeTruthy();
+		expect(
+			screen.getByText('You can configure these options later in Settings.')
+		).toBeTruthy();
+	});
+
+	it('should dispatch skip event after confirming skip dialog', async () => {
 		let skipCalled = false;
 
 		render(OnboardingWizard, {
@@ -115,10 +126,47 @@ describe('OnboardingWizard', () => {
 			}
 		} as any);
 
-		const skipBtn = screen.getByTestId('onboarding-wizard-skip');
-		await fireEvent.click(skipBtn);
+		await fireEvent.click(screen.getByTestId('onboarding-wizard-skip'));
+		await fireEvent.click(screen.getByTestId('onboarding-wizard-skip-confirm-confirm'));
 
 		expect(skipCalled).toBe(true);
+	});
+
+	it('should close skip dialog when Continue setup is clicked', async () => {
+		render(OnboardingWizard, { props: {} });
+
+		await fireEvent.click(screen.getByTestId('onboarding-wizard-skip'));
+		expect(screen.getByText('Skip setup?')).toBeTruthy();
+
+		await fireEvent.click(screen.getByTestId('onboarding-wizard-skip-confirm-cancel'));
+
+		await waitFor(() => {
+			expect(screen.queryByTestId('onboarding-wizard-skip-confirm-message')).toBeNull();
+		});
+	});
+
+	it('should show skip link on Step 2', () => {
+		render(OnboardingWizard, {
+			props: { currentStep: 2, totalSteps: 4, selectedGoals: [] }
+		});
+
+		expect(screen.getByTestId('onboarding-wizard-skip')).toBeTruthy();
+	});
+
+	it('should show skip link on Step 3', () => {
+		render(OnboardingWizard, {
+			props: { currentStep: 3, totalSteps: 4, selectedGoals: [], accounts: [] }
+		});
+
+		expect(screen.getByTestId('onboarding-wizard-skip')).toBeTruthy();
+	});
+
+	it('should show skip link on Step 4', () => {
+		render(OnboardingWizard, {
+			props: { currentStep: 4, totalSteps: 4, selectedGoals: [], disabledCategories: [] }
+		});
+
+		expect(screen.getByTestId('onboarding-wizard-skip')).toBeTruthy();
 	});
 
 	it('should dispatch toggleGoal event from Step1', async () => {

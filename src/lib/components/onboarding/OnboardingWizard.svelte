@@ -6,6 +6,7 @@
 	import Step2Income from './Step2Income.svelte';
 	import Step3Accounts from './Step3Accounts.svelte';
 	import Step4Categories from './Step4Categories.svelte';
+	import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 	import type { OnboardingAccount } from '$lib/stores/onboarding';
 
 	export let currentStep = 1;
@@ -15,6 +16,8 @@
 	export let accounts: OnboardingAccount[] = [];
 	export let disabledCategories: string[] = [];
 	export let testId = 'onboarding-wizard';
+
+	let showSkipConfirm = false;
 
 	const dispatch = createEventDispatcher<{
 		toggleGoal: { goalId: string };
@@ -51,8 +54,17 @@
 		dispatch('back');
 	}
 
-	function handleSkip() {
+	function handleSkipClick() {
+		showSkipConfirm = true;
+	}
+
+	function handleSkipConfirm() {
+		showSkipConfirm = false;
 		dispatch('skip');
+	}
+
+	function handleSkipCancel() {
+		showSkipConfirm = false;
 	}
 
 	function handleFinish() {
@@ -64,7 +76,7 @@
 	<div class="wizard-container" data-testid="{testId}-container">
 		<div class="wizard-header">
 			<StepIndicator {currentStep} {totalSteps} testId="{testId}-indicator" />
-			<button class="skip-link" on:click={handleSkip} data-testid="{testId}-skip">
+			<button class="skip-link" on:click={handleSkipClick} data-testid="{testId}-skip">
 				Skip setup
 			</button>
 		</div>
@@ -113,6 +125,17 @@
 		</div>
 	</div>
 </div>
+
+<ConfirmDialog
+	open={showSkipConfirm}
+	title="Skip setup?"
+	message="You can configure these options later in Settings."
+	confirmLabel="Skip"
+	cancelLabel="Continue setup"
+	testId="{testId}-skip-confirm"
+	on:confirm={handleSkipConfirm}
+	on:cancel={handleSkipCancel}
+/>
 
 <style>
 	.wizard-overlay {
