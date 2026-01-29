@@ -3,10 +3,10 @@ import { render } from '@testing-library/svelte';
 import BudgetPage from '../../../routes/budget/+page.svelte';
 
 describe('Budget Page', () => {
-	it('renders "Budget View" text', () => {
-		const { getByText } = render(BudgetPage);
+	it('renders "Budget" heading', () => {
+		const { getByRole } = render(BudgetPage);
 
-		expect(getByText('Budget View')).toBeTruthy();
+		expect(getByRole('heading', { name: 'Budget' })).toBeTruthy();
 	});
 
 	it('renders with correct data-testid', () => {
@@ -15,9 +15,9 @@ describe('Budget Page', () => {
 		expect(getByTestId('budget-page')).toBeTruthy();
 	});
 
-	it('contains placeholder text about Epic 2', () => {
-		const { getByText } = render(BudgetPage);
+	it('renders budget grid component', () => {
+		const { getByRole } = render(BudgetPage);
 
-		expect(getByText(/Epic 2/)).toBeTruthy();
+		expect(getByRole('region', { name: 'Budget Grid' })).toBeTruthy();
 	});
 });
