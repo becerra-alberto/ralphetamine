@@ -245,3 +245,31 @@ Story 5.4: COMPLETED - feat(story-5.4): Display Liability Categories
 
 [LEARN] Svelte 5 breaks component.$on() for event testing. Use `events: { eventName: handler }` in render options instead. The parentElement?.addEventListener pattern also doesn't work reliably for createEventDispatcher events in Svelte 5 test environments.
 [LEARN] jsdom doesn't implement scrollIntoView. Use optional chaining: `element?.scrollIntoView?.()` to guard against this in test environments.
+
+[LEARN] Story 4.5 was already implemented at commit 5858237. When Ralph state doesn't match actual git history, always check git log for the target files before re-implementing.
+[DONE] Story 4.5 - quick add - Thu 29 Jan 2026 14:34:43 CST
+
+[LEARN] Story 4.6 was already fully implemented in prior commits. When Ralph processes stories, it should check git log for prior implementation commits before starting work to avoid redundant effort.
+[DONE] Story 4.6 - date picker - Thu 29 Jan 2026 14:38:29 CST
+
+[LEARN] Story 4.7 was already fully implemented across commits e8a83b4 and 4aeb33c. When Ralph re-runs a story, always check git log first for existing implementation before starting work. The existing tests (86 total) all pass, and type errors in svelte-check are from unrelated files (AddAccountModal/BalanceEdit using legacy Svelte 4 $on() API).
+[DONE] Story 4.7 - payee autocomplete - Thu 29 Jan 2026 14:42:44 CST
+[DONE] Story 4.8 - category dropdown - Thu 29 Jan 2026 14:46:16 CST
+
+Story 5.5: Implement Account Balance Entry - COMPLETED
+  - Migration 004: account_balance_history table + last_balance_update column on accounts
+  - Rust create_account: UUID gen, initial balance transaction, history record
+  - Rust update_account_balance: Adjustment transaction, timestamp update, history record
+  - Rust get_balance_history: Last 50 chronological snapshots
+  - AccountWithBalance: Added lastBalanceUpdate field (Rust + TypeScript)
+  - BalanceEdit.svelte: Click-to-edit inline balance, Enter save, Escape cancel, abs value for negatives
+  - AddAccountModal.svelte: Form with name, type, institution, currency, starting balance, validation
+  - AccountRow.svelte: Editable prop, BalanceEdit integration, "Updated: DD MMM YYYY" display
+  - AssetsSection/LiabilitiesSection: editable prop threading, +Add Account button
+  - Net-worth page: AddAccountModal, handleBalanceSave, handleAddAccount, handleAccountSubmit
+  - Unit tests: BalanceEdit.test.ts (10), AddAccountModal.test.ts (11), AccountRow.test.ts (11)
+  - All test mocks updated with lastBalanceUpdate: null (32 objects across 8 files)
+  - All 1563 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: fcf864f
+Story 5.5: COMPLETED - feat(story-5.5): Implement Account Balance Entry
+[DONE] Story 5.5 - Account Balance Entry - Thu 29 Jan 2026 14:50:00 CST
