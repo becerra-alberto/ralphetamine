@@ -46,9 +46,10 @@ describe('ShortcutsHelp', () => {
 		render(ShortcutsHelp, { props: { open: true } });
 
 		expect(screen.getByText('Go to Home')).toBeTruthy();
-		expect(screen.getByText('Go to Budget')).toBeTruthy();
-		expect(screen.getByText('Go to Transactions')).toBeTruthy();
-		expect(screen.getByText('Go to Net Worth')).toBeTruthy();
+		// Budget/Transactions/Net Worth appear twice (⌘2/⌘U, ⌘3/⌘T, ⌘4/⌘W)
+		expect(screen.getAllByText('Go to Budget').length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText('Go to Transactions').length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText('Go to Net Worth').length).toBeGreaterThanOrEqual(1);
 	});
 
 	it('should display action shortcuts', () => {
