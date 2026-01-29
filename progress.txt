@@ -1,0 +1,58 @@
+Story 1.1: COMPLETED - feat(story-1.1): Initialize Tauri + SvelteKit project
+Story 1.2: COMPLETED - feat(story-1.2): Setup SQLite Database with libsql
+Story 1.3: COMPLETED - feat(story-1.3): Create Core Database Schema
+Story 1.4: COMPLETED - feat(story-1.4): Implement App Shell with Sidebar Navigation
+Story 1.5: COMPLETED - feat(story-1.5): Setup SvelteKit Routing for Main Views
+Story 1.6: COMPLETED - feat(story-1.6): Setup Test Infrastructure
+Story 2.1: COMPLETED - feat(story-2.1): Create Budget and Transaction Database Tables
+Story 2.2: COMPLETED - feat(story-2.2): Create Budget Grid Component with Month Columns
+Story 2.3: COMPLETED - feat(story-2.3): Implement Collapsible Category Sections
+Story 2.4: COMPLETED - feat(story-2.4): Add Date Range Selector
+Story 2.5: COMPLETED - feat(story-2.5): Display Budget Cells with Actual vs Planned
+Story 2.6: COMPLETED - feat(story-2.6): Add Color-Coded Spending Indicators
+Story 2.7: COMPLETED - feat(story-2.7): Implement Hover Tooltips
+Story 2.8: COMPLETED - feat(story-2.8): Add Trailing 12M Totals Column
+Story 2.9: COMPLETED - feat(story-2.9): Show Uncategorized Transactions Row
+Story 2.10: COMPLETED - feat(story-2.10): Implement Cell Expansion for Transaction Details
+Story 3.1: COMPLETED - feat(story-3.1): Implement Inline Cell Editing
+Story 3.2: COMPLETED - feat(story-3.2): Implement Tab Navigation While Editing
+Story 3.3: COMPLETED - feat(story-3.3): Implement Right-Click Context Menu for Budget Cells
+Story 3.4: COMPLETED - feat(story-3.4): Implement Batch Budget Adjustment Modal
+Story 4.1: COMPLETED - feat(story-4.1): Create Transaction List View
+[DONE] Story 4.2 - Implement Transaction Search - Thu 29 Jan 2026 11:49:00 CST
+
+Story 4.2: Implement Transaction Search - COMPLETED
+  - SearchBar.svelte: Search input with debounce (150ms), clear button, Cmd+F shortcut
+  - Placeholder: "Search transactions..." with search icon
+  - Clear button appears when text entered, clears on click/Escape
+  - filterTransactionsBySearch: Case-insensitive matching on payee and memo fields
+  - Minimum 2 characters before filtering activates
+  - "Showing X of Y transactions" count display
+  - "No transactions match 'query'" empty state
+  - Transaction store: setSearch, clearSearch, searchQuery/isSearchActive derived stores
+  - unfilteredTotalItems tracking for accurate count display
+  - Backend: Search SQL LIKE query on payee/memo (case-insensitive)
+  - Unit tests: SearchBar.test.ts (21 tests), transactions.store.test.ts (23 tests)
+  - E2E tests: transaction-search.spec.ts
+  - All 932 tests passing (1 skipped)
+  - Commit: c010a6d
+Story 4.2: COMPLETED - feat(story-4.2): Implement Transaction Search
+
+Story 4.3: Create Filter Panel - COMPLETED
+  - transactionFilters.ts: Filter store with TransactionFilterState, AND logic, derived stores
+  - FilterPanel.svelte: Sidebar panel with all 6 filter sections, badge, clear all, Escape close
+  - DateRangeFilter.svelte: 5 presets (Today, This week, This month, Last 30 days, This year) + custom range
+  - AccountFilter.svelte: Multi-select checkboxes with currency badges, Select/Clear all
+  - CategoryFilter.svelte: Hierarchical tree with expand/collapse, parent toggle, indeterminate state
+  - TagsFilter.svelte: Checkbox list with tag counts, empty state
+  - AmountFilter.svelte: Min/max dollar inputs, cents conversion, validation
+  - Type filter: All/Income/Expense radio buttons in FilterPanel
+  - "/" keyboard shortcut toggles filter panel, filter toggle button with badge in header
+  - applyTransactionFilters: Client-side AND logic for all 6 filter types
+  - buildApiFilters: Converts filter state to API-compatible TransactionFilters
+  - CategoryNode/TagInfo interfaces in $lib/types/ui.ts
+  - Rust backend: Dynamic SQL query builder with all filter combinations (AND logic)
+  - Unit tests: transactionFilters.store.test.ts (58 tests), FilterPanel.test.ts (3), DateRangeFilter.test.ts (12), AccountFilter.test.ts (7), CategoryFilter.test.ts (14), TagsFilter.test.ts (4), AmountFilter.test.ts (5)
+  - E2E tests: transaction-filters.spec.ts
+  - All 1035 tests passing, 0 type errors
+Story 4.3: COMPLETED - feat(story-4.3): Create Filter Panel

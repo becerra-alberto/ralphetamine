@@ -1,23 +1,39 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import TransactionTable from '$lib/components/transactions/TransactionTable.svelte';
 	import SearchBar from '$lib/components/transactions/SearchBar.svelte';
+	import FilterPanel from '$lib/components/transactions/FilterPanel.svelte';
 	import {
 		transactionStore,
 		filterTransactionsBySearch,
 		type TransactionWithDisplay,
 		type SortableColumn
 	} from '$lib/stores/transactions';
+	import {
+		transactionFilterStore,
+		activeFilterCount as activeFilterCountStore,
+		applyTransactionFilters,
+		type TransactionFilterState
+	} from '$lib/stores/transactionFilters';
 	import { getTransactionsPaginated } from '$lib/api/transactions';
+	import type { Account } from '$lib/types/account';
+	import type { CategoryNode, TagInfo } from '$lib/types/ui';
 
 	// Local state for loading
 	let isLoading = false;
 	let error: string | null = null;
 
-	// Subscribe to store
+	// Filter panel data
+	let accounts: Account[] = [];
+	let categories: CategoryNode[] = [];
+	let tags: TagInfo[] = [];
+
+	// Subscribe to stores
 	$: storeState = $transactionStore;
+	$: filterState = $transactionFilterStore;
+	$: filterCount = $activeFilterCountStore;
 	$: currentPage = storeState.pagination.currentPage;
 	$: itemsPerPage = storeState.pagination.itemsPerPage;
 	$: totalItems = storeState.pagination.totalItems;
@@ -28,10 +44,12 @@
 	$: selectedId = storeState.selectedId;
 	$: expandedId = storeState.expandedId;
 
-	// Apply search filter to transactions
-	$: filteredTransactions = filterTransactionsBySearch(allTransactions, searchQuery);
+	// Apply search filter first, then panel filters
+	$: searchFiltered = filterTransactionsBySearch(allTransactions, searchQuery);
+	$: filteredTransactions = applyTransactionFilters(searchFiltered, filterState);
 	$: transactions = filteredTransactions;
-	$: displayedTotalItems = searchQuery.length >= 2 ? filteredTransactions.length : totalItems;
+	$: displayedTotalItems =
+		searchQuery.length >= 2 || filterCount > 0 ? filteredTransactions.length : totalItems;
 
 	// Load transactions on mount and when pagination/sort changes
 	onMount(() => {
@@ -48,7 +66,29 @@
 		}
 
 		loadTransactions();
+		loadFilterData();
+
+		document.addEventListener('keydown', handleGlobalKeydown);
 	});
+
+	onDestroy(() => {
+		document.removeEventListener('keydown', handleGlobalKeydown);
+	});
+
+	function handleGlobalKeydown(event: KeyboardEvent) {
+		// "/" key toggles filter panel (when not in an input)
+		if (event.key === '/' && !isInputFocused()) {
+			event.preventDefault();
+			transactionFilterStore.toggle();
+		}
+	}
+
+	function isInputFocused(): boolean {
+		const el = document.activeElement;
+		if (!el) return false;
+		const tag = el.tagName.toLowerCase();
+		return tag === 'input' || tag === 'textarea' || tag === 'select' || (el as HTMLElement).isContentEditable;
+	}
 
 	function isValidSortColumn(value: string): boolean {
 		return ['date', 'payee', 'category', 'amount', 'account'].includes(value);
@@ -84,6 +124,53 @@
 			transactionStore.setLoading(false);
 		}
 	}
+
+	async function loadFilterData() {
+		try {
+			// Load accounts and categories via Tauri invoke
+			const { invoke } = await import('@tauri-apps/api/core');
+			const [accts, cats] = await Promise.all([
+				invoke<Account[]>('get_accounts'),
+				invoke<any[]>('get_categories')
+			]);
+
+			accounts = accts || [];
+			categories = (cats || []).map(mapCategoryNode);
+
+			// Build tag list from loaded transactions
+			rebuildTags();
+		} catch {
+			// Gracefully handle missing backend (e.g., in test/dev mode)
+			accounts = [];
+			categories = [];
+			tags = [];
+		}
+	}
+
+	function mapCategoryNode(cat: any): CategoryNode {
+		return {
+			id: cat.id,
+			name: cat.name,
+			parentId: cat.parentId || null,
+			type: cat.type || 'expense',
+			children: (cat.children || []).map(mapCategoryNode)
+		};
+	}
+
+	function rebuildTags() {
+		const tagCounts = new Map<string, number>();
+		for (const t of allTransactions) {
+			for (const tag of t.tags) {
+				tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+			}
+		}
+		tags = Array.from(tagCounts.entries())
+			.map(([name, count]) => ({ name, count }))
+			.sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	// Rebuild tags whenever transactions change
+	$: if (allTransactions) rebuildTags();
 
 	function mapSortColumnToField(column: SortableColumn): string {
 		const mapping: Record<SortableColumn, string> = {
@@ -134,65 +221,188 @@
 	function handleSearchClear() {
 		transactionStore.clearSearch();
 	}
+
+	function handleFilterToggle() {
+		transactionFilterStore.toggle();
+	}
+
+	function handleFilterDatePreset(event: CustomEvent<{ preset: string }>) {
+		transactionFilterStore.setDatePreset(event.detail.preset);
+	}
+
+	function handleFilterDateChange(event: CustomEvent<{ start: string | null; end: string | null; preset: string | null }>) {
+		transactionFilterStore.setDateRange(event.detail);
+	}
+
+	function handleFilterAccountToggle(event: CustomEvent<{ accountId: string }>) {
+		transactionFilterStore.toggleAccountId(event.detail.accountId);
+	}
+
+	function handleFilterAccountSelectAll() {
+		transactionFilterStore.setAccountIds(accounts.map((a) => a.id));
+	}
+
+	function handleFilterAccountClearAll() {
+		transactionFilterStore.setAccountIds([]);
+	}
+
+	function handleFilterCategoryToggle(event: CustomEvent<{ categoryId: string }>) {
+		transactionFilterStore.toggleCategoryId(event.detail.categoryId);
+	}
+
+	function handleFilterCategoryToggleParent(event: CustomEvent<{ parentId: string; childIds: string[] }>) {
+		const { childIds } = event.detail;
+		const allSelected = childIds.every((id) => filterState.categoryIds.includes(id));
+		if (allSelected) {
+			// Deselect all children
+			transactionFilterStore.setCategoryIds(
+				filterState.categoryIds.filter((id) => !childIds.includes(id))
+			);
+		} else {
+			// Select all children
+			const newIds = new Set([...filterState.categoryIds, ...childIds]);
+			transactionFilterStore.setCategoryIds(Array.from(newIds));
+		}
+	}
+
+	function handleFilterTagToggle(event: CustomEvent<{ tag: string }>) {
+		transactionFilterStore.toggleTag(event.detail.tag);
+	}
+
+	function handleFilterAmountChange(event: CustomEvent<{ min: number | null; max: number | null }>) {
+		transactionFilterStore.setAmountRange(event.detail.min, event.detail.max);
+	}
+
+	function handleFilterTypeChange(event: CustomEvent<{ type: 'all' | 'income' | 'expense' }>) {
+		transactionFilterStore.setType(event.detail.type);
+	}
+
+	function handleFilterClearAll() {
+		transactionFilterStore.clearAll();
+	}
+
+	function handleFilterClose() {
+		transactionFilterStore.close();
+	}
 </script>
 
 <svelte:head>
 	<title>Stackz - Transactions</title>
 </svelte:head>
 
-<div class="transactions-page" data-testid="transactions-page">
-	<header class="page-header">
-		<h1 class="page-title">Transactions</h1>
-		<div class="header-actions">
-			<SearchBar
-				value={searchQuery}
-				filteredCount={filteredTransactions.length}
-				totalCount={totalItems}
-				on:search={handleSearch}
-				on:clear={handleSearchClear}
-			/>
-		</div>
-	</header>
-
-	{#if error}
-		<div class="error-banner" role="alert" data-testid="error-banner">
-			<span>{error}</span>
-			<button type="button" on:click={loadTransactions}>Retry</button>
-		</div>
-	{/if}
-
-	<div class="table-container">
-		{#if searchQuery.length >= 2 && filteredTransactions.length === 0 && !isLoading}
-			<div class="no-results" data-testid="no-results">
-				<p>No transactions match '{searchQuery}'</p>
+<div class="transactions-page-wrapper" data-testid="transactions-page">
+	<div class="transactions-page">
+		<header class="page-header">
+			<h1 class="page-title">Transactions</h1>
+			<div class="header-actions">
+				<SearchBar
+					value={searchQuery}
+					filteredCount={filteredTransactions.length}
+					totalCount={totalItems}
+					on:search={handleSearch}
+					on:clear={handleSearchClear}
+				/>
+				<button
+					type="button"
+					class="filter-toggle-btn"
+					on:click={handleFilterToggle}
+					aria-label="Toggle filters"
+					data-testid="filter-toggle"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+					</svg>
+					{#if filterCount > 0}
+						<span class="filter-count-badge" data-testid="filter-count-badge">{filterCount}</span>
+					{/if}
+				</button>
 			</div>
-		{:else}
-			<TransactionTable
-				{transactions}
-				totalItems={displayedTotalItems}
-				{currentPage}
-				{itemsPerPage}
-				{sortColumn}
-				{sortDirection}
-				{isLoading}
-				{selectedId}
-				{expandedId}
-				on:pageChange={handlePageChange}
-				on:sort={handleSort}
-				on:rowClick={handleRowClick}
-				on:rowExpand={handleRowExpand}
-			/>
+		</header>
+
+		{#if error}
+			<div class="error-banner" role="alert" data-testid="error-banner">
+				<span>{error}</span>
+				<button type="button" on:click={loadTransactions}>Retry</button>
+			</div>
 		{/if}
+
+		<div class="table-container">
+			{#if (searchQuery.length >= 2 || filterCount > 0) && filteredTransactions.length === 0 && !isLoading}
+				<div class="no-results" data-testid="no-results">
+					{#if searchQuery.length >= 2}
+						<p>No transactions match '{searchQuery}'</p>
+					{:else}
+						<p>No transactions match the selected filters</p>
+					{/if}
+				</div>
+			{:else}
+				<TransactionTable
+					{transactions}
+					totalItems={displayedTotalItems}
+					{currentPage}
+					{itemsPerPage}
+					{sortColumn}
+					{sortDirection}
+					{isLoading}
+					{selectedId}
+					{expandedId}
+					on:pageChange={handlePageChange}
+					on:sort={handleSort}
+					on:rowClick={handleRowClick}
+					on:rowExpand={handleRowExpand}
+				/>
+			{/if}
+		</div>
 	</div>
+
+	{#if filterState.isOpen}
+		<FilterPanel
+			filters={filterState}
+			{accounts}
+			{categories}
+			{tags}
+			activeFilterCount={filterCount}
+			on:datePreset={handleFilterDatePreset}
+			on:dateChange={handleFilterDateChange}
+			on:accountToggle={handleFilterAccountToggle}
+			on:accountSelectAll={handleFilterAccountSelectAll}
+			on:accountClearAll={handleFilterAccountClearAll}
+			on:categoryToggle={handleFilterCategoryToggle}
+			on:categoryToggleParent={handleFilterCategoryToggleParent}
+			on:tagToggle={handleFilterTagToggle}
+			on:amountChange={handleFilterAmountChange}
+			on:typeChange={handleFilterTypeChange}
+			on:clearAll={handleFilterClearAll}
+			on:close={handleFilterClose}
+		/>
+	{/if}
 </div>
 
 <style>
+	.transactions-page-wrapper {
+		display: flex;
+		height: 100%;
+	}
+
 	.transactions-page {
 		display: flex;
 		flex-direction: column;
+		flex: 1;
 		height: 100%;
 		padding: 24px;
 		gap: 16px;
+		min-width: 0;
 	}
 
 	.page-header {
@@ -256,8 +466,48 @@
 		margin: 0;
 	}
 
+	.filter-toggle-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		height: 36px;
+		padding: 0 10px;
+		border: 1px solid var(--border-color, #e5e7eb);
+		border-radius: 6px;
+		background: var(--bg-primary, #ffffff);
+		color: var(--text-secondary, #6b7280);
+		cursor: pointer;
+		position: relative;
+		transition: border-color 0.15s ease;
+	}
+
+	.filter-toggle-btn:hover {
+		border-color: var(--accent, #4f46e5);
+		color: var(--accent, #4f46e5);
+	}
+
+	.filter-count-badge {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 16px;
+		height: 16px;
+		padding: 0 4px;
+		border-radius: 8px;
+		background: var(--accent, #4f46e5);
+		color: white;
+		font-size: 0.625rem;
+		font-weight: 700;
+	}
+
 	/* Dark mode */
 	:global(.dark) .transactions-page {
 		--text-primary: #f9fafb;
+	}
+
+	:global(.dark) .filter-toggle-btn {
+		background: var(--bg-secondary, #1a1a1a);
+		border-color: var(--border-color, #374151);
+		color: var(--text-secondary, #9ca3af);
 	}
 </style>

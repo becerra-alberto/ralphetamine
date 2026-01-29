@@ -61,12 +61,17 @@ pub struct TransactionFilters {
     pub start_date: Option<String>,
     pub end_date: Option<String>,
     pub category_id: Option<String>,
+    pub category_ids: Option<Vec<String>>,
     pub account_id: Option<String>,
+    pub account_ids: Option<Vec<String>>,
     pub payee: Option<String>,
     pub search: Option<String>,
     pub min_amount: Option<i64>,
     pub max_amount: Option<i64>,
     pub uncategorized_only: Option<bool>,
+    /// "income" = positive amounts, "expense" = negative amounts, None = all
+    pub transaction_type: Option<String>,
+    pub tags: Option<Vec<String>>,
 }
 
 /// Category total result
@@ -191,70 +196,121 @@ pub fn delete_transaction(id: String) -> Result<bool, String> {
     Ok(rows_affected > 0)
 }
 
-/// Get transactions with optional filters
+/// Get transactions with optional filters (combined with AND logic)
 #[tauri::command]
 pub fn get_transactions(filters: Option<TransactionFilters>) -> Result<Vec<Transaction>, String> {
     let db = get_database().map_err(|e| e.to_string())?;
     let filters = filters.unwrap_or_default();
 
-    // For simplicity, build a static query based on common filter patterns
-    // In a production app, you might use a query builder library
+    // Build dynamic WHERE clause combining all filters with AND
+    let mut conditions: Vec<String> = Vec::new();
+    let mut params: Vec<String> = Vec::new();
 
+    // Date range filter
     if let Some(ref start_date) = filters.start_date {
-        if let Some(ref end_date) = filters.end_date {
-            // Filter by date range
-            return db.query_map(
-                "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
-                 FROM transactions WHERE date >= ? AND date <= ?
-                 ORDER BY date DESC, created_at DESC",
-                &[start_date, end_date],
-                parse_transaction_row,
-            ).map_err(|e| e.to_string());
+        params.push(start_date.clone());
+        conditions.push(format!("date >= ?{}", params.len()));
+    }
+    if let Some(ref end_date) = filters.end_date {
+        params.push(end_date.clone());
+        conditions.push(format!("date <= ?{}", params.len()));
+    }
+
+    // Single account ID (backward compatible)
+    if let Some(ref account_id) = filters.account_id {
+        params.push(account_id.clone());
+        conditions.push(format!("account_id = ?{}", params.len()));
+    }
+
+    // Multiple account IDs
+    if let Some(ref account_ids) = filters.account_ids {
+        if !account_ids.is_empty() {
+            let placeholders: Vec<String> = account_ids.iter().map(|id| {
+                params.push(id.clone());
+                format!("?{}", params.len())
+            }).collect();
+            conditions.push(format!("account_id IN ({})", placeholders.join(",")));
         }
     }
 
-    if let Some(ref account_id) = filters.account_id {
-        return db.query_map(
-            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
-             FROM transactions WHERE account_id = ?
-             ORDER BY date DESC, created_at DESC",
-            &[account_id],
-            parse_transaction_row,
-        ).map_err(|e| e.to_string());
+    // Single category ID (backward compatible)
+    if let Some(ref category_id) = filters.category_id {
+        params.push(category_id.clone());
+        conditions.push(format!("category_id = ?{}", params.len()));
     }
 
+    // Multiple category IDs (includes children via parent lookup)
+    if let Some(ref category_ids) = filters.category_ids {
+        if !category_ids.is_empty() {
+            let placeholders: Vec<String> = category_ids.iter().map(|id| {
+                params.push(id.clone());
+                format!("?{}", params.len())
+            }).collect();
+            let placeholder_str = placeholders.join(",");
+            // Match direct IDs or child categories whose parent_id is in the list
+            let child_placeholders: Vec<String> = category_ids.iter().map(|id| {
+                params.push(id.clone());
+                format!("?{}", params.len())
+            }).collect();
+            conditions.push(format!(
+                "(category_id IN ({}) OR category_id IN (SELECT id FROM categories WHERE parent_id IN ({})))",
+                placeholder_str,
+                child_placeholders.join(",")
+            ));
+        }
+    }
+
+    // Search (payee or memo LIKE)
     if let Some(ref search) = filters.search {
         if !search.is_empty() {
             let search_pattern = format!("%{}%", search);
-            return db.query_map(
-                "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
-                 FROM transactions WHERE payee LIKE ?1 COLLATE NOCASE OR memo LIKE ?1 COLLATE NOCASE
-                 ORDER BY date DESC, created_at DESC",
-                &[&search_pattern],
-                parse_transaction_row,
-            ).map_err(|e| e.to_string());
+            params.push(search_pattern.clone());
+            let idx = params.len();
+            conditions.push(format!("(payee LIKE ?{} COLLATE NOCASE OR memo LIKE ?{} COLLATE NOCASE)", idx, idx));
         }
     }
 
+    // Uncategorized only
     if filters.uncategorized_only.unwrap_or(false) {
-        return db.query_map(
-            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
-             FROM transactions WHERE category_id IS NULL OR category_id = ''
-             ORDER BY date DESC, created_at DESC",
-            &[],
-            parse_transaction_row,
-        ).map_err(|e| e.to_string());
+        conditions.push("(category_id IS NULL OR category_id = '')".to_string());
     }
 
-    // Default: return all transactions
-    db.query_map(
-        "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
-         FROM transactions
-         ORDER BY date DESC, created_at DESC",
-        &[],
-        parse_transaction_row,
-    )
-    .map_err(|e| e.to_string())
+    // Amount range
+    if let Some(min_amount) = filters.min_amount {
+        params.push(min_amount.to_string());
+        conditions.push(format!("amount_cents >= ?{}", params.len()));
+    }
+    if let Some(max_amount) = filters.max_amount {
+        params.push(max_amount.to_string());
+        conditions.push(format!("amount_cents <= ?{}", params.len()));
+    }
+
+    // Transaction type (income = positive, expense = negative)
+    if let Some(ref txn_type) = filters.transaction_type {
+        match txn_type.as_str() {
+            "income" => conditions.push("amount_cents > 0".to_string()),
+            "expense" => conditions.push("amount_cents < 0".to_string()),
+            _ => {} // "all" or unknown - no filter
+        }
+    }
+
+    // Build final query
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", conditions.join(" AND "))
+    };
+
+    let query = format!(
+        "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at FROM transactions{} ORDER BY date DESC, created_at DESC",
+        where_clause
+    );
+
+    // Convert params to &dyn ToSql references
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+
+    db.query_map(&query, &param_refs, parse_transaction_row)
+        .map_err(|e| e.to_string())
 }
 
 /// Helper function to parse a transaction row
@@ -736,5 +792,206 @@ mod tests {
             "Search took {}ms, should be under 200ms",
             elapsed.as_millis()
         );
+    }
+
+    // --- Filter integration tests for Story 4.3 ---
+
+    fn setup_filter_test_db() -> Database {
+        let db = setup_test_db();
+
+        // Create a second account
+        db.execute(
+            "INSERT INTO accounts (id, name, type, institution) VALUES ('savings-account', 'Savings Account', 'savings', 'Savings Bank')",
+            &[],
+        ).unwrap();
+
+        // Create test categories
+        db.execute(
+            "INSERT INTO categories (id, name, type, sort_order) VALUES ('cat-income', 'Income', 'income', 1)",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO categories (id, name, type, parent_id, sort_order) VALUES ('cat-income-salary', 'Salary', 'income', 'cat-income', 1)",
+            &[],
+        ).unwrap();
+
+        // Insert test transactions with different dates, accounts, amounts, and categories
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, category_id, amount_cents, account_id, tags)
+             VALUES ('f-1', '2025-01-05', 'Store A', 'cat-essential-groceries', -5000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, category_id, amount_cents, account_id, tags)
+             VALUES ('f-2', '2025-01-15', 'Store B', 'cat-essential-groceries', -3000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, category_id, amount_cents, account_id, tags)
+             VALUES ('f-3', '2025-02-10', 'Store C', 'cat-essential-groceries', -2000, 'savings-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, category_id, amount_cents, account_id, tags)
+             VALUES ('f-4', '2025-01-20', 'Employer', 'cat-income-salary', 500000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('f-5', '2025-01-25', 'Unknown Vendor', -1500, 'savings-account', '[]')",
+            &[],
+        ).unwrap();
+
+        db
+    }
+
+    #[test]
+    fn test_filter_transactions_by_date_range() {
+        let db = setup_filter_test_db();
+
+        let start = "2025-01-10";
+        let end = "2025-01-31";
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE date >= ?1 AND date <= ?2
+             ORDER BY date DESC, created_at DESC",
+            &[&start, &end],
+            parse_transaction_row,
+        ).unwrap();
+
+        // Should exclude f-1 (Jan 5) and f-3 (Feb 10)
+        assert_eq!(results.len(), 3, "Should find 3 transactions in Jan 10-31 range");
+        assert!(results.iter().all(|t| t.date >= "2025-01-10" && t.date <= "2025-01-31"));
+    }
+
+    #[test]
+    fn test_filter_transactions_by_multiple_account_ids() {
+        let db = setup_filter_test_db();
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE account_id IN (?1, ?2)
+             ORDER BY date DESC, created_at DESC",
+            &[&"test-account", &"savings-account"],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 5, "Should find all transactions when both accounts selected");
+    }
+
+    #[test]
+    fn test_filter_transactions_by_single_account() {
+        let db = setup_filter_test_db();
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE account_id = ?1
+             ORDER BY date DESC, created_at DESC",
+            &[&"savings-account"],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 2, "Should find 2 transactions in savings account");
+        assert!(results.iter().all(|t| t.account_id == "savings-account"));
+    }
+
+    #[test]
+    fn test_filter_transactions_by_category_with_children() {
+        let db = setup_filter_test_db();
+
+        // Filter by parent category 'cat-income' should include child 'cat-income-salary'
+        let parent_id = "cat-income";
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE category_id = ?1 OR category_id IN (SELECT id FROM categories WHERE parent_id = ?1)
+             ORDER BY date DESC, created_at DESC",
+            &[&parent_id],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 1, "Should find 1 income transaction (salary)");
+        assert_eq!(results[0].id, "f-4");
+    }
+
+    #[test]
+    fn test_filter_transactions_by_amount_range() {
+        let db = setup_filter_test_db();
+
+        // Filter by amount range: -4000 to -1000 (cents)
+        let min_amount: i64 = -4000;
+        let max_amount: i64 = -1000;
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE amount_cents >= ?1 AND amount_cents <= ?2
+             ORDER BY date DESC, created_at DESC",
+            &[&min_amount, &max_amount],
+            parse_transaction_row,
+        ).unwrap();
+
+        // Should match: f-2 (-3000), f-3 (-2000), f-5 (-1500)
+        assert_eq!(results.len(), 3, "Should find 3 transactions in amount range -4000 to -1000");
+        assert!(results.iter().all(|t| t.amount_cents >= -4000 && t.amount_cents <= -1000));
+    }
+
+    #[test]
+    fn test_filter_transactions_by_type_income() {
+        let db = setup_filter_test_db();
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE amount_cents > 0
+             ORDER BY date DESC, created_at DESC",
+            &[],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 1, "Should find 1 income transaction");
+        assert_eq!(results[0].id, "f-4");
+        assert!(results[0].amount_cents > 0);
+    }
+
+    #[test]
+    fn test_filter_transactions_by_type_expense() {
+        let db = setup_filter_test_db();
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE amount_cents < 0
+             ORDER BY date DESC, created_at DESC",
+            &[],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 4, "Should find 4 expense transactions");
+        assert!(results.iter().all(|t| t.amount_cents < 0));
+    }
+
+    #[test]
+    fn test_filter_transactions_combining_all_filters() {
+        let db = setup_filter_test_db();
+
+        // Combine: date range Jan 2025 + test-account + expense only
+        let start = "2025-01-01";
+        let end = "2025-01-31";
+        let account_id = "test-account";
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions
+             WHERE date >= ?1 AND date <= ?2 AND account_id = ?3 AND amount_cents < 0
+             ORDER BY date DESC, created_at DESC",
+            &[&start, &end, &account_id],
+            parse_transaction_row,
+        ).unwrap();
+
+        // Should match: f-1 (Jan 5, test-account, -5000) and f-2 (Jan 15, test-account, -3000)
+        // Excludes: f-3 (Feb), f-4 (income), f-5 (savings-account)
+        assert_eq!(results.len(), 2, "Should find 2 transactions matching all combined filters");
+        assert!(results.iter().all(|t| {
+            t.date >= "2025-01-01" && t.date <= "2025-01-31"
+                && t.account_id == "test-account"
+                && t.amount_cents < 0
+        }));
     }
 }

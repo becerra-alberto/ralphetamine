@@ -38,3 +38,22 @@ export interface PreviewItem {
 	currentCents: number;
 	newCents: number;
 }
+
+/**
+ * Category node for hierarchical filter display
+ */
+export interface CategoryNode {
+	id: string;
+	name: string;
+	parentId: string | null;
+	type: string;
+	children: CategoryNode[];
+}
+
+/**
+ * Tag with usage count for filter display
+ */
+export interface TagInfo {
+	name: string;
+	count: number;
+}

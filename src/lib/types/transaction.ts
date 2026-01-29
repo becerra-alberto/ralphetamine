@@ -109,8 +109,12 @@ export interface TransactionFilters {
   endDate?: string;
   /** Filter by category ID */
   categoryId?: string | null;
+  /** Filter by multiple category IDs */
+  categoryIds?: string[];
   /** Filter by account ID */
   accountId?: string;
+  /** Filter by multiple account IDs */
+  accountIds?: string[];
   /** Filter by payee */
   payee?: string;
   /** Search term for payee/memo */
@@ -127,6 +131,8 @@ export interface TransactionFilters {
   minAmountCents?: number;
   /** Maximum amount in cents */
   maxAmountCents?: number;
+  /** Transaction type: "income", "expense", or undefined for all */
+  transactionType?: 'income' | 'expense';
   /** Limit number of results */
   limit?: number;
   /** Offset for pagination */
