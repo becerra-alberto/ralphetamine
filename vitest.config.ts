@@ -22,6 +22,19 @@ export default defineConfig({
 			'$app/environment': path.resolve('./src/lib/__mocks__/$app/environment.ts'),
 			'$app/stores': path.resolve('./src/lib/__mocks__/$app/stores.ts'),
 		},
+		coverage: {
+			provider: 'v8',
+			reporter: ['text', 'html', 'lcov'],
+			reportsDirectory: './coverage',
+			exclude: [
+				'node_modules/',
+				'src/lib/__tests__/',
+				'src/lib/__mocks__/',
+				'e2e/',
+				'**/*.d.ts',
+				'**/*.config.*',
+			],
+		},
 	},
 	resolve: {
 		alias: {
