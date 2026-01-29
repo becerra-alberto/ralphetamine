@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Stackz Design System - CSS Variables */
+/* From PRD Section 6 - Design Tokens */
+
+:root {
+  /* Light Mode (default) */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8F9FA;
+  --text-primary: #1A1A1A;
+  --text-secondary: #6B7280;
+  --accent: #4F46E5;
+  --success: #10B981;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+  --neutral: #6B7280;
+
+  /* Typography */
+  font-family: 'Inter', 'SF Pro', system-ui, sans-serif;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Dark Mode */
+.dark {
+  --bg-primary: #0F0F0F;
+  --bg-secondary: #1A1A1A;
+  --text-primary: #F9FAFB;
+  --text-secondary: #9CA3AF;
+}
+
+/* Apply background and text colors */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Tabular figures for numbers */
+.tabular-nums {
+  font-feature-settings: 'tnum' 1;
+}
