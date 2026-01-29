@@ -56,3 +56,18 @@ Story 4.3: Create Filter Panel - COMPLETED
   - E2E tests: transaction-filters.spec.ts
   - All 1035 tests passing, 0 type errors
 Story 4.3: COMPLETED - feat(story-4.3): Create Filter Panel
+
+Story 4.4: Add Uncategorized Warning Banner - COMPLETED
+  - UncategorizedBanner.svelte: Warning banner with icon, count text, Categorize now button, dismiss
+  - uncategorizedCount derived store in transactions.ts
+  - Banner positioned between header and table in transactions page
+  - Categorize now: filters to uncategorized-only, selects first uncategorized
+  - Dismiss: sessionStorage persistence, reappears when count increases
+  - Grammar: singular/plural (1 transaction vs X transactions)
+  - Unit tests: UncategorizedBanner.test.ts (10 tests), transactions.store.test.ts (+6 tests)
+  - E2E tests: uncategorized-banner.spec.ts
+  - Rust integration tests: 3 uncategorized count tests
+  - All 1051 tests passing, 0 type errors
+  - Commit: f947449
+Story 4.4: COMPLETED - feat(story-4.4): Add Uncategorized Warning Banner
+[DONE] Story 4.4 - Add Uncategorized Warning Banner - Thu 29 Jan 2026 12:35:11 CST
