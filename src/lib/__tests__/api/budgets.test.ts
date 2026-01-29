@@ -177,6 +177,90 @@ describe('Budget API', () => {
 		});
 	});
 
+	describe('Story 3.2 - rapid sequential saves (Tab navigation)', () => {
+		it('should handle rapid sequential saves correctly', async () => {
+			const { invoke } = await import('@tauri-apps/api/core');
+			const now = new Date().toISOString();
+
+			// Mock responses for sequential saves
+			vi.mocked(invoke)
+				.mockResolvedValueOnce({
+					categoryId: 'cat-1',
+					month: '2025-01',
+					amountCents: 40000,
+					note: null,
+					createdAt: now,
+					updatedAt: now
+				})
+				.mockResolvedValueOnce({
+					categoryId: 'cat-1',
+					month: '2025-02',
+					amountCents: 45000,
+					note: null,
+					createdAt: now,
+					updatedAt: now
+				})
+				.mockResolvedValueOnce({
+					categoryId: 'cat-1',
+					month: '2025-03',
+					amountCents: 50000,
+					note: null,
+					createdAt: now,
+					updatedAt: now
+				});
+
+			const { setBudget } = await import('../../api/budgets');
+
+			// Simulate rapid Tab navigation with sequential saves
+			const save1 = setBudget({ categoryId: 'cat-1', month: '2025-01', amountCents: 40000 });
+			const save2 = setBudget({ categoryId: 'cat-1', month: '2025-02', amountCents: 45000 });
+			const save3 = setBudget({ categoryId: 'cat-1', month: '2025-03', amountCents: 50000 });
+
+			// All saves should complete successfully
+			const results = await Promise.all([save1, save2, save3]);
+
+			expect(results[0].amountCents).toBe(40000);
+			expect(results[1].amountCents).toBe(45000);
+			expect(results[2].amountCents).toBe(50000);
+
+			// Verify all invokes were called
+			expect(invoke).toHaveBeenCalledTimes(3);
+		});
+
+		it('should save before navigation proceeds', async () => {
+			const { invoke } = await import('@tauri-apps/api/core');
+			const now = new Date().toISOString();
+
+			// Mock a slow save
+			vi.mocked(invoke).mockImplementation(
+				() =>
+					new Promise((resolve) =>
+						setTimeout(
+							() =>
+								resolve({
+									categoryId: 'cat-1',
+									month: '2025-01',
+									amountCents: 40000,
+									note: null,
+									createdAt: now,
+									updatedAt: now
+								}),
+							100
+						)
+					)
+			);
+
+			const { setBudget } = await import('../../api/budgets');
+
+			const startTime = Date.now();
+			await setBudget({ categoryId: 'cat-1', month: '2025-01', amountCents: 40000 });
+			const elapsed = Date.now() - startTime;
+
+			// Save should have completed (simulated delay)
+			expect(elapsed).toBeGreaterThanOrEqual(90);
+		});
+	});
+
 	describe('Story 3.1 - inline editing API', () => {
 		it('should save budget with cents from inline edit', async () => {
 			const { invoke } = await import('@tauri-apps/api/core');

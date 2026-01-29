@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, tick } from 'svelte';
 	import type { Category } from '$lib/types/category';
 	import type { MonthString } from '$lib/types/budget';
 	import type { BudgetCell as BudgetCellType } from '$lib/stores/budget';
@@ -21,10 +21,20 @@
 	export let expansionTotalCount: number = 0;
 	export let isExpansionLoading: boolean = false;
 
+	// Cell refs for programmatic focus/edit - using object for bind:this compatibility
+	let cellRefs: Record<string, BudgetCell> = {};
+
+	// Index of this category's row (for cross-row navigation)
+	export let rowIndex: number = 0;
+
+	// Pending edit request from parent (for Tab navigation)
+	export let pendingEditMonth: MonthString | null = null;
+
 	const dispatch = createEventDispatcher<{
 		expand: { categoryId: string; month: MonthString };
 		closeExpansion: void;
 		budgetChange: { categoryId: string; month: MonthString; amountCents: number };
+		navigate: { categoryId: string; month: MonthString; direction: 'next' | 'prev'; monthIndex: number; rowIndex: number };
 	}>();
 
 	/**
@@ -67,6 +77,44 @@
 	function handleBudgetChange(event: CustomEvent<{ categoryId: string; month: MonthString; amountCents: number }>) {
 		dispatch('budgetChange', event.detail);
 	}
+
+	/**
+	 * Handle Tab navigation from a cell
+	 */
+	function handleCellNavigate(event: CustomEvent<{ categoryId: string; month: MonthString; direction: 'next' | 'prev'; amountCents: number }>) {
+		const { month, direction, amountCents } = event.detail;
+		const monthIndex = months.indexOf(month);
+
+		// Dispatch navigation event for parent to handle
+		dispatch('navigate', {
+			categoryId: category.id,
+			month,
+			direction,
+			monthIndex,
+			rowIndex
+		});
+	}
+
+	/**
+	 * Public method: Start editing a specific month's cell
+	 */
+	export function startEditingMonth(month: MonthString) {
+		const cell = cellRefs[month];
+		if (cell) {
+			cell.startEditing();
+		}
+	}
+
+	// React to pendingEditMonth changes from parent
+	$: if (pendingEditMonth && cellRefs[pendingEditMonth]) {
+		// Use tick to ensure the cell is rendered before trying to edit
+		tick().then(() => {
+			const cell = cellRefs[pendingEditMonth!];
+			if (cell) {
+				cell.startEditing();
+			}
+		});
+	}
 </script>
 
 <div
@@ -85,6 +133,7 @@
 		{#each months as month (month)}
 			{@const cell = cells.get(month)}
 			<BudgetCell
+				bind:this={cellRefs[month]}
 				{month}
 				budgetedCents={cell?.budgetedCents ?? 0}
 				actualCents={cell?.actualCents ?? 0}
@@ -94,6 +143,7 @@
 				isExpanded={isCellExpanded(month)}
 				on:expand={handleCellExpand}
 				on:budgetChange={handleBudgetChange}
+				on:navigate={handleCellNavigate}
 			/>
 		{/each}
 	</div>

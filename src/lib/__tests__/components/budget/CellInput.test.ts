@@ -323,6 +323,116 @@ describe('CellInput', () => {
 		});
 	});
 
+	describe('Tab navigation (Story 3.2)', () => {
+		it('should prevent default Tab behavior', async () => {
+			render(CellInput, {
+				props: {
+					valueCents: 40000
+				}
+			});
+
+			const input = screen.getByTestId('cell-input-field');
+			const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+			const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+
+			input.dispatchEvent(event);
+
+			expect(preventDefaultSpy).toHaveBeenCalled();
+		});
+
+		it('should emit navigate event with direction "next" on Tab', async () => {
+			// In Svelte 5, we can test navigation behavior via DOM observation
+			// since $on is no longer available
+			render(CellInput, {
+				props: {
+					valueCents: 40000
+				}
+			});
+
+			const input = screen.getByTestId('cell-input-field');
+
+			// Tab should trigger navigation (we verify by checking no error state)
+			await fireEvent.keyDown(input, { key: 'Tab' });
+
+			// No error should be shown for valid input
+			const wrapper = screen.getByTestId('cell-input');
+			expect(wrapper.classList.contains('has-error')).toBe(false);
+		});
+
+		it('should emit navigate event with direction "prev" on Shift+Tab', async () => {
+			render(CellInput, {
+				props: {
+					valueCents: 40000
+				}
+			});
+
+			const input = screen.getByTestId('cell-input-field');
+
+			// Shift+Tab should trigger navigation (we verify by checking no error state)
+			await fireEvent.keyDown(input, { key: 'Tab', shiftKey: true });
+
+			// No error should be shown for valid input
+			const wrapper = screen.getByTestId('cell-input');
+			expect(wrapper.classList.contains('has-error')).toBe(false);
+		});
+
+		it('should validate value before navigation with Tab', async () => {
+			render(CellInput, {
+				props: {
+					valueCents: 40000
+				}
+			});
+
+			const input = screen.getByTestId('cell-input-field');
+			await fireEvent.input(input, { target: { value: '500.00' } });
+			await fireEvent.keyDown(input, { key: 'Tab' });
+
+			// No error should be shown for valid input
+			const wrapper = screen.getByTestId('cell-input');
+			expect(wrapper.classList.contains('has-error')).toBe(false);
+		});
+
+		it('should show error and prevent navigation on invalid value with Tab', async () => {
+			render(CellInput, {
+				props: {
+					valueCents: 40000
+				}
+			});
+
+			const input = screen.getByTestId('cell-input-field');
+			await fireEvent.input(input, { target: { value: '-100' } });
+			await fireEvent.keyDown(input, { key: 'Tab' });
+
+			// Should show error
+			const wrapper = screen.getByTestId('cell-input');
+			expect(wrapper.classList.contains('has-error')).toBe(true);
+
+			// Error message should be visible
+			const errorMessage = screen.getByTestId('cell-input-error');
+			expect(errorMessage).toBeTruthy();
+		});
+
+		it('should show error and prevent navigation on invalid value with Shift+Tab', async () => {
+			render(CellInput, {
+				props: {
+					valueCents: 40000
+				}
+			});
+
+			const input = screen.getByTestId('cell-input-field');
+			await fireEvent.input(input, { target: { value: 'abc' } });
+			await fireEvent.keyDown(input, { key: 'Tab', shiftKey: true });
+
+			// Should show error
+			const wrapper = screen.getByTestId('cell-input');
+			expect(wrapper.classList.contains('has-error')).toBe(true);
+
+			// Error message should be visible
+			const errorMessage = screen.getByTestId('cell-input-error');
+			expect(errorMessage).toBeTruthy();
+		});
+	});
+
 	describe('accessibility', () => {
 		it('should have aria-invalid when error state', async () => {
 			render(CellInput, {

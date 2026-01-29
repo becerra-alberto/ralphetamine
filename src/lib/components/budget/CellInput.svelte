@@ -15,6 +15,7 @@
 	const dispatch = createEventDispatcher<{
 		save: { valueCents: number };
 		cancel: void;
+		navigate: { direction: 'next' | 'prev'; valueCents: number };
 	}>();
 
 	// Convert cents to display value
@@ -89,6 +90,25 @@
 	}
 
 	/**
+	 * Handle Tab navigation - validates and saves before navigating
+	 * Returns true if navigation should proceed
+	 */
+	function handleTabNavigation(direction: 'next' | 'prev'): boolean {
+		const result = validateValue(displayValue);
+
+		if (!result.valid) {
+			hasError = true;
+			errorMessage = result.error;
+			return false;
+		}
+
+		hasError = false;
+		errorMessage = '';
+		dispatch('navigate', { direction, valueCents: result.cents });
+		return true;
+	}
+
+	/**
 	 * Handle keyboard events
 	 */
 	function handleKeydown(event: KeyboardEvent) {
@@ -98,6 +118,10 @@
 		} else if (event.key === 'Escape') {
 			event.preventDefault();
 			handleCancel();
+		} else if (event.key === 'Tab') {
+			event.preventDefault();
+			const direction = event.shiftKey ? 'prev' : 'next';
+			handleTabNavigation(direction);
 		}
 	}
 

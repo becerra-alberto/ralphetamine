@@ -19,6 +19,7 @@
 	const dispatch = createEventDispatcher<{
 		expand: { categoryId: string; month: MonthString };
 		budgetChange: { categoryId: string; month: MonthString; amountCents: number };
+		navigate: { categoryId: string; month: MonthString; direction: 'next' | 'prev'; amountCents: number };
 	}>();
 
 	// Edit mode state
@@ -101,6 +102,41 @@
 		hasInputError = false;
 	}
 
+	/**
+	 * Handle Tab navigation from CellInput
+	 * Saves the value and dispatches navigate event for parent to handle focus
+	 */
+	function handleNavigate(event: CustomEvent<{ direction: 'next' | 'prev'; valueCents: number }>) {
+		const { direction, valueCents } = event.detail;
+		isEditing = false;
+		hasInputError = false;
+
+		// Dispatch budget change if value changed
+		if (valueCents !== budgetedCents) {
+			dispatch('budgetChange', {
+				categoryId,
+				month,
+				amountCents: valueCents
+			});
+		}
+
+		// Dispatch navigation event for parent to handle
+		dispatch('navigate', {
+			categoryId,
+			month,
+			direction,
+			amountCents: valueCents
+		});
+	}
+
+	/**
+	 * Public method to programmatically enter edit mode
+	 * Called by parent component for Tab navigation
+	 */
+	export function startEditing() {
+		enterEditMode();
+	}
+
 	// Tooltip state
 	let tooltipVisible = false;
 	let cellElement: HTMLElement | null = null;
@@ -149,6 +185,7 @@
 			bind:hasError={hasInputError}
 			on:save={handleSave}
 			on:cancel={handleCancel}
+			on:navigate={handleNavigate}
 		/>
 	{:else}
 		<span class="cell-actual" data-testid="cell-actual">

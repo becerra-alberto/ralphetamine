@@ -12,19 +12,32 @@ import { SECTION_ORDER, type SectionName } from '$lib/utils/categoryGroups';
 const STORAGE_KEY = 'stackz-budget-ui-state';
 
 /**
+ * Position of a focused cell in the budget grid for tab navigation
+ */
+export interface FocusedCellPosition {
+	categoryId: string;
+	monthIndex: number;
+	/** Whether the cell should enter edit mode automatically */
+	autoEdit: boolean;
+}
+
+/**
  * Budget UI state interface
  */
 export interface BudgetUIState {
 	/** Map of section IDs to collapsed state */
 	collapsedSections: Set<string>;
+	/** Currently focused cell position for tab navigation */
+	focusedCell: FocusedCellPosition | null;
 }
 
 /**
  * Load state from localStorage
+ * Note: focusedCell is NOT persisted - it's session-only state
  */
 function loadFromStorage(): BudgetUIState {
 	if (!browser) {
-		return { collapsedSections: new Set() };
+		return { collapsedSections: new Set(), focusedCell: null };
 	}
 
 	try {
@@ -32,14 +45,15 @@ function loadFromStorage(): BudgetUIState {
 		if (stored) {
 			const data = JSON.parse(stored);
 			return {
-				collapsedSections: new Set(data.collapsedSections || [])
+				collapsedSections: new Set(data.collapsedSections || []),
+				focusedCell: null
 			};
 		}
 	} catch {
 		// Ignore parse errors
 	}
 
-	return { collapsedSections: new Set() };
+	return { collapsedSections: new Set(), focusedCell: null };
 }
 
 /**
@@ -145,10 +159,30 @@ function createBudgetUIStore() {
 		 * Reset the store to initial state
 		 */
 		reset: () => {
-			set({ collapsedSections: new Set() });
+			set({ collapsedSections: new Set(), focusedCell: null });
 			if (browser) {
 				localStorage.removeItem(STORAGE_KEY);
 			}
+		},
+
+		/**
+		 * Set the focused cell position for tab navigation
+		 */
+		setFocusedCell: (position: FocusedCellPosition | null) => {
+			update((state) => ({
+				...state,
+				focusedCell: position
+			}));
+		},
+
+		/**
+		 * Clear the focused cell position
+		 */
+		clearFocusedCell: () => {
+			update((state) => ({
+				...state,
+				focusedCell: null
+			}));
 		}
 	};
 }
@@ -161,4 +195,12 @@ export const budgetUIStore = createBudgetUIStore();
  */
 export const collapsedSectionIds: Readable<string[]> = derived(budgetUIStore, ($state) =>
 	Array.from($state.collapsedSections)
+);
+
+/**
+ * Derived store for focused cell position
+ */
+export const focusedCell: Readable<FocusedCellPosition | null> = derived(
+	budgetUIStore,
+	($state) => $state.focusedCell
 );

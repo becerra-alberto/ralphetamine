@@ -42,6 +42,11 @@
 	let expansionTotalCount: number = 0;
 	let isExpansionLoading: boolean = false;
 
+	// Row refs for Tab navigation - keyed by category ID
+	let rowRefs: Record<string, CategoryRow> = {};
+	// Pending edit state for Tab navigation
+	let pendingEdit: { categoryId: string; month: MonthString } | null = null;
+
 	/**
 	 * Create a unique key for cell expansion
 	 */
@@ -308,6 +313,88 @@
 	}
 
 	$: uncategorizedMonthlyTotals = getUncategorizedMonthlyTotals();
+
+	// Build flat list of navigable categories (respects collapsed sections)
+	$: navigableCategories = buildNavigableCategoryList(sections, hasSections, $budgetStore.categories, collapsedSections);
+
+	/**
+	 * Build a flat list of category IDs in display order, skipping collapsed sections
+	 */
+	function buildNavigableCategoryList(
+		sectionList: CategorySection[],
+		useSections: boolean,
+		allCategories: typeof $budgetStore.categories,
+		collapsed: Set<string>
+	): string[] {
+		if (!useSections) {
+			return allCategories.map((c) => c.id);
+		}
+
+		const result: string[] = [];
+		for (const section of sectionList) {
+			if (!collapsed.has(section.id)) {
+				for (const child of section.children) {
+					result.push(child.id);
+				}
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Handle Tab/Shift+Tab navigation from a cell
+	 * Calculates the next cell position and triggers editing on that cell
+	 */
+	function handleCellNavigate(event: CustomEvent<{ categoryId: string; month: MonthString; direction: 'next' | 'prev'; monthIndex: number; rowIndex: number }>) {
+		const { categoryId, month, direction, monthIndex } = event.detail;
+
+		// Find current category index in the navigable list
+		const categoryIndex = navigableCategories.indexOf(categoryId);
+		if (categoryIndex === -1) return;
+
+		let nextCategoryIndex = categoryIndex;
+		let nextMonthIndex = monthIndex;
+
+		if (direction === 'next') {
+			// Tab: move to next month
+			nextMonthIndex = monthIndex + 1;
+
+			// If past last month, wrap to first month of next category
+			if (nextMonthIndex >= months.length) {
+				nextMonthIndex = 0;
+				nextCategoryIndex = categoryIndex + 1;
+
+				// If past last category, wrap to first category
+				if (nextCategoryIndex >= navigableCategories.length) {
+					nextCategoryIndex = 0;
+				}
+			}
+		} else {
+			// Shift+Tab: move to previous month
+			nextMonthIndex = monthIndex - 1;
+
+			// If before first month, wrap to last month of previous category
+			if (nextMonthIndex < 0) {
+				nextMonthIndex = months.length - 1;
+				nextCategoryIndex = categoryIndex - 1;
+
+				// If before first category, wrap to last category
+				if (nextCategoryIndex < 0) {
+					nextCategoryIndex = navigableCategories.length - 1;
+				}
+			}
+		}
+
+		// Get the target category and month
+		const targetCategoryId = navigableCategories[nextCategoryIndex];
+		const targetMonth = months[nextMonthIndex];
+
+		// Trigger editing on the target cell via CategoryRow
+		const targetRow = rowRefs[targetCategoryId];
+		if (targetRow) {
+			targetRow.startEditingMonth(targetMonth);
+		}
+	}
 </script>
 
 <svelte:window on:click={handleClickOutside} />
@@ -394,14 +481,16 @@
 								data-testid="section-content"
 								data-section-id={section.id}
 							>
-								{#each section.children as childCategory (childCategory.id)}
+								{#each section.children as childCategory, rowIdx (childCategory.id)}
 									{@const category12MTotals = getCategory12MTotals(childCategory.id)}
 									<CategoryRow
+										bind:this={rowRefs[childCategory.id]}
 										category={childCategory}
 										cells={getCategoryCells(childCategory.id)}
 										{months}
 										currentMonth={current}
 										totals12M={category12MTotals}
+										rowIndex={rowIdx}
 										{expandedCellKey}
 										{expansionTransactions}
 										{expansionTotalCount}
@@ -409,6 +498,7 @@
 										on:expand={handleCellExpand}
 										on:closeExpansion={closeExpansion}
 										on:budgetChange={handleBudgetChange}
+										on:navigate={handleCellNavigate}
 									/>
 								{/each}
 							</div>
@@ -416,14 +506,16 @@
 					{/each}
 				{:else}
 					<!-- Fallback: render flat category list when no sections exist -->
-					{#each $budgetStore.categories as category (category.id)}
+					{#each $budgetStore.categories as category, rowIdx (category.id)}
 						{@const category12MTotals = getCategory12MTotals(category.id)}
 						<CategoryRow
+							bind:this={rowRefs[category.id]}
 							{category}
 							cells={getCategoryCells(category.id)}
 							{months}
 							currentMonth={current}
 							totals12M={category12MTotals}
+							rowIndex={rowIdx}
 							{expandedCellKey}
 							{expansionTransactions}
 							{expansionTotalCount}
@@ -431,6 +523,7 @@
 							on:expand={handleCellExpand}
 							on:closeExpansion={closeExpansion}
 							on:budgetChange={handleBudgetChange}
+							on:navigate={handleCellNavigate}
 						/>
 					{/each}
 				{/if}
