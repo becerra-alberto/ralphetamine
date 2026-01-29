@@ -71,3 +71,23 @@ Story 4.4: Add Uncategorized Warning Banner - COMPLETED
   - Commit: f947449
 Story 4.4: COMPLETED - feat(story-4.4): Add Uncategorized Warning Banner
 [DONE] Story 4.4 - Add Uncategorized Warning Banner - Thu 29 Jan 2026 12:35:11 CST
+
+Story 4.5: Implement Quick-Add Transaction Row - COMPLETED
+  - QuickAddRow.svelte: Inline form with Date, Payee, Category, Memo, Amount, Account, Save
+  - Default values: today's date, expense sign, first/last-used account
+  - Amount +/- toggle: switches between income and expense
+  - dollarsToCents conversion: $123.45 -> 12345 cents
+  - Validation: required Payee, Amount, Account with error messages
+  - Focus moves to first invalid field on validation failure
+  - Form resets after successful save with success indicator animation
+  - Cmd+N keyboard shortcut focuses Payee input
+  - Enter key triggers save from any field
+  - Tab order: Date -> Payee -> Category -> Memo -> Amount -> Account -> Save
+  - Integrated into transactions page above table with createTransaction API
+  - lastUsedAccountId tracking for default account persistence
+  - Unit tests: QuickAddRow.test.ts (14 tests)
+  - E2E tests: quick-add.spec.ts
+  - All 1071 tests passing (1 skipped), 0 type errors
+  - Commit: 5858237
+Story 4.5: COMPLETED - feat(story-4.5): Implement Quick-Add Transaction Row
+[DONE] Story 4.5 - Implement Quick-Add Transaction Row - Thu 29 Jan 2026 12:44:02 CST
