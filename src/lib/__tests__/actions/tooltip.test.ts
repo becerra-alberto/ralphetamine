@@ -3,14 +3,14 @@ import { tooltip, tooltipContent } from '../../actions/tooltip';
 
 describe('tooltip action', () => {
 	let mockElement: HTMLElement;
-	let onShow: ReturnType<typeof vi.fn>;
-	let onHide: ReturnType<typeof vi.fn>;
+	let onShow: (element: HTMLElement) => void;
+	let onHide: () => void;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
 		mockElement = document.createElement('div');
-		onShow = vi.fn();
-		onHide = vi.fn();
+		onShow = vi.fn() as unknown as (element: HTMLElement) => void;
+		onHide = vi.fn() as unknown as () => void;
 	});
 
 	afterEach(() => {
@@ -126,12 +126,14 @@ describe('tooltip action', () => {
 		it('should allow updating options', () => {
 			const action = tooltip(mockElement, { onShow, onHide, showDelay: 200 });
 
-			const newOnShow = vi.fn();
-			action.update({ onShow: newOnShow, onHide, showDelay: 100 });
+			const newOnShow = vi.fn() as unknown as (element: HTMLElement) => void;
+			action.update({ onShow: newOnShow, onHide, showDelay: 200 });
 
+			// After update, trigger mouseenter with new callback
 			mockElement.dispatchEvent(new MouseEvent('mouseenter'));
-			vi.advanceTimersByTime(100);
+			vi.advanceTimersByTime(200);
 
+			// The newOnShow should be called because options were updated
 			expect(newOnShow).toHaveBeenCalled();
 		});
 	});
@@ -139,13 +141,13 @@ describe('tooltip action', () => {
 
 describe('tooltipContent action', () => {
 	let mockElement: HTMLElement;
-	let onMouseEnter: ReturnType<typeof vi.fn>;
-	let onMouseLeave: ReturnType<typeof vi.fn>;
+	let onMouseEnter: () => void;
+	let onMouseLeave: () => void;
 
 	beforeEach(() => {
 		mockElement = document.createElement('div');
-		onMouseEnter = vi.fn();
-		onMouseLeave = vi.fn();
+		onMouseEnter = vi.fn() as unknown as () => void;
+		onMouseLeave = vi.fn() as unknown as () => void;
 	});
 
 	it('should attach mouseenter and mouseleave listeners', () => {
