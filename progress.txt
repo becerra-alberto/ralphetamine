@@ -309,3 +309,20 @@ Story 6.2: Create Onboarding Wizard Steps 2-4 - COMPLETED
   - All 1641 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
   - Commit: 03e9689
 Story 6.2: COMPLETED - feat(story-6.2): Create Onboarding Wizard Steps 2-4
+
+[LEARN] When a story has already been partially implemented by a previous Ralph run, check git log first to see what commits already exist. The OnboardingWizard.svelte had uncommitted changes from a separate enhancement (ConfirmDialog skip confirmation) that broke the skip test - reverting those non-story changes via `git checkout` was the correct fix rather than modifying the test.
+[DONE] Story 6.2 - onuoarding steps234 - Thu 29 Jan 2026 15:23:29 CST
+
+Story 6.3: Add Skip Onboarding Option - COMPLETED
+  - OnboardingWizard.svelte: Skip setup link in wizard header, ConfirmDialog integration
+  - ConfirmDialog.svelte: Reusable shared component with Modal, confirm/cancel events, custom labels, danger variant
+  - Skip link: Muted text button below step indicator, consistent position across all 4 steps
+  - Skip confirmation dialog: Title "Skip setup?", message about Settings access, "Skip"/"Continue setup" buttons
+  - Confirm skip: Dispatches skip event, closes dialog, page handler calls completeOnboarding + navigates to dashboard
+  - Cancel skip: Closes dialog, wizard remains on current step, no changes
+  - Default settings: No accounts created, no income set, no categories disabled (all defaults applied)
+  - +page.svelte: handleSkip calls completeOnboarding(), sets isCompleted=true, hides wizard
+  - Unit tests: ConfirmDialog.test.ts (8 tests), OnboardingWizard.test.ts (22 tests including skip link on all steps, dialog open/confirm/cancel)
+  - All 1665 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+Story 6.3: COMPLETED - feat(story-6.3): Add Skip Onboarding Option
+[DONE] Story 6.3 - Skip Onboarding - Thu 29 Jan 2026 15:26:00 CST

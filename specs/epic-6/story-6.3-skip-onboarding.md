@@ -2,7 +2,7 @@
 id: "6.3"
 epic: 6
 title: "Add Skip Onboarding Option"
-status: pending
+status: done
 priority: medium
 estimation: small
 depends_on: ["6.1"]
