@@ -293,3 +293,19 @@ Story 6.1: Create Onboarding Wizard Step 1 Goals - COMPLETED
   - Commit: 4351db2
 Story 6.1: COMPLETED - feat(story-6.1): Create Onboarding Wizard Step 1 Goals
 [DONE] Story 6.1 - Onboarding Wizard Step 1 - Thu 29 Jan 2026 15:00:00 CST
+[DONE] Story 5.1 - networth summary - Thu 29 Jan 2026 15:01:39 CST
+
+Story 6.2: Create Onboarding Wizard Steps 2-4 - COMPLETED
+  - Rust save_monthly_income: Stores income in cents as user_preferences key-value
+  - Rust save_disabled_categories: Stores disabled category IDs as JSON array
+  - onboarding.ts API: Added saveMonthlyIncome, saveDisabledCategories wrappers
+  - onboarding.ts store: Added OnboardingAccount interface, monthlyIncomeCents, accounts, disabledCategories, setMonthlyIncome, addAccount, toggleCategory, setDisabledCategories
+  - Step2Income.svelte: Currency input with € symbol, 4 presets (€2k/€3.5k/€5k/€7.5k), validation, setIncome/next/back dispatchers
+  - Step3Accounts.svelte: Inline add-account form (name, type, balance), account list, "Skip for now"/"Next" button, addAccount/next/back dispatchers
+  - Step4Categories.svelte: 4 sections (Housing, Essential, Lifestyle, Savings) with 19 category toggles, disabled-opacity visual, toggleCategory/finish/back dispatchers
+  - OnboardingWizard.svelte: Updated with all 4 steps, fly transitions, back navigation, finish event
+  - +page.svelte: Updated with all event handlers (setIncome, addAccount, toggleCategory, back, finish), step-aware handleNext saves goals/income per step
+  - Unit tests: Step2Income.test.ts (10), Step3Accounts.test.ts (10), Step4Categories.test.ts (12), OnboardingWizard.test.ts (13 updated), onboarding.test.ts (14 updated)
+  - All 1641 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: 03e9689
+Story 6.2: COMPLETED - feat(story-6.2): Create Onboarding Wizard Steps 2-4
