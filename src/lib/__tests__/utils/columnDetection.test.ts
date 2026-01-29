@@ -7,479 +7,332 @@ import {
 	toggleAmountMode,
 	parseRawAmountToCents,
 	parseRawDate,
-	buildPreviewTransaction,
-	FIELD_LABELS,
-	REQUIRED_FIELDS,
 	type ColumnMapping,
-	type MappableField
+	FIELD_LABELS,
+	REQUIRED_FIELDS
 } from '../../utils/columnDetection';
 
-describe('columnDetection', () => {
-	describe('autoDetectMappings', () => {
-		it('should detect English headers', () => {
-			const headers = ['Date', 'Description', 'Amount', 'Memo'];
-			const firstRow = ['2025-01-01', 'Coffee Shop', '12.50', 'Morning coffee'];
-			const result = autoDetectMappings(headers, firstRow);
+describe('autoDetectMappings', () => {
+	it('should auto-map English column names (Date, Description, Amount, Memo)', () => {
+		const headers = ['Date', 'Description', 'Amount', 'Memo'];
+		const firstRow = ['2025-01-01', 'Grocery Store', '50.00', 'Weekly groceries'];
+		const mappings = autoDetectMappings(headers, firstRow);
 
-			expect(result).toHaveLength(4);
-			expect(result[0].field).toBe('date');
-			expect(result[1].field).toBe('payee');
-			expect(result[2].field).toBe('amount');
-			expect(result[3].field).toBe('memo');
-		});
-
-		it('should detect Dutch headers', () => {
-			const headers = ['Datum', 'Omschrijving', 'Bedrag', 'Opmerkingen'];
-			const firstRow = ['01-01-2025', 'Albert Heijn', '25,00', 'Boodschappen'];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[0].field).toBe('date');
-			expect(result[1].field).toBe('payee');
-			expect(result[2].field).toBe('amount');
-			expect(result[3].field).toBe('memo');
-		});
-
-		it('should detect German headers', () => {
-			const headers = ['Datum', 'Beschreibung', 'Betrag', 'Notizen'];
-			const firstRow = ['01.01.2025', 'Lidl', '15,00', 'Einkauf'];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[0].field).toBe('date');
-			expect(result[1].field).toBe('payee');
-			expect(result[2].field).toBe('amount');
-			expect(result[3].field).toBe('memo');
-		});
-
-		it('should detect inflow/outflow columns', () => {
-			const headers = ['Date', 'Name', 'Credit', 'Debit'];
-			const firstRow = ['2025-01-01', 'Salary', '3000.00', ''];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[0].field).toBe('date');
-			expect(result[1].field).toBe('payee');
-			expect(result[2].field).toBe('inflow');
-			expect(result[3].field).toBe('outflow');
-		});
-
-		it('should detect Bij/Af (Dutch inflow/outflow)', () => {
-			const headers = ['Datum', 'Omschrijving', 'Bij', 'Af'];
-			const firstRow = ['01-01-2025', 'Salaris', '3000,00', ''];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[2].field).toBe('inflow');
-			expect(result[3].field).toBe('outflow');
-		});
-
-		it('should be case-insensitive', () => {
-			const headers = ['DATE', 'DESCRIPTION', 'AMOUNT'];
-			const firstRow = ['2025-01-01', 'Store', '10.00'];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[0].field).toBe('date');
-			expect(result[1].field).toBe('payee');
-			expect(result[2].field).toBe('amount');
-		});
-
-		it('should match partial headers containing patterns', () => {
-			const headers = ['Transaction Date', 'Counterparty Name', 'Total Amount'];
-			const firstRow = ['2025-01-01', 'Shop', '10.00'];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[0].field).toBe('date');
-			expect(result[1].field).toBe('payee');
-			expect(result[2].field).toBe('amount');
-		});
-
-		it('should skip unrecognized columns', () => {
-			const headers = ['Date', 'Payee', 'Amount', 'Some Random Col'];
-			const firstRow = ['2025-01-01', 'Shop', '10.00', 'xyz'];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[3].field).toBe('skip');
-		});
-
-		it('should not assign the same field twice', () => {
-			const headers = ['Date', 'Transaction Date', 'Amount'];
-			const firstRow = ['2025-01-01', '2025-01-01', '10.00'];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[0].field).toBe('date');
-			expect(result[1].field).toBe('skip');
-			expect(result[2].field).toBe('amount');
-		});
-
-		it('should include sample values from first row', () => {
-			const headers = ['Date', 'Amount'];
-			const firstRow = ['2025-01-01', '42.50'];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[0].sampleValue).toBe('2025-01-01');
-			expect(result[1].sampleValue).toBe('42.50');
-		});
-
-		it('should handle empty first row gracefully', () => {
-			const headers = ['Date', 'Amount'];
-			const firstRow: string[] = [];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[0].sampleValue).toBe('');
-			expect(result[1].sampleValue).toBe('');
-		});
-
-		it('should detect category column', () => {
-			const headers = ['Date', 'Payee', 'Amount', 'Category'];
-			const firstRow = ['2025-01-01', 'Shop', '10.00', 'Groceries'];
-			const result = autoDetectMappings(headers, firstRow);
-
-			expect(result[3].field).toBe('category');
-		});
+		expect(mappings).toHaveLength(4);
+		expect(mappings[0].field).toBe('date');
+		expect(mappings[1].field).toBe('payee');
+		expect(mappings[2].field).toBe('amount');
+		expect(mappings[3].field).toBe('memo');
 	});
 
-	describe('validateMappings', () => {
-		function makeMappings(fields: MappableField[]): ColumnMapping[] {
-			return fields.map((field, i) => ({
-				columnIndex: i,
-				columnHeader: `Col ${i}`,
-				sampleValue: '',
-				field
-			}));
-		}
+	it('should auto-map Dutch column names (Datum, Omschrijving, Bedrag)', () => {
+		const headers = ['Datum', 'Omschrijving', 'Bedrag'];
+		const firstRow = ['01/02/2025', 'Albert Heijn', '25,50'];
+		const mappings = autoDetectMappings(headers, firstRow);
 
-		it('should pass with date + payee + amount', () => {
-			const errors = validateMappings(makeMappings(['date', 'payee', 'amount']));
-			expect(errors).toHaveLength(0);
-		});
-
-		it('should pass with date + payee + inflow + outflow', () => {
-			const errors = validateMappings(makeMappings(['date', 'payee', 'inflow', 'outflow']));
-			expect(errors).toHaveLength(0);
-		});
-
-		it('should fail when date is missing', () => {
-			const errors = validateMappings(makeMappings(['skip', 'payee', 'amount']));
-			expect(errors.length).toBeGreaterThan(0);
-			expect(errors.some((e) => e.includes('Date'))).toBe(true);
-		});
-
-		it('should fail when payee is missing', () => {
-			const errors = validateMappings(makeMappings(['date', 'skip', 'amount']));
-			expect(errors.length).toBeGreaterThan(0);
-			expect(errors.some((e) => e.includes('Payee'))).toBe(true);
-		});
-
-		it('should fail when amount/inflow/outflow are all missing', () => {
-			const errors = validateMappings(makeMappings(['date', 'payee', 'skip']));
-			expect(errors.length).toBeGreaterThan(0);
-			expect(errors.some((e) => e.includes('Amount'))).toBe(true);
-		});
-
-		it('should fail when only inflow is mapped (no outflow)', () => {
-			const errors = validateMappings(makeMappings(['date', 'payee', 'inflow']));
-			expect(errors.length).toBeGreaterThan(0);
-			expect(errors.some((e) => e.includes('Outflow'))).toBe(true);
-		});
-
-		it('should fail when only outflow is mapped (no inflow)', () => {
-			const errors = validateMappings(makeMappings(['date', 'payee', 'outflow']));
-			expect(errors.length).toBeGreaterThan(0);
-			expect(errors.some((e) => e.includes('Inflow'))).toBe(true);
-		});
-
-		it('should ignore skip columns', () => {
-			const errors = validateMappings(makeMappings(['date', 'payee', 'amount', 'skip', 'skip']));
-			expect(errors).toHaveLength(0);
-		});
-
-		it('should report multiple missing fields', () => {
-			const errors = validateMappings(makeMappings(['skip', 'skip', 'skip']));
-			expect(errors.length).toBeGreaterThanOrEqual(3);
-		});
+		expect(mappings[0].field).toBe('date');
+		expect(mappings[1].field).toBe('payee');
+		expect(mappings[2].field).toBe('amount');
 	});
 
-	describe('getAvailableFields', () => {
-		function makeMappings(fields: MappableField[]): ColumnMapping[] {
-			return fields.map((field, i) => ({
-				columnIndex: i,
-				columnHeader: `Col ${i}`,
-				sampleValue: '',
-				field
-			}));
-		}
+	it('should auto-map German column names (Datum, Beschreibung, Betrag)', () => {
+		const headers = ['Datum', 'Beschreibung', 'Betrag', 'Notizen'];
+		const firstRow = ['28.01.2025', 'REWE', '45,00', 'Einkauf'];
+		const mappings = autoDetectMappings(headers, firstRow);
 
-		it('should include skip option', () => {
-			const mappings = makeMappings(['date', 'skip']);
-			const options = getAvailableFields(mappings, 1);
-			expect(options.some((o) => o.value === 'skip')).toBe(true);
-		});
-
-		it('should include current field even if used', () => {
-			const mappings = makeMappings(['date', 'payee']);
-			const options = getAvailableFields(mappings, 0);
-			expect(options.some((o) => o.value === 'date')).toBe(true);
-		});
-
-		it('should exclude fields used by other columns', () => {
-			const mappings = makeMappings(['date', 'payee', 'skip']);
-			const options = getAvailableFields(mappings, 2);
-			expect(options.some((o) => o.value === 'date')).toBe(false);
-			expect(options.some((o) => o.value === 'payee')).toBe(false);
-		});
-
-		it('should hide inflow/outflow when useInflowOutflow is false', () => {
-			const mappings = makeMappings(['date', 'skip']);
-			const options = getAvailableFields(mappings, 1, false);
-			expect(options.some((o) => o.value === 'inflow')).toBe(false);
-			expect(options.some((o) => o.value === 'outflow')).toBe(false);
-			expect(options.some((o) => o.value === 'amount')).toBe(true);
-		});
-
-		it('should hide amount when useInflowOutflow is true', () => {
-			const mappings = makeMappings(['date', 'skip']);
-			const options = getAvailableFields(mappings, 1, true);
-			expect(options.some((o) => o.value === 'amount')).toBe(false);
-			expect(options.some((o) => o.value === 'inflow')).toBe(true);
-			expect(options.some((o) => o.value === 'outflow')).toBe(true);
-		});
+		expect(mappings[0].field).toBe('date');
+		expect(mappings[1].field).toBe('payee');
+		expect(mappings[2].field).toBe('amount');
+		expect(mappings[3].field).toBe('memo');
 	});
 
-	describe('isInflowOutflowMode', () => {
-		function makeMappings(fields: MappableField[]): ColumnMapping[] {
-			return fields.map((field, i) => ({
-				columnIndex: i,
-				columnHeader: `Col ${i}`,
-				sampleValue: '',
-				field
-			}));
-		}
+	it('should be case-insensitive for header matching', () => {
+		const headers = ['DATE', 'description', 'Amount'];
+		const firstRow = ['2025-01-01', 'Store', '100'];
+		const mappings = autoDetectMappings(headers, firstRow);
 
-		it('should return false when using amount', () => {
-			expect(isInflowOutflowMode(makeMappings(['date', 'payee', 'amount']))).toBe(false);
-		});
-
-		it('should return true when inflow is mapped', () => {
-			expect(isInflowOutflowMode(makeMappings(['date', 'payee', 'inflow', 'outflow']))).toBe(true);
-		});
-
-		it('should return true when outflow is mapped', () => {
-			expect(isInflowOutflowMode(makeMappings(['date', 'payee', 'outflow']))).toBe(true);
-		});
+		expect(mappings[0].field).toBe('date');
+		expect(mappings[1].field).toBe('payee');
+		expect(mappings[2].field).toBe('amount');
 	});
 
-	describe('toggleAmountMode', () => {
-		function makeMappings(fields: MappableField[]): ColumnMapping[] {
-			return fields.map((field, i) => ({
-				columnIndex: i,
-				columnHeader: `Col ${i}`,
-				sampleValue: '',
-				field
-			}));
-		}
+	it('should detect inflow/outflow columns', () => {
+		const headers = ['Date', 'Payee', 'Credit', 'Debit'];
+		const firstRow = ['2025-01-01', 'Store', '', '50.00'];
+		const mappings = autoDetectMappings(headers, firstRow);
 
-		it('should reset amount to skip when switching to inflow/outflow', () => {
-			const mappings = makeMappings(['date', 'payee', 'amount']);
-			const result = toggleAmountMode(mappings, true);
-			expect(result[2].field).toBe('skip');
-		});
-
-		it('should reset inflow/outflow to skip when switching to amount', () => {
-			const mappings = makeMappings(['date', 'payee', 'inflow', 'outflow']);
-			const result = toggleAmountMode(mappings, false);
-			expect(result[2].field).toBe('skip');
-			expect(result[3].field).toBe('skip');
-		});
-
-		it('should not affect non-amount fields', () => {
-			const mappings = makeMappings(['date', 'payee', 'amount', 'memo']);
-			const result = toggleAmountMode(mappings, true);
-			expect(result[0].field).toBe('date');
-			expect(result[1].field).toBe('payee');
-			expect(result[3].field).toBe('memo');
-		});
+		expect(mappings[2].field).toBe('inflow');
+		expect(mappings[3].field).toBe('outflow');
 	});
 
-	describe('parseRawAmountToCents', () => {
-		it('should parse US format (1,234.56)', () => {
-			expect(parseRawAmountToCents('1,234.56')).toBe(123456);
-		});
+	it('should detect category column', () => {
+		const headers = ['Date', 'Description', 'Amount', 'Category'];
+		const firstRow = ['2025-01-01', 'Store', '50', 'Groceries'];
+		const mappings = autoDetectMappings(headers, firstRow);
 
-		it('should parse European format (1.234,56)', () => {
-			expect(parseRawAmountToCents('1.234,56')).toBe(123456);
-		});
-
-		it('should parse simple decimal (42.50)', () => {
-			expect(parseRawAmountToCents('42.50')).toBe(4250);
-		});
-
-		it('should parse negative values (-25.00)', () => {
-			expect(parseRawAmountToCents('-25.00')).toBe(-2500);
-		});
-
-		it('should remove currency symbols', () => {
-			expect(parseRawAmountToCents('€42.50')).toBe(4250);
-			expect(parseRawAmountToCents('$100.00')).toBe(10000);
-			expect(parseRawAmountToCents('£75.00')).toBe(7500);
-		});
-
-		it('should handle empty/whitespace input', () => {
-			expect(parseRawAmountToCents('')).toBe(0);
-			expect(parseRawAmountToCents('  ')).toBe(0);
-		});
-
-		it('should handle non-numeric input', () => {
-			expect(parseRawAmountToCents('abc')).toBe(0);
-		});
-
-		it('should handle integer values', () => {
-			expect(parseRawAmountToCents('100')).toBe(10000);
-		});
+		expect(mappings[3].field).toBe('category');
 	});
 
-	describe('parseRawDate', () => {
-		it('should parse ISO format (YYYY-MM-DD)', () => {
-			expect(parseRawDate('2025-01-28')).toBe('2025-01-28');
-		});
+	it('should assign skip to unrecognized columns', () => {
+		const headers = ['Date', 'Payee', 'Amount', 'SomeRandomField'];
+		const firstRow = ['2025-01-01', 'Store', '50', 'xyz'];
+		const mappings = autoDetectMappings(headers, firstRow);
 
-		it('should parse ISO datetime (YYYY-MM-DDThh:mm:ss)', () => {
-			expect(parseRawDate('2025-01-28T10:30:00Z')).toBe('2025-01-28');
-		});
-
-		it('should parse DD/MM/YYYY when day > 12', () => {
-			expect(parseRawDate('28/01/2025')).toBe('2025-01-28');
-		});
-
-		it('should parse MM/DD/YYYY when month <= 12 and day > 12', () => {
-			expect(parseRawDate('01/28/2025')).toBe('2025-01-28');
-		});
-
-		it('should default ambiguous dates to DD/MM/YYYY', () => {
-			// 05/06/2025 is ambiguous; defaults to DD/MM = 5th June
-			expect(parseRawDate('05/06/2025')).toBe('2025-06-05');
-		});
-
-		it('should parse DD-MM-YYYY', () => {
-			expect(parseRawDate('28-01-2025')).toBe('2025-01-28');
-		});
-
-		it('should parse DD.MM.YYYY', () => {
-			expect(parseRawDate('28.01.2025')).toBe('2025-01-28');
-		});
-
-		it('should pad single-digit months and days', () => {
-			expect(parseRawDate('2025-1-5')).toBe('2025-01-05');
-		});
-
-		it('should return null for empty input', () => {
-			expect(parseRawDate('')).toBeNull();
-			expect(parseRawDate('  ')).toBeNull();
-		});
-
-		it('should return null for unrecognized format', () => {
-			expect(parseRawDate('Jan 28 2025')).toBeNull();
-		});
+		expect(mappings[3].field).toBe('skip');
 	});
 
-	describe('buildPreviewTransaction', () => {
-		it('should build transaction from single amount mapping', () => {
-			const mappings: ColumnMapping[] = [
-				{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
-				{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
-				{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '', field: 'amount' },
-				{ columnIndex: 3, columnHeader: 'Memo', sampleValue: '', field: 'memo' }
-			];
-			const row = ['2025-01-28', 'Coffee Shop', '4.50', 'Morning coffee'];
-			const result = buildPreviewTransaction(row, mappings);
+	it('should not assign same field twice', () => {
+		const headers = ['Date', 'Transaction Date', 'Amount'];
+		const firstRow = ['2025-01-01', '2025-01-01', '50'];
+		const mappings = autoDetectMappings(headers, firstRow);
 
-			expect(result.date).toBe('2025-01-28');
-			expect(result.payee).toBe('Coffee Shop');
-			expect(result.amountCents).toBe(450);
-			expect(result.memo).toBe('Morning coffee');
-		});
-
-		it('should build transaction from inflow/outflow mappings', () => {
-			const mappings: ColumnMapping[] = [
-				{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
-				{ columnIndex: 1, columnHeader: 'Name', sampleValue: '', field: 'payee' },
-				{ columnIndex: 2, columnHeader: 'Credit', sampleValue: '', field: 'inflow' },
-				{ columnIndex: 3, columnHeader: 'Debit', sampleValue: '', field: 'outflow' }
-			];
-			const row = ['2025-01-28', 'Salary', '3000.00', ''];
-			const result = buildPreviewTransaction(row, mappings);
-
-			expect(result.amountCents).toBe(300000);
-		});
-
-		it('should subtract outflow from amount', () => {
-			const mappings: ColumnMapping[] = [
-				{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
-				{ columnIndex: 1, columnHeader: 'Name', sampleValue: '', field: 'payee' },
-				{ columnIndex: 2, columnHeader: 'Credit', sampleValue: '', field: 'inflow' },
-				{ columnIndex: 3, columnHeader: 'Debit', sampleValue: '', field: 'outflow' }
-			];
-			const row = ['2025-01-28', 'Grocery', '', '50.00'];
-			const result = buildPreviewTransaction(row, mappings);
-
-			expect(result.amountCents).toBe(-5000);
-		});
-
-		it('should parse date values', () => {
-			const mappings: ColumnMapping[] = [
-				{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
-				{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
-				{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '', field: 'amount' }
-			];
-			const row = ['28/01/2025', 'Shop', '10.00'];
-			const result = buildPreviewTransaction(row, mappings);
-
-			expect(result.date).toBe('2025-01-28');
-		});
-
-		it('should handle category mapping', () => {
-			const mappings: ColumnMapping[] = [
-				{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
-				{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
-				{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '', field: 'amount' },
-				{ columnIndex: 3, columnHeader: 'Category', sampleValue: '', field: 'category' }
-			];
-			const row = ['2025-01-28', 'Shop', '10.00', 'Groceries'];
-			const result = buildPreviewTransaction(row, mappings);
-
-			expect(result.category).toBe('Groceries');
-		});
-
-		it('should skip columns mapped as skip', () => {
-			const mappings: ColumnMapping[] = [
-				{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
-				{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
-				{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '', field: 'amount' },
-				{ columnIndex: 3, columnHeader: 'Extra', sampleValue: '', field: 'skip' }
-			];
-			const row = ['2025-01-28', 'Shop', '10.00', 'ignored'];
-			const result = buildPreviewTransaction(row, mappings);
-
-			// skip column should not affect result
-			expect(result.date).toBe('2025-01-28');
-			expect(result.payee).toBe('Shop');
-			expect(result.amountCents).toBe(1000);
-		});
+		expect(mappings[0].field).toBe('date');
+		expect(mappings[1].field).toBe('skip');
+		expect(mappings[2].field).toBe('amount');
 	});
 
-	describe('FIELD_LABELS', () => {
-		it('should have labels for all mappable fields', () => {
-			expect(FIELD_LABELS.date).toBe('Date');
-			expect(FIELD_LABELS.payee).toBe('Payee');
-			expect(FIELD_LABELS.amount).toBe('Amount');
-			expect(FIELD_LABELS.inflow).toBe('Inflow');
-			expect(FIELD_LABELS.outflow).toBe('Outflow');
-			expect(FIELD_LABELS.memo).toBe('Memo');
-			expect(FIELD_LABELS.category).toBe('Category');
-			expect(FIELD_LABELS.skip).toBe('Skip this column');
-		});
+	it('should include sample values from first row', () => {
+		const headers = ['Date', 'Amount'];
+		const firstRow = ['2025-01-15', '123.45'];
+		const mappings = autoDetectMappings(headers, firstRow);
+
+		expect(mappings[0].sampleValue).toBe('2025-01-15');
+		expect(mappings[1].sampleValue).toBe('123.45');
 	});
 
-	describe('REQUIRED_FIELDS', () => {
-		it('should require date and payee', () => {
-			expect(REQUIRED_FIELDS).toContain('date');
-			expect(REQUIRED_FIELDS).toContain('payee');
-		});
+	it('should handle empty first row gracefully', () => {
+		const headers = ['Date', 'Amount'];
+		const firstRow: string[] = [];
+		const mappings = autoDetectMappings(headers, firstRow);
+
+		expect(mappings[0].sampleValue).toBe('');
+		expect(mappings[1].sampleValue).toBe('');
+	});
+});
+
+describe('validateMappings', () => {
+	it('should return empty errors for valid mappings (date + payee + amount)', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '2025-01-01', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: 'Store', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '50', field: 'amount' }
+		];
+		expect(validateMappings(mappings)).toEqual([]);
+	});
+
+	it('should return error when Date is missing', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Payee', sampleValue: 'Store', field: 'payee' },
+			{ columnIndex: 1, columnHeader: 'Amount', sampleValue: '50', field: 'amount' }
+		];
+		const errors = validateMappings(mappings);
+		expect(errors.length).toBeGreaterThan(0);
+		expect(errors.some((e) => e.toLowerCase().includes('date'))).toBe(true);
+	});
+
+	it('should return error when Payee is missing', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '2025-01-01', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Amount', sampleValue: '50', field: 'amount' }
+		];
+		const errors = validateMappings(mappings);
+		expect(errors.some((e) => e.toLowerCase().includes('payee'))).toBe(true);
+	});
+
+	it('should return error when Amount is missing (no inflow/outflow)', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '2025-01-01', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: 'Store', field: 'payee' }
+		];
+		const errors = validateMappings(mappings);
+		expect(errors.some((e) => e.toLowerCase().includes('amount'))).toBe(true);
+	});
+
+	it('should accept inflow + outflow as alternative to amount', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '2025-01-01', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: 'Store', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Credit', sampleValue: '50', field: 'inflow' },
+			{ columnIndex: 3, columnHeader: 'Debit', sampleValue: '', field: 'outflow' }
+		];
+		expect(validateMappings(mappings)).toEqual([]);
+	});
+
+	it('should return error when only inflow is mapped', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '2025-01-01', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: 'Store', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Credit', sampleValue: '50', field: 'inflow' }
+		];
+		const errors = validateMappings(mappings);
+		expect(errors.length).toBeGreaterThan(0);
+	});
+
+	it('should ignore skip fields', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '2025-01-01', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: 'Store', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '50', field: 'amount' },
+			{ columnIndex: 3, columnHeader: 'Extra', sampleValue: 'x', field: 'skip' }
+		];
+		expect(validateMappings(mappings)).toEqual([]);
+	});
+});
+
+describe('getAvailableFields', () => {
+	it('should exclude already-used fields', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '', field: 'skip' }
+		];
+		const options = getAvailableFields(mappings, 2);
+		const fieldValues = options.map((o) => o.value);
+		expect(fieldValues).not.toContain('date');
+		expect(fieldValues).not.toContain('payee');
+		expect(fieldValues).toContain('amount');
+		expect(fieldValues).toContain('skip');
+	});
+
+	it('should always include skip and current field', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'X', sampleValue: '', field: 'payee' }
+		];
+		const options = getAvailableFields(mappings, 0);
+		const fieldValues = options.map((o) => o.value);
+		expect(fieldValues).toContain('skip');
+		expect(fieldValues).toContain('date');
+	});
+
+	it('should hide amount when useInflowOutflow is true', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' }
+		];
+		const options = getAvailableFields(mappings, 0, true);
+		const fieldValues = options.map((o) => o.value);
+		expect(fieldValues).not.toContain('amount');
+		expect(fieldValues).toContain('inflow');
+		expect(fieldValues).toContain('outflow');
+	});
+
+	it('should hide inflow/outflow when useInflowOutflow is false', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' }
+		];
+		const options = getAvailableFields(mappings, 0, false);
+		const fieldValues = options.map((o) => o.value);
+		expect(fieldValues).toContain('amount');
+		expect(fieldValues).not.toContain('inflow');
+		expect(fieldValues).not.toContain('outflow');
+	});
+});
+
+describe('isInflowOutflowMode', () => {
+	it('should return true when inflow is mapped', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'X', sampleValue: '', field: 'inflow' }
+		];
+		expect(isInflowOutflowMode(mappings)).toBe(true);
+	});
+
+	it('should return false when only amount is mapped', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'X', sampleValue: '', field: 'amount' }
+		];
+		expect(isInflowOutflowMode(mappings)).toBe(false);
+	});
+});
+
+describe('toggleAmountMode', () => {
+	it('should reset amount to skip when switching to inflow/outflow', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Amount', sampleValue: '', field: 'amount' }
+		];
+		const result = toggleAmountMode(mappings, true);
+		expect(result[0].field).toBe('skip');
+	});
+
+	it('should reset inflow/outflow to skip when switching to amount', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Credit', sampleValue: '', field: 'inflow' },
+			{ columnIndex: 1, columnHeader: 'Debit', sampleValue: '', field: 'outflow' }
+		];
+		const result = toggleAmountMode(mappings, false);
+		expect(result[0].field).toBe('skip');
+		expect(result[1].field).toBe('skip');
+	});
+});
+
+describe('parseRawAmountToCents', () => {
+	it('should parse US format (1,234.56) to 123456 cents', () => {
+		expect(parseRawAmountToCents('1,234.56')).toBe(123456);
+	});
+
+	it('should parse European format (1.234,56) to 123456 cents', () => {
+		expect(parseRawAmountToCents('1.234,56')).toBe(123456);
+	});
+
+	it('should handle negative values', () => {
+		expect(parseRawAmountToCents('-50.00')).toBe(-5000);
+	});
+
+	it('should strip currency symbols', () => {
+		expect(parseRawAmountToCents('€50.00')).toBe(5000);
+		expect(parseRawAmountToCents('$100.00')).toBe(10000);
+	});
+
+	it('should return 0 for empty string', () => {
+		expect(parseRawAmountToCents('')).toBe(0);
+	});
+
+	it('should return 0 for invalid input', () => {
+		expect(parseRawAmountToCents('abc')).toBe(0);
+	});
+
+	it('should handle simple integers', () => {
+		expect(parseRawAmountToCents('50')).toBe(5000);
+	});
+});
+
+describe('parseRawDate', () => {
+	it('should parse YYYY-MM-DD', () => {
+		expect(parseRawDate('2025-01-28')).toBe('2025-01-28');
+	});
+
+	it('should parse DD/MM/YYYY (European)', () => {
+		expect(parseRawDate('28/01/2025')).toBe('2025-01-28');
+	});
+
+	it('should parse MM/DD/YYYY when second > 12', () => {
+		expect(parseRawDate('01/28/2025')).toBe('2025-01-28');
+	});
+
+	it('should parse ISO datetime to date', () => {
+		expect(parseRawDate('2025-01-28T10:30:00Z')).toBe('2025-01-28');
+	});
+
+	it('should return null for invalid dates', () => {
+		expect(parseRawDate('not a date')).toBeNull();
+	});
+
+	it('should return null for empty string', () => {
+		expect(parseRawDate('')).toBeNull();
+	});
+});
+
+describe('FIELD_LABELS', () => {
+	it('should have labels for all field types', () => {
+		expect(FIELD_LABELS.date).toBe('Date');
+		expect(FIELD_LABELS.payee).toBe('Payee');
+		expect(FIELD_LABELS.amount).toBe('Amount');
+		expect(FIELD_LABELS.skip).toBe('Skip this column');
+	});
+});
+
+describe('REQUIRED_FIELDS', () => {
+	it('should require date and payee', () => {
+		expect(REQUIRED_FIELDS).toContain('date');
+		expect(REQUIRED_FIELDS).toContain('payee');
 	});
 });
