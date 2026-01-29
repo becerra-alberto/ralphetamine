@@ -67,7 +67,14 @@
 				sortDirection
 			});
 
-			transactionStore.setTransactions(result.items, result.totalCount);
+			// Transform transactions to include display names
+			const transactionsWithDisplay: TransactionWithDisplay[] = result.items.map((t) => ({
+				...t,
+				categoryName: null,
+				accountName: 'Unknown'
+			}));
+
+			transactionStore.setTransactions(transactionsWithDisplay, result.totalCount);
 			error = null;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load transactions';

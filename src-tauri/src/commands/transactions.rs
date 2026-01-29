@@ -63,6 +63,7 @@ pub struct TransactionFilters {
     pub category_id: Option<String>,
     pub account_id: Option<String>,
     pub payee: Option<String>,
+    pub search: Option<String>,
     pub min_amount: Option<i64>,
     pub max_amount: Option<i64>,
     pub uncategorized_only: Option<bool>,
@@ -220,6 +221,19 @@ pub fn get_transactions(filters: Option<TransactionFilters>) -> Result<Vec<Trans
             &[account_id],
             parse_transaction_row,
         ).map_err(|e| e.to_string());
+    }
+
+    if let Some(ref search) = filters.search {
+        if !search.is_empty() {
+            let search_pattern = format!("%{}%", search);
+            return db.query_map(
+                "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+                 FROM transactions WHERE payee LIKE ?1 COLLATE NOCASE OR memo LIKE ?1 COLLATE NOCASE
+                 ORDER BY date DESC, created_at DESC",
+                &[&search_pattern],
+                parse_transaction_row,
+            ).map_err(|e| e.to_string());
+        }
     }
 
     if filters.uncategorized_only.unwrap_or(false) {
@@ -564,6 +578,162 @@ mod tests {
         assert!(
             elapsed.as_millis() < 100,
             "Query took {}ms, should be under 100ms",
+            elapsed.as_millis()
+        );
+    }
+
+    #[test]
+    fn test_search_transactions_by_payee() {
+        let db = setup_test_db();
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('search-1', '2025-01-10', 'Grocery Store', -5000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('search-2', '2025-01-11', 'Gas Station', -3000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('search-3', '2025-01-12', 'Amazon', -2000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE payee LIKE '%Grocery%' COLLATE NOCASE
+             ORDER BY date DESC",
+            &[],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].payee, "Grocery Store");
+    }
+
+    #[test]
+    fn test_search_transactions_by_memo() {
+        let db = setup_test_db();
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, memo, amount_cents, account_id, tags)
+             VALUES ('memo-1', '2025-01-10', 'Store', 'Weekly groceries', -5000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, memo, amount_cents, account_id, tags)
+             VALUES ('memo-2', '2025-01-11', 'Gas', 'Fuel for car', -3000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE memo LIKE '%groceries%' COLLATE NOCASE
+             ORDER BY date DESC",
+            &[],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].memo.as_deref(), Some("Weekly groceries"));
+    }
+
+    #[test]
+    fn test_search_transactions_matches_payee_and_memo() {
+        let db = setup_test_db();
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, memo, amount_cents, account_id, tags)
+             VALUES ('both-1', '2025-01-10', 'Coffee Shop', 'Morning coffee', -500, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, memo, amount_cents, account_id, tags)
+             VALUES ('both-2', '2025-01-11', 'Restaurant', 'Had coffee after lunch', -2000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, memo, amount_cents, account_id, tags)
+             VALUES ('both-3', '2025-01-12', 'Gas Station', 'Fuel', -3000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+
+        let search_pattern = "%coffee%";
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE payee LIKE ?1 COLLATE NOCASE OR memo LIKE ?1 COLLATE NOCASE
+             ORDER BY date DESC",
+            &[&search_pattern],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 2, "Should match both payee and memo containing 'coffee'");
+    }
+
+    #[test]
+    fn test_search_returns_empty_result_gracefully() {
+        let db = setup_test_db();
+
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES ('empty-1', '2025-01-10', 'Store', -5000, 'test-account', '[]')",
+            &[],
+        ).unwrap();
+
+        let search_pattern = "%nonexistent_query_xyz%";
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE payee LIKE ?1 COLLATE NOCASE OR memo LIKE ?1 COLLATE NOCASE
+             ORDER BY date DESC",
+            &[&search_pattern],
+            parse_transaction_row,
+        ).unwrap();
+
+        assert_eq!(results.len(), 0, "Should return empty result set");
+    }
+
+    #[test]
+    fn test_search_performance_with_many_transactions() {
+        let db = setup_test_db();
+
+        // Insert 10,000 transactions
+        for i in 0..10_000 {
+            let id = format!("search-perf-{}", i);
+            let date = format!("2025-{:02}-{:02}", (i % 12) + 1, (i % 28) + 1);
+            let payee = format!("Payee {}", i);
+            let memo = format!("Memo for transaction {}", i);
+            db.execute(
+                "INSERT INTO transactions (id, date, payee, memo, amount_cents, account_id, tags)
+                 VALUES (?, ?, ?, ?, -100, 'test-account', '[]')",
+                &[&id, &date, &payee, &memo],
+            )
+            .unwrap();
+        }
+
+        let search_pattern = "%Payee 500%";
+
+        let start = Instant::now();
+
+        let results: Vec<Transaction> = db.query_map(
+            "SELECT id, date, payee, category_id, memo, amount_cents, account_id, tags, is_reconciled, import_source, created_at, updated_at
+             FROM transactions WHERE payee LIKE ?1 COLLATE NOCASE OR memo LIKE ?1 COLLATE NOCASE
+             ORDER BY date DESC",
+            &[&search_pattern],
+            parse_transaction_row,
+        ).unwrap();
+
+        let elapsed = start.elapsed();
+
+        assert!(
+            !results.is_empty(),
+            "Should find matching transactions"
+        );
+        assert!(
+            elapsed.as_millis() < 200,
+            "Search took {}ms, should be under 200ms",
             elapsed.as_millis()
         );
     }

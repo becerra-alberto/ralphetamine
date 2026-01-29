@@ -33,6 +33,27 @@ export interface TransactionStoreState {
 	expandedId: string | null;
 	isLoading: boolean;
 	error: string | null;
+	unfilteredTotalItems: number;
+}
+
+/**
+ * Filter transactions by search query (case-insensitive matching on payee and memo)
+ */
+export function filterTransactionsBySearch(
+	transactions: TransactionWithDisplay[],
+	query: string
+): TransactionWithDisplay[] {
+	if (!query || query.length < 2) {
+		return transactions;
+	}
+
+	const lowerQuery = query.toLowerCase();
+
+	return transactions.filter((t) => {
+		const payeeMatch = t.payee.toLowerCase().includes(lowerQuery);
+		const memoMatch = t.memo?.toLowerCase().includes(lowerQuery) ?? false;
+		return payeeMatch || memoMatch;
+	});
 }
 
 const initialState: TransactionStoreState = {
@@ -58,7 +79,8 @@ const initialState: TransactionStoreState = {
 	selectedId: null,
 	expandedId: null,
 	isLoading: false,
-	error: null
+	error: null,
+	unfilteredTotalItems: 0
 };
 
 function createTransactionStore() {
@@ -67,7 +89,7 @@ function createTransactionStore() {
 	return {
 		subscribe,
 
-		setTransactions: (transactions: TransactionWithDisplay[], totalCount: number) => {
+		setTransactions: (transactions: TransactionWithDisplay[], totalCount: number, unfilteredTotal?: number) => {
 			update(state => ({
 				...state,
 				transactions,
@@ -75,6 +97,7 @@ function createTransactionStore() {
 					...state.pagination,
 					totalItems: totalCount
 				},
+				unfilteredTotalItems: unfilteredTotal ?? totalCount,
 				error: null
 			}));
 		},
@@ -131,6 +154,34 @@ function createTransactionStore() {
 			}));
 		},
 
+		setSearch: (search: string) => {
+			update(state => ({
+				...state,
+				filters: {
+					...state.filters,
+					search
+				},
+				pagination: {
+					...state.pagination,
+					currentPage: 1
+				}
+			}));
+		},
+
+		clearSearch: () => {
+			update(state => ({
+				...state,
+				filters: {
+					...state.filters,
+					search: ''
+				},
+				pagination: {
+					...state.pagination,
+					currentPage: 1
+				}
+			}));
+		},
+
 		selectTransaction: (id: string | null) => {
 			update(state => ({
 				...state,
@@ -171,4 +222,14 @@ export const transactionStore = createTransactionStore();
 export const totalPages = derived(
 	transactionStore,
 	$store => Math.max(1, Math.ceil($store.pagination.totalItems / $store.pagination.itemsPerPage))
+);
+
+export const searchQuery = derived(
+	transactionStore,
+	$store => $store.filters.search
+);
+
+export const isSearchActive = derived(
+	transactionStore,
+	$store => $store.filters.search.length >= 2
 );
