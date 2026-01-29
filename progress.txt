@@ -224,8 +224,24 @@ Story 5.3: Display Asset Categories - COMPLETED
 Story 5.3: COMPLETED - feat(story-5.3): Display Asset Categories
 [DONE] Story 5.3 - Display Asset Categories - Thu 29 Jan 2026 14:30:00 CST
 
+Story 5.4: Display Liability Categories - COMPLETED
+  - LiabilitiesSection.svelte: Section with "Liabilities" header, grouped categories, debt-free empty state
+  - LiabilityCategory.svelte: Category card with header (label, percent, total in red), account list
+  - AccountRow.svelte: Extended with showAbsoluteBalance prop for liabilities (negative → positive display)
+  - accountGroups.ts: Added groupLiabilitiesByCategory, getLiabilityCategoryKey, getLiabilityCategoryLabel
+  - Liability categories: Credit Cards (credit), Loans (loan), Mortgages (mortgage)
+  - Category totals: Absolute sum of negative balances, percentage of total liabilities
+  - Balances displayed as positive amounts (amount owed), totals in red/danger color
+  - Empty state: "No liabilities — debt-free!" in success green color
+  - Empty categories hidden automatically
+  - Integrated into net-worth page below AssetsSection
+  - Dark mode support
+  - Unit tests: LiabilitiesSection.test.ts (8), LiabilityCategory.test.ts (8), accountGroups.test.ts (+15 liability tests)
+  - Rust integration tests: 4 tests (group by type, absolute aggregation, zero-balance exclusion, multi-currency)
+  - All 1539 tests passing (1 skipped), 0 type errors, 9 warnings (all pre-existing)
+  - Commit: 682c555
+Story 5.4: COMPLETED - feat(story-5.4): Display Liability Categories
+[DONE] Story 5.4 - Display Liability Categories - Thu 29 Jan 2026 14:35:00 CST
+
 [LEARN] Svelte 5 breaks component.$on() for event testing. Use `events: { eventName: handler }` in render options instead. The parentElement?.addEventListener pattern also doesn't work reliably for createEventDispatcher events in Svelte 5 test environments.
 [LEARN] jsdom doesn't implement scrollIntoView. Use optional chaining: `element?.scrollIntoView?.()` to guard against this in test environments.
-
-[LEARN] Story 4.2 was already fully implemented and committed. Always check git log first before implementing to avoid duplicate work.
-[DONE] Story 4.2 - transaction search - Thu 29 Jan 2026 14:25:09 CST
