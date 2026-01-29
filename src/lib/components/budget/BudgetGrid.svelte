@@ -23,6 +23,8 @@
 		calculateGrand12MTotals,
 		calculateUncategorized12MTotals
 	} from '$lib/utils/budgetCalculations';
+	import { getTransactions } from '$lib/api/transactions';
+	import type { MiniTransaction } from './TransactionMiniList.svelte';
 	import MonthHeader from './MonthHeader.svelte';
 	import YearHeader from './YearHeader.svelte';
 	import CategoryRow from './CategoryRow.svelte';
@@ -32,6 +34,94 @@
 	import { formatCentsCurrency } from '$lib/types/budget';
 	import type { BudgetCell, UncategorizedData } from '$lib/stores/budget';
 	import type { MonthString } from '$lib/types/budget';
+
+	// Cell expansion state
+	let expandedCellKey: string | null = null;
+	let expansionTransactions: MiniTransaction[] = [];
+	let expansionTotalCount: number = 0;
+	let isExpansionLoading: boolean = false;
+
+	/**
+	 * Create a unique key for cell expansion
+	 */
+	function getExpansionCellKey(categoryId: string, month: MonthString): string {
+		return `${categoryId}:${month}`;
+	}
+
+	/**
+	 * Handle cell expand event
+	 */
+	async function handleCellExpand(event: CustomEvent<{ categoryId: string; month: MonthString }>) {
+		const { categoryId, month } = event.detail;
+		const newKey = getExpansionCellKey(categoryId, month);
+
+		// If clicking the same cell, close it
+		if (expandedCellKey === newKey) {
+			closeExpansion();
+			return;
+		}
+
+		// Set loading state and new key
+		expandedCellKey = newKey;
+		isExpansionLoading = true;
+		expansionTransactions = [];
+		expansionTotalCount = 0;
+
+		try {
+			// Fetch transactions for this category and month
+			const startDate = `${month}-01`;
+			const [year, m] = month.split('-').map(Number);
+			const lastDay = new Date(year, m, 0).getDate();
+			const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+			const transactions = await getTransactions({
+				categoryId,
+				startDate,
+				endDate
+			});
+
+			// Store total count before slicing
+			expansionTotalCount = transactions.length;
+
+			// Map to MiniTransaction format
+			expansionTransactions = transactions.map((t) => ({
+				id: t.id,
+				date: t.date,
+				payee: t.payee,
+				amountCents: t.amountCents
+			}));
+		} catch (error) {
+			console.error('Failed to fetch transactions for cell expansion:', error);
+			expansionTransactions = [];
+			expansionTotalCount = 0;
+		} finally {
+			isExpansionLoading = false;
+		}
+	}
+
+	/**
+	 * Close the expansion panel
+	 */
+	function closeExpansion() {
+		expandedCellKey = null;
+		expansionTransactions = [];
+		expansionTotalCount = 0;
+		isExpansionLoading = false;
+	}
+
+	/**
+	 * Handle click outside expansion to close it
+	 */
+	function handleClickOutside(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+		// Don't close if clicking inside the expansion panel or on a budget cell
+		if (target.closest('[data-testid="cell-expansion"]') || target.closest('[data-testid="budget-cell"]')) {
+			return;
+		}
+		if (expandedCellKey) {
+			closeExpansion();
+		}
+	}
 
 	// Get reactive values from stores
 	$: months = $budgetStore.months;
@@ -196,6 +286,8 @@
 	$: uncategorizedMonthlyTotals = getUncategorizedMonthlyTotals();
 </script>
 
+<svelte:window on:click={handleClickOutside} />
+
 <div class="budget-grid-container" role="region" aria-label="Budget Grid">
 	{#if isLoading}
 		<div class="loading-state">
@@ -286,6 +378,12 @@
 										{months}
 										currentMonth={current}
 										totals12M={category12MTotals}
+										{expandedCellKey}
+										{expansionTransactions}
+										{expansionTotalCount}
+										{isExpansionLoading}
+										on:expand={handleCellExpand}
+										on:closeExpansion={closeExpansion}
 									/>
 								{/each}
 							</div>
@@ -301,6 +399,12 @@
 							{months}
 							currentMonth={current}
 							totals12M={category12MTotals}
+							{expandedCellKey}
+							{expansionTransactions}
+							{expansionTotalCount}
+							{isExpansionLoading}
+							on:expand={handleCellExpand}
+							on:closeExpansion={closeExpansion}
 						/>
 					{/each}
 				{/if}

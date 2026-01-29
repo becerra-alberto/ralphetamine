@@ -1,16 +1,64 @@
 <script lang="ts">
+	import { createEventDispatcher } from 'svelte';
 	import type { Category } from '$lib/types/category';
 	import type { MonthString } from '$lib/types/budget';
 	import type { BudgetCell as BudgetCellType } from '$lib/stores/budget';
 	import type { Trailing12MTotals } from '$lib/utils/budgetCalculations';
+	import type { MiniTransaction } from './TransactionMiniList.svelte';
 	import BudgetCell from './BudgetCell.svelte';
 	import TotalsColumn from './TotalsColumn.svelte';
+	import CellExpansion from './CellExpansion.svelte';
 
 	export let category: Category;
 	export let cells: Map<MonthString, BudgetCellType>;
 	export let months: MonthString[];
 	export let currentMonth: MonthString;
 	export let totals12M: Trailing12MTotals | undefined = undefined;
+
+	// Expansion state
+	export let expandedCellKey: string | null = null;
+	export let expansionTransactions: MiniTransaction[] = [];
+	export let expansionTotalCount: number = 0;
+	export let isExpansionLoading: boolean = false;
+
+	const dispatch = createEventDispatcher<{
+		expand: { categoryId: string; month: MonthString };
+		closeExpansion: void;
+	}>();
+
+	/**
+	 * Create a unique key for a cell
+	 */
+	function getCellKey(categoryId: string, month: MonthString): string {
+		return `${categoryId}:${month}`;
+	}
+
+	/**
+	 * Check if a specific cell is expanded
+	 */
+	function isCellExpanded(month: MonthString): boolean {
+		return expandedCellKey === getCellKey(category.id, month);
+	}
+
+	/**
+	 * Get expanded month (if this category has an expanded cell)
+	 */
+	$: expandedMonth = months.find((m) => isCellExpanded(m));
+	$: hasExpansion = expandedMonth !== undefined;
+
+	/**
+	 * Handle cell expand event
+	 */
+	function handleCellExpand(event: CustomEvent<{ categoryId: string; month: MonthString }>) {
+		dispatch('expand', event.detail);
+	}
+
+	/**
+	 * Handle expansion close
+	 */
+	function handleCloseExpansion() {
+		dispatch('closeExpansion');
+	}
 </script>
 
 <div
@@ -35,6 +83,8 @@
 				isCurrent={month === currentMonth}
 				categoryType={category.type}
 				categoryId={category.id}
+				isExpanded={isCellExpanded(month)}
+				on:expand={handleCellExpand}
 			/>
 		{/each}
 	</div>
@@ -44,6 +94,19 @@
 		<TotalsColumn totals={totals12M} />
 	{/if}
 </div>
+
+<!-- Expansion panel (shown below the row when a cell is expanded) -->
+{#if hasExpansion && expandedMonth}
+	<CellExpansion
+		categoryId={category.id}
+		categoryName={category.name}
+		month={expandedMonth}
+		transactions={expansionTransactions}
+		totalCount={expansionTotalCount}
+		isLoading={isExpansionLoading}
+		on:close={handleCloseExpansion}
+	/>
+{/if}
 
 <style>
 	.category-row {

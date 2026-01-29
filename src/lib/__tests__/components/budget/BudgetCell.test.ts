@@ -459,4 +459,84 @@ describe('BudgetCell', () => {
 			expect(cell.classList.contains('status-neutral')).toBe(false);
 		});
 	});
+
+	describe('expanded state (Story 2.10)', () => {
+		it('should have "expanded" highlight state when isExpanded is true', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					isExpanded: true
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('expanded')).toBe(true);
+		});
+
+		it('should not have expanded class when isExpanded is false', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					isExpanded: false
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('expanded')).toBe(false);
+		});
+
+		it('should default isExpanded to false', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('expanded')).toBe(false);
+		});
+
+		it('should be focusable for keyboard interaction', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.getAttribute('tabindex')).toBe('0');
+		});
+
+		it('should have cursor pointer for clickability', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			expect(cell.classList.contains('budget-cell')).toBe(true);
+			// The cursor: pointer is in the CSS for .budget-cell class
+		});
+	});
 });

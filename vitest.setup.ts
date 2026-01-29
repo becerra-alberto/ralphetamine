@@ -49,3 +49,50 @@ global.ResizeObserver = class ResizeObserver {
 	unobserve() {}
 	disconnect() {}
 };
+
+// Mock Element.prototype.animate for Svelte transitions
+Element.prototype.animate = vi.fn().mockImplementation(() => {
+	let onfinishHandler: (() => void) | null = null;
+	let oncancelHandler: (() => void) | null = null;
+
+	const animation = {
+		finished: Promise.resolve(),
+		cancel: vi.fn(),
+		pause: vi.fn(),
+		play: vi.fn(),
+		reverse: vi.fn(),
+		finish: vi.fn(),
+		get onfinish() {
+			return onfinishHandler;
+		},
+		set onfinish(handler: (() => void) | null) {
+			onfinishHandler = handler;
+			// Auto-trigger onfinish since we're in tests and want instant completion
+			if (handler) {
+				setTimeout(() => handler(), 0);
+			}
+		},
+		get oncancel() {
+			return oncancelHandler;
+		},
+		set oncancel(handler: (() => void) | null) {
+			oncancelHandler = handler;
+		},
+		currentTime: 0,
+		playbackRate: 1,
+		playState: 'finished',
+		effect: null,
+		timeline: null,
+		startTime: 0,
+		pending: false,
+		id: '',
+		commitStyles: vi.fn(),
+		persist: vi.fn(),
+		updatePlaybackRate: vi.fn(),
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
+		dispatchEvent: vi.fn()
+	};
+
+	return animation;
+});

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { createEventDispatcher } from 'svelte';
 	import type { MonthString } from '$lib/types/budget';
 	import { formatCentsCurrency } from '$lib/utils/currency';
 	import { getBudgetStatusWithClass } from '$lib/utils/budgetStatus';
@@ -12,10 +13,32 @@
 	export let isCurrent: boolean = false;
 	export let categoryType: 'expense' | 'income' | 'transfer' = 'expense';
 	export let categoryId: string = '';
+	export let isExpanded: boolean = false;
+
+	const dispatch = createEventDispatcher<{
+		expand: { categoryId: string; month: MonthString };
+	}>();
 
 	// Calculate budget status using the utility
 	$: statusResult = getBudgetStatusWithClass(actualCents, budgetedCents, categoryType);
 	$: statusClass = statusResult.className;
+
+	/**
+	 * Handle click to expand cell
+	 */
+	function handleClick() {
+		dispatch('expand', { categoryId, month });
+	}
+
+	/**
+	 * Handle keyboard expand
+	 */
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			dispatch('expand', { categoryId, month });
+		}
+	}
 
 	// Tooltip state
 	let tooltipVisible = false;
@@ -46,9 +69,13 @@
 <div
 	class="budget-cell {statusClass}"
 	class:current-month={isCurrent}
+	class:expanded={isExpanded}
 	role="cell"
+	tabindex="0"
 	data-testid="budget-cell"
 	data-month={month}
+	on:click={handleClick}
+	on:keydown={handleKeydown}
 	use:tooltip={{ onShow: showTooltip, onHide: hideTooltip, showDelay: 200, hideDelay: 200 }}
 >
 	<span class="cell-actual" data-testid="cell-actual">
@@ -86,6 +113,22 @@
 		gap: 2px;
 		border-right: 1px solid var(--border-color, #e5e7eb);
 		font-variant-numeric: tabular-nums;
+		cursor: pointer;
+		transition: background 150ms ease;
+	}
+
+	.budget-cell:hover {
+		background: var(--bg-hover, #f3f4f6);
+	}
+
+	.budget-cell:focus-visible {
+		outline: 2px solid var(--color-accent, #4f46e5);
+		outline-offset: -2px;
+	}
+
+	.budget-cell.expanded {
+		background: var(--bg-expanded, #e0e7ff);
+		border-left: 3px solid var(--color-accent, #4f46e5);
 	}
 
 	.budget-cell.current-month {
