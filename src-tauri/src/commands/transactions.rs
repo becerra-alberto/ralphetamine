@@ -370,6 +370,81 @@ pub fn get_uncategorized_total(month: String) -> Result<i64, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Payee suggestion with frequency count
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayeeSuggestion {
+    pub payee: String,
+    pub frequency: i64,
+}
+
+/// Payee category association (most-used category for a payee)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayeeCategoryAssociation {
+    pub payee: String,
+    pub category_id: String,
+    pub count: i64,
+}
+
+/// Get payee suggestions sorted by frequency, filtered by search term
+#[tauri::command]
+pub fn get_payee_suggestions(search: Option<String>, limit: Option<i64>) -> Result<Vec<PayeeSuggestion>, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+    let limit = limit.unwrap_or(10);
+
+    if let Some(ref search) = search {
+        if search.len() < 2 {
+            return Ok(Vec::new());
+        }
+        let pattern = format!("%{}%", search);
+        db.query_map(
+            "SELECT payee, COUNT(*) as freq FROM transactions WHERE payee LIKE ?1 COLLATE NOCASE GROUP BY payee COLLATE NOCASE ORDER BY freq DESC LIMIT ?2",
+            &[&pattern as &dyn rusqlite::ToSql, &limit as &dyn rusqlite::ToSql],
+            |row| {
+                Ok(PayeeSuggestion {
+                    payee: row.get(0)?,
+                    frequency: row.get(1)?,
+                })
+            },
+        )
+        .map_err(|e| e.to_string())
+    } else {
+        db.query_map(
+            "SELECT payee, COUNT(*) as freq FROM transactions GROUP BY payee COLLATE NOCASE ORDER BY freq DESC LIMIT ?1",
+            &[&limit],
+            |row| {
+                Ok(PayeeSuggestion {
+                    payee: row.get(0)?,
+                    frequency: row.get(1)?,
+                })
+            },
+        )
+        .map_err(|e| e.to_string())
+    }
+}
+
+/// Get the most-used category for a given payee
+#[tauri::command]
+pub fn get_payee_category(payee: String) -> Result<Option<PayeeCategoryAssociation>, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    let results: Vec<PayeeCategoryAssociation> = db.query_map(
+        "SELECT payee, category_id, COUNT(*) as cnt FROM transactions WHERE payee = ?1 COLLATE NOCASE AND category_id IS NOT NULL AND category_id != '' GROUP BY category_id ORDER BY cnt DESC LIMIT 1",
+        &[&payee],
+        |row| {
+            Ok(PayeeCategoryAssociation {
+                payee: row.get(0)?,
+                category_id: row.get(1)?,
+                count: row.get(2)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(results.into_iter().next())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1177,5 +1252,250 @@ mod tests {
             |row| row.get(0),
         ).unwrap();
         assert_eq!(updated_count, 2, "Count should be 2 after removing category from f-1");
+    }
+
+    // --- Date storage and sorting tests for Story 4.6 ---
+
+    #[test]
+    fn test_transaction_date_stored_as_iso_format() {
+        let db = setup_test_db();
+
+        let id = Uuid::new_v4().to_string();
+
+        // Insert transaction with ISO date (as DatePicker produces)
+        db.execute(
+            "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+             VALUES (?, '2025-01-28', 'Date Test Payee', -2500, 'test-account', '[]')",
+            &[&id],
+        )
+        .unwrap();
+
+        let stored_date: String = db
+            .query_row(
+                "SELECT date FROM transactions WHERE id = ?",
+                &[&id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(stored_date, "2025-01-28", "Date should be stored in YYYY-MM-DD ISO format");
+
+        // Verify the format matches the ISO pattern
+        let parts: Vec<&str> = stored_date.split('-').collect();
+        assert_eq!(parts.len(), 3, "ISO date should have 3 parts separated by hyphens");
+        assert_eq!(parts[0].len(), 4, "Year should be 4 digits");
+        assert_eq!(parts[1].len(), 2, "Month should be 2 digits");
+        assert_eq!(parts[2].len(), 2, "Day should be 2 digits");
+    }
+
+    #[test]
+    fn test_date_sorting_works_with_iso_strings() {
+        let db = setup_test_db();
+
+        // Insert transactions with various dates (out of order)
+        let dates = vec![
+            ("ds-1", "2025-03-15"),
+            ("ds-2", "2025-01-05"),
+            ("ds-3", "2025-02-28"),
+            ("ds-4", "2024-12-31"),
+            ("ds-5", "2025-01-05"), // Same date as ds-2
+        ];
+
+        for (id, date) in &dates {
+            db.execute(
+                "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+                 VALUES (?, ?, 'Sort Test', -1000, 'test-account', '[]')",
+                rusqlite::params![id, date],
+            )
+            .unwrap();
+        }
+
+        // Query with ORDER BY date DESC (most recent first)
+        let results: Vec<String> = db
+            .prepare(
+                "SELECT date FROM transactions WHERE payee = 'Sort Test' ORDER BY date DESC",
+            )
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert_eq!(results.len(), 5);
+        assert_eq!(results[0], "2025-03-15", "Most recent date should be first");
+        assert_eq!(results[1], "2025-02-28");
+        assert_eq!(results[2], "2025-01-05"); // One of the two Jan 5 entries
+        assert_eq!(results[3], "2025-01-05"); // The other Jan 5 entry
+        assert_eq!(results[4], "2024-12-31", "Oldest date should be last");
+
+        // Query with ORDER BY date ASC (oldest first)
+        let asc_results: Vec<String> = db
+            .prepare(
+                "SELECT date FROM transactions WHERE payee = 'Sort Test' ORDER BY date ASC",
+            )
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert_eq!(asc_results[0], "2024-12-31", "Oldest date should be first in ASC order");
+        assert_eq!(asc_results[4], "2025-03-15", "Newest date should be last in ASC order");
+    }
+
+    // --- Payee suggestions tests for Story 4.7 ---
+
+    fn setup_payee_test_db() -> Database {
+        let db = setup_test_db();
+
+        // Create categories
+        db.execute(
+            "INSERT INTO categories (id, name, type) VALUES ('cat-groceries', 'Groceries', 'expense')",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO categories (id, name, type) VALUES ('cat-transport', 'Transport', 'expense')",
+            &[],
+        ).unwrap();
+
+        // Insert transactions with varying payee frequencies
+        // Albert Heijn: 15 times (groceries)
+        for i in 0..15 {
+            db.execute(
+                "INSERT INTO transactions (id, date, payee, category_id, amount_cents, account_id, tags)
+                 VALUES (?, '2025-01-15', 'Albert Heijn', 'cat-groceries', -3000, 'test-account', '[]')",
+                &[&format!("ah-{}", i)],
+            ).unwrap();
+        }
+        // Aldi: 8 times (groceries)
+        for i in 0..8 {
+            db.execute(
+                "INSERT INTO transactions (id, date, payee, category_id, amount_cents, account_id, tags)
+                 VALUES (?, '2025-01-15', 'Aldi', 'cat-groceries', -2000, 'test-account', '[]')",
+                &[&format!("aldi-{}", i)],
+            ).unwrap();
+        }
+        // Amazon: 5 times (no category)
+        for i in 0..5 {
+            db.execute(
+                "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+                 VALUES (?, '2025-01-15', 'Amazon', -5000, 'test-account', '[]')",
+                &[&format!("amz-{}", i)],
+            ).unwrap();
+        }
+        // Shell Gas: 3 times (transport)
+        for i in 0..3 {
+            db.execute(
+                "INSERT INTO transactions (id, date, payee, category_id, amount_cents, account_id, tags)
+                 VALUES (?, '2025-01-15', 'Shell Gas', 'cat-transport', -4000, 'test-account', '[]')",
+                &[&format!("shell-{}", i)],
+            ).unwrap();
+        }
+
+        db
+    }
+
+    #[test]
+    fn test_get_payee_suggestions_returns_distinct_payees_with_frequency() {
+        let db = setup_payee_test_db();
+
+        let results: Vec<PayeeSuggestion> = db.query_map(
+            "SELECT payee, COUNT(*) as freq FROM transactions GROUP BY payee COLLATE NOCASE ORDER BY freq DESC",
+            &[],
+            |row| Ok(PayeeSuggestion { payee: row.get(0)?, frequency: row.get(1)? }),
+        ).unwrap();
+
+        assert!(results.len() >= 4, "Should have at least 4 distinct payees");
+        // Check frequencies
+        let ah = results.iter().find(|r| r.payee == "Albert Heijn").unwrap();
+        assert_eq!(ah.frequency, 15);
+        let aldi = results.iter().find(|r| r.payee == "Aldi").unwrap();
+        assert_eq!(aldi.frequency, 8);
+    }
+
+    #[test]
+    fn test_get_payee_suggestions_sorted_by_frequency_desc() {
+        let db = setup_payee_test_db();
+
+        let results: Vec<PayeeSuggestion> = db.query_map(
+            "SELECT payee, COUNT(*) as freq FROM transactions GROUP BY payee COLLATE NOCASE ORDER BY freq DESC",
+            &[],
+            |row| Ok(PayeeSuggestion { payee: row.get(0)?, frequency: row.get(1)? }),
+        ).unwrap();
+
+        // Verify descending frequency order
+        for i in 1..results.len() {
+            assert!(
+                results[i - 1].frequency >= results[i].frequency,
+                "Results should be sorted by frequency DESC: {} ({}) should be >= {} ({})",
+                results[i - 1].payee, results[i - 1].frequency,
+                results[i].payee, results[i].frequency
+            );
+        }
+        assert_eq!(results[0].payee, "Albert Heijn", "Most frequent payee should be first");
+    }
+
+    #[test]
+    fn test_get_payee_suggestions_filters_by_search_term() {
+        let db = setup_payee_test_db();
+
+        let search_pattern = "%al%";
+        let results: Vec<PayeeSuggestion> = db.query_map(
+            "SELECT payee, COUNT(*) as freq FROM transactions WHERE payee LIKE ?1 COLLATE NOCASE GROUP BY payee COLLATE NOCASE ORDER BY freq DESC",
+            &[&search_pattern],
+            |row| Ok(PayeeSuggestion { payee: row.get(0)?, frequency: row.get(1)? }),
+        ).unwrap();
+
+        // Should match "Albert Heijn" and "Aldi" (both contain "al")
+        assert_eq!(results.len(), 2, "Should find 2 payees matching 'al'");
+        assert!(results.iter().any(|r| r.payee == "Albert Heijn"));
+        assert!(results.iter().any(|r| r.payee == "Aldi"));
+    }
+
+    #[test]
+    fn test_get_payee_category_association_returns_most_used_category() {
+        let db = setup_payee_test_db();
+
+        let results: Vec<PayeeCategoryAssociation> = db.query_map(
+            "SELECT payee, category_id, COUNT(*) as cnt FROM transactions WHERE payee = ?1 COLLATE NOCASE AND category_id IS NOT NULL AND category_id != '' GROUP BY category_id ORDER BY cnt DESC LIMIT 1",
+            &[&"Albert Heijn"],
+            |row| Ok(PayeeCategoryAssociation { payee: row.get(0)?, category_id: row.get(1)?, count: row.get(2)? }),
+        ).unwrap();
+
+        assert_eq!(results.len(), 1, "Should find one category association");
+        assert_eq!(results[0].category_id, "cat-groceries");
+        assert_eq!(results[0].count, 15);
+    }
+
+    #[test]
+    fn test_payee_suggestions_performance_with_many_transactions() {
+        let db = setup_test_db();
+
+        // Insert 10,000+ transactions with varied payees
+        for i in 0..10_000 {
+            let id = format!("payee-perf-{}", i);
+            let payee = format!("Payee {}", i % 500); // 500 distinct payees
+            db.execute(
+                "INSERT INTO transactions (id, date, payee, amount_cents, account_id, tags)
+                 VALUES (?, '2025-01-15', ?, -100, 'test-account', '[]')",
+                &[&id, &payee],
+            ).unwrap();
+        }
+
+        let search_pattern = "%Payee 1%";
+        let start = Instant::now();
+
+        let _results: Vec<PayeeSuggestion> = db.query_map(
+            "SELECT payee, COUNT(*) as freq FROM transactions WHERE payee LIKE ?1 COLLATE NOCASE GROUP BY payee COLLATE NOCASE ORDER BY freq DESC LIMIT 10",
+            &[&search_pattern],
+            |row| Ok(PayeeSuggestion { payee: row.get(0)?, frequency: row.get(1)? }),
+        ).unwrap();
+
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() < 100,
+            "Payee suggestions query took {}ms, should be under 100ms",
+            elapsed.as_millis()
+        );
     }
 }
