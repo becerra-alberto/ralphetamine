@@ -539,6 +539,47 @@ pub fn get_monthly_summary(month: String) -> Result<MonthlySummary, String> {
     })
 }
 
+/// Bulk categorize multiple transactions at once
+#[tauri::command]
+pub fn bulk_categorize_transactions(
+    transaction_ids: Vec<String>,
+    category_id: String,
+) -> Result<usize, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    if transaction_ids.is_empty() {
+        return Ok(0);
+    }
+
+    db.execute("BEGIN TRANSACTION", &[])
+        .map_err(|e| e.to_string())?;
+
+    let mut updated = 0;
+
+    for id in &transaction_ids {
+        let result = db.execute(
+            "UPDATE transactions SET category_id = ?, updated_at = datetime('now') WHERE id = ?",
+            &[&category_id, id],
+        );
+
+        match result {
+            Ok(_) => updated += 1,
+            Err(e) => {
+                let _ = db.execute("ROLLBACK", &[]);
+                return Err(format!("Bulk categorize failed at ID {}: {}", id, e));
+            }
+        }
+    }
+
+    db.execute("COMMIT", &[])
+        .map_err(|e| {
+            let _ = db.execute("ROLLBACK", &[]);
+            e.to_string()
+        })?;
+
+    Ok(updated)
+}
+
 /// Result of a batch import operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

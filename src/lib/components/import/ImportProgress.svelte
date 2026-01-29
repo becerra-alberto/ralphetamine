@@ -6,11 +6,13 @@
 	export let skipped: number = 0;
 	export let total: number = 0;
 	export let errorMessage: string = '';
+	export let uncategorizedCount: number = 0;
 	export let testId: string = 'import-progress';
 
 	const dispatch = createEventDispatcher<{
 		close: void;
 		retry: void;
+		categorize: void;
 	}>();
 
 	$: progress = total > 0 ? Math.round((imported / total) * 100) : 0;
@@ -43,13 +45,35 @@
 					<span class="skipped-info">({skipped} duplicate{skipped === 1 ? '' : 's'} skipped)</span>
 				{/if}
 			</p>
-			<button
-				class="btn-done"
-				data-testid="{testId}-done"
-				on:click={() => dispatch('close')}
-			>
-				Done
-			</button>
+			{#if uncategorizedCount > 0}
+				<p class="categorize-prompt" data-testid="{testId}-categorize-prompt">
+					{uncategorizedCount} transaction{uncategorizedCount === 1 ? '' : 's'} need{uncategorizedCount === 1 ? 's' : ''} categorization
+				</p>
+				<div class="success-actions">
+					<button
+						class="btn-categorize"
+						data-testid="{testId}-categorize"
+						on:click={() => dispatch('categorize')}
+					>
+						Categorize now
+					</button>
+					<button
+						class="btn-done-secondary"
+						data-testid="{testId}-done"
+						on:click={() => dispatch('close')}
+					>
+						Done
+					</button>
+				</div>
+			{:else}
+				<button
+					class="btn-done"
+					data-testid="{testId}-done"
+					on:click={() => dispatch('close')}
+				>
+					Done
+				</button>
+			{/if}
 		</div>
 	{:else if status === 'error'}
 		<div class="error-state" data-testid="{testId}-error">
@@ -162,9 +186,21 @@
 		color: var(--text-secondary, #9ca3af);
 	}
 
-	.btn-done {
-		margin-top: 8px;
-		padding: 8px 24px;
+	.categorize-prompt {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--color-warning, #d97706);
+		font-weight: 500;
+	}
+
+	.success-actions {
+		display: flex;
+		gap: 8px;
+		margin-top: 4px;
+	}
+
+	.btn-categorize {
+		padding: 8px 20px;
 		background: var(--accent, #4f46e5);
 		color: white;
 		border: none;
@@ -174,7 +210,35 @@
 		cursor: pointer;
 	}
 
-	.btn-done:hover {
+	.btn-categorize:hover {
+		opacity: 0.9;
+	}
+
+	.btn-done,
+	.btn-done-secondary {
+		margin-top: 8px;
+		padding: 8px 24px;
+		border-radius: 6px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+	}
+
+	.btn-done {
+		background: var(--accent, #4f46e5);
+		color: white;
+		border: none;
+	}
+
+	.btn-done-secondary {
+		background: transparent;
+		color: var(--text-primary, #111827);
+		border: 1px solid var(--border-color, #d1d5db);
+		margin-top: 0;
+	}
+
+	.btn-done:hover,
+	.btn-done-secondary:hover {
 		opacity: 0.9;
 	}
 
@@ -237,8 +301,13 @@
 		background: #374151;
 	}
 
-	:global(.dark) .btn-cancel {
+	:global(.dark) .btn-cancel,
+	:global(.dark) .btn-done-secondary {
 		border-color: #374151;
 		color: #f9fafb;
+	}
+
+	:global(.dark) .categorize-prompt {
+		color: var(--color-warning, #f59e0b);
 	}
 </style>

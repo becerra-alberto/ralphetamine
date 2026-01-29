@@ -58,6 +58,7 @@ pub fn run() {
             commands::complete_onboarding,
             commands::get_monthly_summary,
             commands::import_transactions,
+            commands::bulk_categorize_transactions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

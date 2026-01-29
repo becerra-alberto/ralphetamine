@@ -126,4 +126,65 @@ describe('ImportProgress', () => {
 		});
 		expect(screen.getByTestId('custom-progress')).toBeTruthy();
 	});
+
+	// Story 7.4 - Uncategorized prompt tests
+	it('should show categorize prompt when uncategorizedCount > 0', () => {
+		render(ImportProgress, {
+			props: { status: 'success', imported: 10, total: 10, uncategorizedCount: 7 }
+		});
+		expect(screen.getByTestId('import-progress-categorize-prompt')).toBeTruthy();
+		expect(screen.getByTestId('import-progress-categorize-prompt').textContent).toContain('7 transactions');
+		expect(screen.getByTestId('import-progress-categorize-prompt').textContent).toContain('categorization');
+	});
+
+	it('should not show categorize prompt when uncategorizedCount is 0', () => {
+		render(ImportProgress, {
+			props: { status: 'success', imported: 10, total: 10, uncategorizedCount: 0 }
+		});
+		expect(screen.queryByTestId('import-progress-categorize-prompt')).toBeNull();
+	});
+
+	it('should show singular text for 1 uncategorized transaction', () => {
+		render(ImportProgress, {
+			props: { status: 'success', imported: 10, total: 10, uncategorizedCount: 1 }
+		});
+		const prompt = screen.getByTestId('import-progress-categorize-prompt').textContent;
+		expect(prompt).toContain('1 transaction');
+		expect(prompt).toContain('needs');
+	});
+
+	it('should show Categorize now button when uncategorized > 0', () => {
+		render(ImportProgress, {
+			props: { status: 'success', imported: 10, total: 10, uncategorizedCount: 5 }
+		});
+		expect(screen.getByTestId('import-progress-categorize')).toBeTruthy();
+		expect(screen.getByTestId('import-progress-categorize').textContent).toContain('Categorize now');
+	});
+
+	it('should not show Categorize now button when no uncategorized', () => {
+		render(ImportProgress, {
+			props: { status: 'success', imported: 10, total: 10, uncategorizedCount: 0 }
+		});
+		expect(screen.queryByTestId('import-progress-categorize')).toBeNull();
+	});
+
+	it('should dispatch categorize on Categorize now click', async () => {
+		const handleCategorize = vi.fn();
+		render(ImportProgress, {
+			props: { status: 'success', imported: 10, total: 10, uncategorizedCount: 5 },
+			events: { categorize: handleCategorize }
+		} as any);
+
+		await fireEvent.click(screen.getByTestId('import-progress-categorize'));
+		expect(handleCategorize).toHaveBeenCalledTimes(1);
+	});
+
+	it('should show Done button alongside Categorize now when uncategorized > 0', () => {
+		render(ImportProgress, {
+			props: { status: 'success', imported: 10, total: 10, uncategorizedCount: 5 }
+		});
+		// Both buttons should be present
+		expect(screen.getByTestId('import-progress-categorize')).toBeTruthy();
+		expect(screen.getByTestId('import-progress-done')).toBeTruthy();
+	});
 });

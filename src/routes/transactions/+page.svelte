@@ -8,8 +8,10 @@
 	import UncategorizedBanner from '$lib/components/transactions/UncategorizedBanner.svelte';
 	import QuickAddRow from '$lib/components/transactions/QuickAddRow.svelte';
 	import ImportWizard from '$lib/components/import/ImportWizard.svelte';
-	import { createTransaction } from '$lib/api/transactions';
+	import BulkActions from '$lib/components/transactions/BulkActions.svelte';
+	import { createTransaction, bulkCategorize } from '$lib/api/transactions';
 	import type { TransactionInput } from '$lib/types/transaction';
+	import { detectPayeePatterns, type PayeePattern } from '$lib/utils/payeePatterns';
 	import {
 		transactionStore,
 		filterTransactionsBySearch,
@@ -306,6 +308,18 @@
 	let showUncategorizedOnly = false;
 	let lastUsedAccountId: string | null = null;
 
+	// Bulk categorization state (post-import flow)
+	let isBulkCategorizing = false;
+	let selectedTransactionIds: Set<string> = new Set();
+	let categorizedSinceImport = 0;
+	let totalToCategorize = 0;
+	let payeePatterns: PayeePattern[] = [];
+
+	$: selectedCount = selectedTransactionIds.size;
+	$: bulkUncategorized = isBulkCategorizing
+		? filteredTransactions.filter((t) => !t.categoryId)
+		: [];
+
 	async function handleQuickAddSave(event: CustomEvent<{
 		date: string;
 		payee: string;
@@ -337,18 +351,26 @@
 		}
 	}
 
-	function handleCategorizeNow() {
+	async function handleCategorizeNow() {
+		importWizardOpen = false;
 		// Clear other filters and show only uncategorized
 		transactionFilterStore.clearAll();
 		transactionStore.clearSearch();
+		// Enter bulk categorization mode
+		isBulkCategorizing = true;
 		showUncategorizedOnly = true;
-		// Select the first uncategorized transaction
-		const firstUncategorized = allTransactions.find(
-			(t) => t.categoryId === null || t.categoryId === undefined || t.categoryId === ''
+		selectedTransactionIds = new Set();
+		categorizedSinceImport = 0;
+
+		// Reload and count
+		await loadTransactions();
+		totalToCategorize = allTransactions.filter((t) => !t.categoryId).length;
+
+		// Detect patterns
+		payeePatterns = detectPayeePatterns(
+			allTransactions.filter((t) => !t.categoryId) as any,
+			allTransactions as any
 		);
-		if (firstUncategorized) {
-			transactionStore.selectTransaction(firstUncategorized.id);
-		}
 	}
 
 	function handleBannerDismiss() {
@@ -357,6 +379,78 @@
 
 	function handleClearUncategorizedFilter() {
 		showUncategorizedOnly = false;
+	}
+
+	function handleImportComplete() {
+		importWizardOpen = false;
+		loadTransactions();
+	}
+
+	function handleBulkSelectAll() {
+		const ids = bulkUncategorized.map((t) => t.id);
+		selectedTransactionIds = new Set(ids);
+	}
+
+	function handleBulkClearSelection() {
+		selectedTransactionIds = new Set();
+	}
+
+	function handleBulkToggle(event: CustomEvent<{ transactionId: string; checked: boolean }>) {
+		const { transactionId, checked } = event.detail;
+		const next = new Set(selectedTransactionIds);
+		if (checked) {
+			next.add(transactionId);
+		} else {
+			next.delete(transactionId);
+		}
+		selectedTransactionIds = next;
+	}
+
+	async function handleBulkAssignCategory(event: CustomEvent<{ categoryId: string }>) {
+		const { categoryId } = event.detail;
+		const ids = Array.from(selectedTransactionIds);
+		if (ids.length === 0) return;
+
+		try {
+			await bulkCategorize(ids, categoryId);
+			categorizedSinceImport += ids.length;
+			selectedTransactionIds = new Set();
+			await loadTransactions();
+			// Refresh patterns
+			payeePatterns = detectPayeePatterns(
+				allTransactions.filter((t) => !t.categoryId) as any,
+				allTransactions as any
+			);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to assign category';
+		}
+	}
+
+	async function handleApplyPattern(event: CustomEvent<{ pattern: PayeePattern }>) {
+		const { pattern } = event.detail;
+		if (!pattern.suggestedCategoryId) return;
+
+		try {
+			await bulkCategorize(pattern.transactionIds, pattern.suggestedCategoryId);
+			categorizedSinceImport += pattern.transactionIds.length;
+			selectedTransactionIds = new Set();
+			await loadTransactions();
+			payeePatterns = detectPayeePatterns(
+				allTransactions.filter((t) => !t.categoryId) as any,
+				allTransactions as any
+			);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to apply pattern';
+		}
+	}
+
+	function handleBulkDone() {
+		isBulkCategorizing = false;
+		showUncategorizedOnly = false;
+		selectedTransactionIds = new Set();
+		categorizedSinceImport = 0;
+		totalToCategorize = 0;
+		payeePatterns = [];
 	}
 </script>
 
@@ -442,7 +536,26 @@
 			on:dismiss={handleBannerDismiss}
 		/>
 
-		{#if showUncategorizedOnly}
+		{#if isBulkCategorizing}
+			<div class="categorizing-banner" data-testid="categorizing-banner">
+				<span>Categorizing imported transactions</span>
+				<button type="button" on:click={handleBulkDone} data-testid="exit-categorize-mode">
+					Exit
+				</button>
+			</div>
+			<BulkActions
+				{selectedCount}
+				totalCount={totalToCategorize}
+				categorizedCount={categorizedSinceImport}
+				{categories}
+				patterns={payeePatterns}
+				on:selectAll={handleBulkSelectAll}
+				on:clearSelection={handleBulkClearSelection}
+				on:assignCategory={handleBulkAssignCategory}
+				on:applyPattern={handleApplyPattern}
+				on:done={handleBulkDone}
+			/>
+		{:else if showUncategorizedOnly}
 			<div class="uncategorized-filter-active" data-testid="uncategorized-filter-active">
 				<span>Showing uncategorized transactions only</span>
 				<button type="button" on:click={handleClearUncategorizedFilter} data-testid="clear-uncategorized-filter">
@@ -489,7 +602,9 @@
 
 	<ImportWizard
 		open={importWizardOpen}
-		on:close={() => (importWizardOpen = false)}
+		on:close={handleImportComplete}
+		on:importComplete={handleImportComplete}
+		on:categorizeNow={handleCategorizeNow}
 	/>
 
 	{#if filterState.isOpen}
@@ -577,6 +692,35 @@
 
 	.error-banner button:hover {
 		opacity: 0.9;
+	}
+
+	.categorizing-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8px 16px;
+		background: rgba(16, 185, 129, 0.08);
+		border: 1px solid var(--color-success, #10b981);
+		border-radius: 8px;
+		color: var(--color-success, #10b981);
+		font-size: 0.8125rem;
+		font-weight: 500;
+	}
+
+	.categorizing-banner button {
+		padding: 4px 10px;
+		background: transparent;
+		border: 1px solid var(--color-success, #10b981);
+		border-radius: 4px;
+		color: var(--color-success, #10b981);
+		cursor: pointer;
+		font-size: 0.8125rem;
+		font-weight: 500;
+	}
+
+	.categorizing-banner button:hover {
+		background: var(--color-success, #10b981);
+		color: white;
 	}
 
 	.uncategorized-filter-active {

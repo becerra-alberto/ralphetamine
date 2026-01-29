@@ -26,6 +26,7 @@
 	const dispatch = createEventDispatcher<{
 		close: void;
 		importComplete: { imported: number; skipped: number };
+		categorizeNow: void;
 	}>();
 
 	let currentStep = 1;
@@ -52,6 +53,7 @@
 	let importedCount = 0;
 	let skippedCount = 0;
 	let importError = '';
+	let uncategorizedImportCount = 0;
 
 	$: hasFile = fileData !== null;
 	$: canProceed = currentStep === 1 ? hasFile
@@ -83,6 +85,7 @@
 		importedCount = 0;
 		skippedCount = 0;
 		importError = '';
+		uncategorizedImportCount = 0;
 	}
 
 	function handleBackdropClick(event: MouseEvent) {
@@ -200,6 +203,8 @@
 			const result = await importTransactions(inputs);
 			importedCount = result.imported;
 			skippedCount += result.skipped;
+			// Count how many imported transactions have no category
+			uncategorizedImportCount = inputs.filter((t) => !t.categoryId).length;
 			importStatus = 'success';
 			dispatch('importComplete', { imported: importedCount, skipped: skippedCount });
 		} catch (err) {
@@ -227,6 +232,11 @@
 
 	function handleProgressClose() {
 		handleClose();
+	}
+
+	function handleCategorize() {
+		dispatch('categorizeNow');
+		resetState();
 	}
 
 	async function handleRetry() {
@@ -289,9 +299,11 @@
 						skipped={skippedCount}
 						total={importSummary.toImport}
 						errorMessage={importError}
+						uncategorizedCount={uncategorizedImportCount}
 						testId="{testId}-progress"
 						on:close={handleProgressClose}
 						on:retry={handleRetry}
+						on:categorize={handleCategorize}
 					/>
 				{:else if currentStep === 1}
 					<FileSelection
