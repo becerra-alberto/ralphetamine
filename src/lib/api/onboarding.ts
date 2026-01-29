@@ -17,6 +17,14 @@ export async function saveUserGoals(goals: string[]): Promise<void> {
 	return invoke('save_user_goals', { goals });
 }
 
+export async function saveMonthlyIncome(incomeCents: number): Promise<void> {
+	return invoke('save_monthly_income', { incomeCents });
+}
+
+export async function saveDisabledCategories(categoryIds: string[]): Promise<void> {
+	return invoke('save_disabled_categories', { categoryIds });
+}
+
 export async function completeOnboarding(): Promise<void> {
 	return invoke('complete_onboarding');
 }

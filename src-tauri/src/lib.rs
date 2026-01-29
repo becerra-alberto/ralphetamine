@@ -53,6 +53,8 @@ pub fn run() {
             commands::get_balance_history,
             commands::check_onboarding_status,
             commands::save_user_goals,
+            commands::save_monthly_income,
+            commands::save_disabled_categories,
             commands::complete_onboarding,
         ])
         .run(tauri::generate_context!())

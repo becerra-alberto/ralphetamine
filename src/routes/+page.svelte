@@ -2,10 +2,19 @@
 	import { onMount } from 'svelte';
 	import OnboardingWizard from '$lib/components/onboarding/OnboardingWizard.svelte';
 	import { onboardingStore } from '$lib/stores/onboarding';
-	import { checkOnboardingStatus, saveUserGoals, completeOnboarding } from '$lib/api/onboarding';
+	import type { OnboardingAccount } from '$lib/stores/onboarding';
+	import {
+		checkOnboardingStatus,
+		saveUserGoals,
+		saveMonthlyIncome,
+		saveDisabledCategories,
+		completeOnboarding
+	} from '$lib/api/onboarding';
+	import { createAccount } from '$lib/api/netWorth';
 
 	let showOnboarding = false;
 	let isLoading = true;
+	let showWelcomeToast = false;
 
 	onMount(async () => {
 		try {
@@ -22,13 +31,57 @@
 		}
 	});
 
-	async function handleToggleGoal(event: CustomEvent<{ goalId: string }>) {
+	function handleToggleGoal(event: CustomEvent<{ goalId: string }>) {
 		onboardingStore.toggleGoal(event.detail.goalId);
 	}
 
+	function handleSetIncome(event: CustomEvent<{ incomeCents: number }>) {
+		onboardingStore.setMonthlyIncome(event.detail.incomeCents);
+	}
+
+	function handleAddAccount(event: CustomEvent<OnboardingAccount>) {
+		onboardingStore.addAccount(event.detail);
+	}
+
+	function handleToggleCategory(event: CustomEvent<{ categoryId: string }>) {
+		onboardingStore.toggleCategory(event.detail.categoryId);
+	}
+
 	async function handleNext() {
-		await saveUserGoals($onboardingStore.goals);
+		const step = $onboardingStore.currentStep;
+		try {
+			if (step === 1) {
+				await saveUserGoals($onboardingStore.goals);
+			} else if (step === 2) {
+				await saveMonthlyIncome($onboardingStore.monthlyIncomeCents);
+			} else if (step === 3) {
+				for (const account of $onboardingStore.accounts) {
+					await createAccount(account.name, account.type, '', 'EUR', account.balanceCents);
+				}
+			}
+		} catch {
+			// Best-effort save, still advance
+		}
 		onboardingStore.nextStep();
+	}
+
+	function handleBack() {
+		onboardingStore.previousStep();
+	}
+
+	async function handleFinish() {
+		try {
+			await saveDisabledCategories($onboardingStore.disabledCategories);
+			await completeOnboarding();
+		} catch {
+			// Best-effort save
+		}
+		onboardingStore.setCompleted(true);
+		showOnboarding = false;
+		showWelcomeToast = true;
+		setTimeout(() => {
+			showWelcomeToast = false;
+		}, 4000);
 	}
 
 	async function handleSkip() {
@@ -49,9 +102,17 @@
 		currentStep={$onboardingStore.currentStep}
 		totalSteps={$onboardingStore.totalSteps}
 		selectedGoals={$onboardingStore.goals}
+		monthlyIncomeCents={$onboardingStore.monthlyIncomeCents}
+		accounts={$onboardingStore.accounts}
+		disabledCategories={$onboardingStore.disabledCategories}
 		on:toggleGoal={handleToggleGoal}
+		on:setIncome={handleSetIncome}
+		on:addAccount={handleAddAccount}
+		on:toggleCategory={handleToggleCategory}
 		on:next={handleNext}
+		on:back={handleBack}
 		on:skip={handleSkip}
+		on:finish={handleFinish}
 	/>
 {:else}
 	<div class="p-6" data-testid="home-page">
@@ -83,7 +144,25 @@
 	</div>
 {/if}
 
+{#if showWelcomeToast}
+	<div class="welcome-toast" data-testid="welcome-toast">Welcome to Stackz!</div>
+{/if}
+
 <style>
+	.welcome-toast {
+		position: fixed;
+		bottom: 24px;
+		left: 50%;
+		transform: translateX(-50%);
+		background: var(--success, #10b981);
+		color: white;
+		padding: 12px 24px;
+		border-radius: 8px;
+		font-weight: 600;
+		font-size: 0.9375rem;
+		z-index: 200;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	}
 	.loading {
 		display: flex;
 		align-items: center;

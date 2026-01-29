@@ -69,6 +69,38 @@ pub fn save_user_goals(goals: Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
+/// Save monthly income estimate (stored as cents)
+#[tauri::command]
+pub fn save_monthly_income(income_cents: i64) -> Result<(), String> {
+    let db = get_database().map_err(db_err)?;
+
+    let value = income_cents.to_string();
+
+    db.execute(
+        "INSERT OR REPLACE INTO user_preferences (key, value) VALUES ('monthly_income_cents', ?)",
+        &[&value as &dyn rusqlite::types::ToSql],
+    )
+    .map_err(db_err)?;
+
+    Ok(())
+}
+
+/// Save disabled categories list
+#[tauri::command]
+pub fn save_disabled_categories(category_ids: Vec<String>) -> Result<(), String> {
+    let db = get_database().map_err(db_err)?;
+
+    let json = serde_json::to_string(&category_ids).map_err(|e| e.to_string())?;
+
+    db.execute(
+        "INSERT OR REPLACE INTO user_preferences (key, value) VALUES ('disabled_categories', ?)",
+        &[&json as &dyn rusqlite::types::ToSql],
+    )
+    .map_err(db_err)?;
+
+    Ok(())
+}
+
 /// Mark onboarding as completed
 #[tauri::command]
 pub fn complete_onboarding() -> Result<(), String> {
@@ -154,5 +186,76 @@ mod tests {
 
         let parsed: Vec<String> = serde_json::from_str(stored.first().unwrap()).unwrap();
         assert_eq!(parsed, vec!["emergency_fund", "track_spending"]);
+    }
+
+    #[test]
+    fn test_save_monthly_income_stores_cents_in_database() {
+        let db = setup_test_db();
+
+        let income_cents: i64 = 350000;
+        let value = income_cents.to_string();
+
+        db.execute(
+            "INSERT OR REPLACE INTO user_preferences (key, value) VALUES ('monthly_income_cents', ?)",
+            &[&value as &dyn rusqlite::types::ToSql],
+        )
+        .unwrap();
+
+        let stored: Vec<String> = db
+            .query_map(
+                "SELECT value FROM user_preferences WHERE key = 'monthly_income_cents'",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        let parsed: i64 = stored.first().unwrap().parse().unwrap();
+        assert_eq!(parsed, 350000);
+    }
+
+    #[test]
+    fn test_save_disabled_categories_stores_in_database() {
+        let db = setup_test_db();
+
+        let ids = vec!["cat-housing-vve", "cat-lifestyle-travel"];
+        let json = serde_json::to_string(&ids).unwrap();
+
+        db.execute(
+            "INSERT OR REPLACE INTO user_preferences (key, value) VALUES ('disabled_categories', ?)",
+            &[&json as &dyn rusqlite::types::ToSql],
+        )
+        .unwrap();
+
+        let stored: Vec<String> = db
+            .query_map(
+                "SELECT value FROM user_preferences WHERE key = 'disabled_categories'",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        let parsed: Vec<String> = serde_json::from_str(stored.first().unwrap()).unwrap();
+        assert_eq!(parsed, vec!["cat-housing-vve", "cat-lifestyle-travel"]);
+    }
+
+    #[test]
+    fn test_complete_onboarding_sets_flag() {
+        let db = setup_test_db();
+
+        db.execute(
+            "INSERT OR REPLACE INTO user_preferences (key, value) VALUES ('onboarding_completed', 'true')",
+            &[],
+        )
+        .unwrap();
+
+        let completed: Vec<String> = db
+            .query_map(
+                "SELECT value FROM user_preferences WHERE key = 'onboarding_completed'",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(completed.first().unwrap(), "true");
     }
 }

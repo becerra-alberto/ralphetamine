@@ -3,28 +3,60 @@
 	import { fly } from 'svelte/transition';
 	import StepIndicator from './StepIndicator.svelte';
 	import Step1Goals from './Step1Goals.svelte';
+	import Step2Income from './Step2Income.svelte';
+	import Step3Accounts from './Step3Accounts.svelte';
+	import Step4Categories from './Step4Categories.svelte';
+	import type { OnboardingAccount } from '$lib/stores/onboarding';
 
 	export let currentStep = 1;
 	export let totalSteps = 4;
 	export let selectedGoals: string[] = [];
+	export let monthlyIncomeCents = 0;
+	export let accounts: OnboardingAccount[] = [];
+	export let disabledCategories: string[] = [];
 	export let testId = 'onboarding-wizard';
 
 	const dispatch = createEventDispatcher<{
 		toggleGoal: { goalId: string };
+		setIncome: { incomeCents: number };
+		addAccount: OnboardingAccount;
+		toggleCategory: { categoryId: string };
 		next: void;
+		back: void;
 		skip: void;
+		finish: void;
 	}>();
 
 	function handleToggleGoal(event: CustomEvent<{ goalId: string }>) {
 		dispatch('toggleGoal', event.detail);
 	}
 
+	function handleSetIncome(event: CustomEvent<{ incomeCents: number }>) {
+		dispatch('setIncome', event.detail);
+	}
+
+	function handleAddAccount(event: CustomEvent<OnboardingAccount>) {
+		dispatch('addAccount', event.detail);
+	}
+
+	function handleToggleCategory(event: CustomEvent<{ categoryId: string }>) {
+		dispatch('toggleCategory', event.detail);
+	}
+
 	function handleNext() {
 		dispatch('next');
 	}
 
+	function handleBack() {
+		dispatch('back');
+	}
+
 	function handleSkip() {
 		dispatch('skip');
+	}
+
+	function handleFinish() {
+		dispatch('finish');
 	}
 </script>
 
@@ -48,28 +80,34 @@
 					/>
 				</div>
 			{:else if currentStep === 2}
-				<div
-					class="placeholder-step"
-					data-testid="{testId}-step2"
-					in:fly={{ x: 50, duration: 300 }}
-				>
-					<h2>Step 2 - Coming Soon</h2>
+				<div in:fly={{ x: 50, duration: 300 }} out:fly={{ x: -50, duration: 300 }}>
+					<Step2Income
+						{monthlyIncomeCents}
+						testId="{testId}-step2"
+						on:setIncome={handleSetIncome}
+						on:next={handleNext}
+						on:back={handleBack}
+					/>
 				</div>
 			{:else if currentStep === 3}
-				<div
-					class="placeholder-step"
-					data-testid="{testId}-step3"
-					in:fly={{ x: 50, duration: 300 }}
-				>
-					<h2>Step 3 - Coming Soon</h2>
+				<div in:fly={{ x: 50, duration: 300 }} out:fly={{ x: -50, duration: 300 }}>
+					<Step3Accounts
+						{accounts}
+						testId="{testId}-step3"
+						on:addAccount={handleAddAccount}
+						on:next={handleNext}
+						on:back={handleBack}
+					/>
 				</div>
 			{:else if currentStep === 4}
-				<div
-					class="placeholder-step"
-					data-testid="{testId}-step4"
-					in:fly={{ x: 50, duration: 300 }}
-				>
-					<h2>Step 4 - Coming Soon</h2>
+				<div in:fly={{ x: 50, duration: 300 }} out:fly={{ x: -50, duration: 300 }}>
+					<Step4Categories
+						{disabledCategories}
+						testId="{testId}-step4"
+						on:toggleCategory={handleToggleCategory}
+						on:finish={handleFinish}
+						on:back={handleBack}
+					/>
 				</div>
 			{/if}
 		</div>
@@ -125,11 +163,6 @@
 		justify-content: center;
 	}
 
-	.placeholder-step {
-		text-align: center;
-		color: var(--text-secondary, #6b7280);
-	}
-
 	:global(.dark) .wizard-overlay {
 		background: var(--bg-primary, #0f0f0f);
 	}
@@ -140,9 +173,5 @@
 
 	:global(.dark) .skip-link:hover {
 		color: #d1d5db;
-	}
-
-	:global(.dark) .placeholder-step {
-		color: #9ca3af;
 	}
 </style>

@@ -4,11 +4,20 @@
 
 import { writable, derived } from 'svelte/store';
 
+export interface OnboardingAccount {
+	name: string;
+	type: string;
+	balanceCents: number;
+}
+
 export interface OnboardingState {
 	isCompleted: boolean;
 	currentStep: number;
 	totalSteps: number;
 	goals: string[];
+	monthlyIncomeCents: number;
+	accounts: OnboardingAccount[];
+	disabledCategories: string[];
 	isLoading: boolean;
 }
 
@@ -17,6 +26,9 @@ const initialState: OnboardingState = {
 	currentStep: 1,
 	totalSteps: 4,
 	goals: [],
+	monthlyIncomeCents: 0,
+	accounts: [],
+	disabledCategories: [],
 	isLoading: true
 };
 
@@ -56,6 +68,23 @@ function createOnboardingStore() {
 		},
 		setGoals(goals: string[]) {
 			update((state) => ({ ...state, goals }));
+		},
+		setMonthlyIncome(cents: number) {
+			update((state) => ({ ...state, monthlyIncomeCents: cents }));
+		},
+		addAccount(account: OnboardingAccount) {
+			update((state) => ({ ...state, accounts: [...state.accounts, account] }));
+		},
+		toggleCategory(categoryId: string) {
+			update((state) => {
+				const disabled = state.disabledCategories.includes(categoryId)
+					? state.disabledCategories.filter((c) => c !== categoryId)
+					: [...state.disabledCategories, categoryId];
+				return { ...state, disabledCategories: disabled };
+			});
+		},
+		setDisabledCategories(ids: string[]) {
+			update((state) => ({ ...state, disabledCategories: ids }));
 		},
 		reset() {
 			set(initialState);

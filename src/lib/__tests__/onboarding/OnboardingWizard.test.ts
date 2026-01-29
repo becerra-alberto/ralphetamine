@@ -34,12 +34,73 @@ describe('OnboardingWizard', () => {
 		expect(screen.getByTestId('onboarding-wizard-step1')).toBeTruthy();
 	});
 
-	it('should show Step 2 placeholder when currentStep is 2', () => {
+	it('should show Step 2 Income when currentStep is 2', () => {
 		render(OnboardingWizard, {
 			props: { currentStep: 2, totalSteps: 4, selectedGoals: [] }
 		});
 
 		expect(screen.getByTestId('onboarding-wizard-step2')).toBeTruthy();
+		expect(screen.getByTestId('onboarding-wizard-step2-title').textContent).toBe(
+			"What's your monthly income?"
+		);
+	});
+
+	it('should show Step 3 Accounts when currentStep is 3', () => {
+		render(OnboardingWizard, {
+			props: { currentStep: 3, totalSteps: 4, selectedGoals: [], accounts: [] }
+		});
+
+		expect(screen.getByTestId('onboarding-wizard-step3')).toBeTruthy();
+		expect(screen.getByTestId('onboarding-wizard-step3-title').textContent).toBe(
+			'Add your accounts'
+		);
+	});
+
+	it('should show Step 4 Categories when currentStep is 4', () => {
+		render(OnboardingWizard, {
+			props: { currentStep: 4, totalSteps: 4, selectedGoals: [], disabledCategories: [] }
+		});
+
+		expect(screen.getByTestId('onboarding-wizard-step4')).toBeTruthy();
+		expect(screen.getByTestId('onboarding-wizard-step4-title').textContent).toBe(
+			'Review your budget categories'
+		);
+	});
+
+	it('should dispatch back event from Step 2 Back button', async () => {
+		let backCalled = false;
+
+		render(OnboardingWizard, {
+			props: { currentStep: 2, totalSteps: 4, selectedGoals: [] },
+			events: {
+				back: () => {
+					backCalled = true;
+				}
+			}
+		} as any);
+
+		const backBtn = screen.getByTestId('onboarding-wizard-step2-back');
+		await fireEvent.click(backBtn);
+
+		expect(backCalled).toBe(true);
+	});
+
+	it('should dispatch finish event from Step 4 Finish button', async () => {
+		let finishCalled = false;
+
+		render(OnboardingWizard, {
+			props: { currentStep: 4, totalSteps: 4, selectedGoals: [], disabledCategories: [] },
+			events: {
+				finish: () => {
+					finishCalled = true;
+				}
+			}
+		} as any);
+
+		const finishBtn = screen.getByTestId('onboarding-wizard-step4-finish');
+		await fireEvent.click(finishBtn);
+
+		expect(finishCalled).toBe(true);
 	});
 
 	it('should dispatch skip event when Skip setup is clicked', async () => {
@@ -103,5 +164,74 @@ describe('OnboardingWizard', () => {
 
 		expect(screen.getByTestId('custom-wizard')).toBeTruthy();
 		expect(screen.getByTestId('custom-wizard-container')).toBeTruthy();
+	});
+
+	it('should dispatch back event from Step 3 Back button', async () => {
+		let backCalled = false;
+
+		render(OnboardingWizard, {
+			props: { currentStep: 3, totalSteps: 4, accounts: [] },
+			events: {
+				back: () => {
+					backCalled = true;
+				}
+			}
+		} as any);
+
+		const backBtn = screen.getByTestId('onboarding-wizard-step3-back');
+		await fireEvent.click(backBtn);
+
+		expect(backCalled).toBe(true);
+	});
+
+	it('should dispatch back event from Step 4 Back button', async () => {
+		let backCalled = false;
+
+		render(OnboardingWizard, {
+			props: { currentStep: 4, totalSteps: 4, disabledCategories: [] },
+			events: {
+				back: () => {
+					backCalled = true;
+				}
+			}
+		} as any);
+
+		const backBtn = screen.getByTestId('onboarding-wizard-step4-back');
+		await fireEvent.click(backBtn);
+
+		expect(backCalled).toBe(true);
+	});
+
+	it('should preserve previous selections when navigating back to Step 1', () => {
+		render(OnboardingWizard, {
+			props: {
+				currentStep: 1,
+				selectedGoals: ['emergency_fund', 'track_spending']
+			}
+		});
+
+		const checkbox1 = screen.getByTestId(
+			'onboarding-wizard-step1-checkbox-emergency_fund'
+		) as HTMLInputElement;
+		const checkbox2 = screen.getByTestId(
+			'onboarding-wizard-step1-checkbox-track_spending'
+		) as HTMLInputElement;
+
+		expect(checkbox1.checked).toBe(true);
+		expect(checkbox2.checked).toBe(true);
+	});
+
+	it('should preserve income when navigating back to Step 2', () => {
+		render(OnboardingWizard, {
+			props: {
+				currentStep: 2,
+				monthlyIncomeCents: 350000
+			}
+		});
+
+		// Step 2 should be rendered with preserved income data
+		expect(screen.getByTestId('onboarding-wizard-step2')).toBeTruthy();
+		const input = screen.getByTestId('onboarding-wizard-step2-input') as HTMLInputElement;
+		expect(input.value).toBeTruthy();
 	});
 });
