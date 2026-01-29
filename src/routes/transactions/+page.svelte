@@ -7,6 +7,7 @@
 	import FilterPanel from '$lib/components/transactions/FilterPanel.svelte';
 	import UncategorizedBanner from '$lib/components/transactions/UncategorizedBanner.svelte';
 	import QuickAddRow from '$lib/components/transactions/QuickAddRow.svelte';
+	import ImportWizard from '$lib/components/import/ImportWizard.svelte';
 	import { createTransaction } from '$lib/api/transactions';
 	import type { TransactionInput } from '$lib/types/transaction';
 	import {
@@ -29,6 +30,7 @@
 	// Local state for loading
 	let isLoading = false;
 	let error: string | null = null;
+	let importWizardOpen = false;
 
 	// Filter panel data
 	let accounts: Account[] = [];
@@ -85,6 +87,13 @@
 	});
 
 	function handleGlobalKeydown(event: KeyboardEvent) {
+		// ⌘I: Open import wizard
+		if ((event.metaKey || event.ctrlKey) && event.key === 'i') {
+			event.preventDefault();
+			importWizardOpen = true;
+			return;
+		}
+
 		// "/" key toggles filter panel (when not in an input)
 		if (event.key === '/' && !isInputFocused()) {
 			event.preventDefault();
@@ -369,6 +378,31 @@
 				/>
 				<button
 					type="button"
+					class="import-btn"
+					on:click={() => (importWizardOpen = true)}
+					aria-label="Import transactions"
+					data-testid="import-btn"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+						<polyline points="17 8 12 3 7 8" />
+						<line x1="12" y1="3" x2="12" y2="15" />
+					</svg>
+					Import
+				</button>
+				<button
+					type="button"
 					class="filter-toggle-btn"
 					on:click={handleFilterToggle}
 					aria-label="Toggle filters"
@@ -452,6 +486,11 @@
 			{/if}
 		</div>
 	</div>
+
+	<ImportWizard
+		open={importWizardOpen}
+		on:close={() => (importWizardOpen = false)}
+	/>
 
 	{#if filterState.isOpen}
 		<FilterPanel
@@ -582,6 +621,27 @@
 		margin: 0;
 	}
 
+	.import-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		height: 36px;
+		padding: 0 12px;
+		border: 1px solid var(--border-color, #e5e7eb);
+		border-radius: 6px;
+		background: var(--bg-primary, #ffffff);
+		color: var(--text-secondary, #6b7280);
+		cursor: pointer;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		transition: border-color 0.15s ease;
+	}
+
+	.import-btn:hover {
+		border-color: var(--accent, #4f46e5);
+		color: var(--accent, #4f46e5);
+	}
+
 	.filter-toggle-btn {
 		display: flex;
 		align-items: center;
@@ -619,6 +679,12 @@
 	/* Dark mode */
 	:global(.dark) .transactions-page {
 		--text-primary: #f9fafb;
+	}
+
+	:global(.dark) .import-btn {
+		background: var(--bg-secondary, #1a1a1a);
+		border-color: var(--border-color, #374151);
+		color: var(--text-secondary, #9ca3af);
 	}
 
 	:global(.dark) .filter-toggle-btn {

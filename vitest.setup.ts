@@ -43,6 +43,18 @@ Object.defineProperty(window, 'matchMedia', {
 	})),
 });
 
+// Polyfill File.text() for jsdom (not properly supported)
+if (typeof File !== 'undefined') {
+	File.prototype.text = function () {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result as string);
+			reader.onerror = () => reject(reader.error);
+			reader.readAsText(this);
+		});
+	};
+}
+
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {
 	observe() {}
