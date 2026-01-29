@@ -2,7 +2,7 @@
 id: "7.4"
 epic: 7
 title: "Add Post-Import Category Assignment"
-status: pending
+status: done
 priority: medium
 estimation: medium
 depends_on: ["7.3"]
