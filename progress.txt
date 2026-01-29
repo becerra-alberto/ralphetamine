@@ -383,3 +383,4 @@ Story 6.6: Add Recent Commands History - COMPLETED
   - All 1790 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
   - Commit: 3b762cd
 Story 6.6: COMPLETED - feat(story-6.6): Add Recent Commands History
+[DONE] Story 6.6 - recent commands - Thu 29 Jan 2026 15:55:22 CST
