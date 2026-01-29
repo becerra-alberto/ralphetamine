@@ -124,3 +124,22 @@ Story 4.7: Implement Payee Autocomplete - COMPLETED
   - Commit: e8a83b4
 Story 4.7: COMPLETED - feat(story-4.7): Implement Payee Autocomplete
 [DONE] Story 4.7 - Implement Payee Autocomplete - Thu 29 Jan 2026 13:25:00 CST
+
+Story 4.8: Create Hierarchical Category Dropdown - COMPLETED
+  - CategoryDropdown.svelte: Reusable hierarchical dropdown with search, keyboard nav, ARIA listbox
+  - CategorySelect.svelte: Transaction-context wrapper dispatching select events with categoryId
+  - categoryGroups.ts: Added flattenCategoryTree, filterCategoryTree, getSelectableItems, groupCategoriesByParent
+  - QuickAddRow: Replaced native <select> with CategoryDropdown component
+  - Section headers (Income, Housing, Essential, Lifestyle, Savings): Bold, non-selectable, uppercase
+  - Child categories: Indented under headers, clickable, mouse/keyboard selectable
+  - Uncategorized option at top of list, clear button to remove selection
+  - Search/filter: Type to filter, preserves headers when children match
+  - Keyboard: ArrowDown/Up skips headers, Enter selects, Escape closes
+  - Color dot and icon support for categories (when color/icon fields set)
+  - Dark mode styling with CSS variables
+  - Unit tests: CategoryDropdown.test.ts (17 tests), categoryGroups.test.ts (+13 tests)
+  - E2E tests: category-dropdown.spec.ts (5 scenarios)
+  - All 1285 tests passing (1 skipped), 0 type errors
+  - Commit: d6adf8c
+Story 4.8: COMPLETED - feat(story-4.8): Create Hierarchical Category Dropdown
+[DONE] Story 4.8 - Create Hierarchical Category Dropdown - Thu 29 Jan 2026 13:40:00 CST
