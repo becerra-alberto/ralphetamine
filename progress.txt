@@ -108,3 +108,19 @@ Story 4.6: Add Date Picker with Auto-Fill - COMPLETED
   - Commit: 9b8d17c
 Story 4.6: COMPLETED - feat(story-4.6): Add Date Picker with Auto-Fill
 [DONE] Story 4.6 - Add Date Picker with Auto-Fill - Thu 29 Jan 2026 13:08:00 CST
+
+Story 4.7: Implement Payee Autocomplete - COMPLETED
+  - Autocomplete.svelte: Reusable autocomplete with dropdown, keyboard nav, debounce, ARIA combobox
+  - PayeeInput.svelte: Wrapper calling getPayeeSuggestions API, auto-fills category on selection
+  - QuickAddRow: Replaced plain input with PayeeInput component, category auto-fill on payee select
+  - AutocompleteItem interface in ui.ts: { label, value, detail? }
+  - API: getPayeeSuggestions (frequency-sorted), getPayeeCategory (most-used category association)
+  - Rust backend: get_payee_suggestions, get_payee_category commands with SQL frequency queries
+  - Keyboard: ArrowDown/Up navigation, Enter select, Escape close, minChars(2) threshold
+  - Max 10 suggestions, 150ms debounce, no-matches text for novel payees
+  - Unit tests: Autocomplete.test.ts (14), PayeeInput.test.ts (31), QuickAddRow.test.ts updated
+  - E2E tests: payee-autocomplete.spec.ts (5 scenarios)
+  - All 1208 tests passing (1 skipped), 0 type errors
+  - Commit: e8a83b4
+Story 4.7: COMPLETED - feat(story-4.7): Implement Payee Autocomplete
+[DONE] Story 4.7 - Implement Payee Autocomplete - Thu 29 Jan 2026 13:25:00 CST
