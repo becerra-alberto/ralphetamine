@@ -326,3 +326,23 @@ Story 6.3: Add Skip Onboarding Option - COMPLETED
   - All 1665 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
 Story 6.3: COMPLETED - feat(story-6.3): Add Skip Onboarding Option
 [DONE] Story 6.3 - Skip Onboarding - Thu 29 Jan 2026 15:26:00 CST
+
+[LEARN] Story 6.3 was already fully implemented in commit 1da7e0d with progress update at 2d69e52. All components (ConfirmDialog, OnboardingWizard skip link, tests) were complete. When Ralph re-processes a story, always check git log --oneline for existing implementation commits before re-implementing. The 1665 tests (95 files) all pass with 0 type errors.
+[DONE] Story 6.3 - skip onuoarding - Thu 29 Jan 2026 15:28:01 CST
+
+Story 6.4: Create Returning User Dashboard - COMPLETED
+  - Rust get_monthly_summary: SUM positive/negative transactions filtered by YYYY-MM month
+  - MonthlySummary struct: income_cents, expenses_cents, balance_cents (camelCase serialization)
+  - dashboard.ts API: getMonthlySummary wrapper for Tauri command
+  - dashboard.ts store: DashboardState with incomeCents/expensesCents, derived balanceCents, getCurrentMonth(), calculateMonthSummary()
+  - Dashboard.svelte: Command palette prompt ("Press ⌘K to get started"), QuickShortcuts section, SummaryCards section
+  - QuickShortcuts.svelte: Button-based shortcuts (⌘T Transactions, ⌘U Budget, ⌘W Net Worth) with navigate events
+  - SummaryCards.svelte: 3-card grid (Income/Expenses/Balance), formatCentsCurrency, balance color coding, empty state
+  - Balance card: Larger styling, green when positive, red when negative
+  - Empty state: Cards show €0.00, "Add your first transaction" prompt with link to /transactions
+  - +page.svelte: Dashboard component integrated, shows after onboarding completion
+  - Dark mode support with CSS variables
+  - Unit tests: Dashboard.test.ts (8), QuickShortcuts.test.ts (8), SummaryCards.test.ts (13)
+  - All 1695 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: 0ed8b56
+Story 6.4: COMPLETED - feat(story-6.4): Create Returning User Dashboard
