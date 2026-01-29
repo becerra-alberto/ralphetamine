@@ -1,12 +1,31 @@
-<div class="min-h-screen bg-bg-primary flex items-center justify-center">
-	<div class="text-center">
-		<h1 class="text-4xl font-bold text-text-primary mb-4">Stackz</h1>
-		<p class="text-text-secondary mb-6">Your local-first personal finance app</p>
-		<div class="flex gap-4 justify-center">
-			<span class="px-3 py-1 bg-accent text-white rounded">Accent</span>
-			<span class="px-3 py-1 bg-success text-white rounded">Success</span>
-			<span class="px-3 py-1 bg-danger text-white rounded">Danger</span>
-			<span class="px-3 py-1 bg-warning text-white rounded">Warning</span>
-		</div>
+<script lang="ts">
+	// Home page
+</script>
+
+<div class="p-6" data-testid="home-page">
+	<h1 class="text-3xl font-bold text-text-primary mb-4">Welcome to Stackz</h1>
+	<p class="text-text-secondary mb-6">Your local-first personal finance app</p>
+	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+		<a
+			href="/budget"
+			class="p-4 bg-bg-secondary rounded-lg hover:bg-accent/10 transition-colors"
+		>
+			<h2 class="text-lg font-semibold text-text-primary">Budget</h2>
+			<p class="text-sm text-text-secondary">Manage your monthly budgets</p>
+		</a>
+		<a
+			href="/transactions"
+			class="p-4 bg-bg-secondary rounded-lg hover:bg-accent/10 transition-colors"
+		>
+			<h2 class="text-lg font-semibold text-text-primary">Transactions</h2>
+			<p class="text-sm text-text-secondary">Track your spending</p>
+		</a>
+		<a
+			href="/net-worth"
+			class="p-4 bg-bg-secondary rounded-lg hover:bg-accent/10 transition-colors"
+		>
+			<h2 class="text-lg font-semibold text-text-primary">Net Worth</h2>
+			<p class="text-sm text-text-secondary">Monitor your assets & liabilities</p>
+		</a>
 	</div>
 </div>

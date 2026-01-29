@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import AppShell from '$lib/components/AppShell.svelte';
 
 	let { children } = $props();
 </script>
@@ -8,4 +9,6 @@
 	<title>Stackz</title>
 </svelte:head>
 
-{@render children()}
+<AppShell>
+	{@render children()}
+</AppShell>
