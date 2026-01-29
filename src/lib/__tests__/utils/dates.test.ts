@@ -13,7 +13,14 @@ import {
 	isValidMonth,
 	compareMonths,
 	isMonthInRange,
-	getMonthCount
+	getMonthCount,
+	getRolling12MonthsRange,
+	getThisYearRange,
+	getLastYearRange,
+	getThisQuarterRange,
+	isValidDateRange,
+	formatDateRange,
+	DATE_RANGE_OPTIONS
 } from '../../utils/dates';
 
 describe('Date Utilities', () => {
@@ -194,6 +201,104 @@ describe('Date Utilities', () => {
 
 		it('should return correct count across years', () => {
 			expect(getMonthCount('2024-11', '2025-02')).toBe(4);
+		});
+	});
+
+	describe('Date Range Presets', () => {
+		describe('getRolling12MonthsRange', () => {
+			it('should return current month + 11 previous months', () => {
+				const range = getRolling12MonthsRange();
+				const currentMonth = getCurrentMonth();
+
+				expect(range.endMonth).toBe(currentMonth);
+
+				// Calculate expected start month (11 months back)
+				const monthCount = getMonthCount(range.startMonth, range.endMonth);
+				expect(monthCount).toBe(12);
+			});
+		});
+
+		describe('getThisYearRange', () => {
+			it('should return Jan-Dec of current year', () => {
+				const range = getThisYearRange();
+				const currentYear = new Date().getFullYear();
+
+				expect(range.startMonth).toBe(`${currentYear}-01`);
+				expect(range.endMonth).toBe(`${currentYear}-12`);
+			});
+		});
+
+		describe('getLastYearRange', () => {
+			it('should return Jan-Dec of previous year', () => {
+				const range = getLastYearRange();
+				const lastYear = new Date().getFullYear() - 1;
+
+				expect(range.startMonth).toBe(`${lastYear}-01`);
+				expect(range.endMonth).toBe(`${lastYear}-12`);
+			});
+		});
+
+		describe('getThisQuarterRange', () => {
+			it('should return correct 3-month range for current quarter', () => {
+				const range = getThisQuarterRange();
+				const monthCount = getMonthCount(range.startMonth, range.endMonth);
+
+				expect(monthCount).toBe(3);
+			});
+
+			it('should start on quarter boundary', () => {
+				const range = getThisQuarterRange();
+				const startMonth = getMonthNumber(range.startMonth);
+
+				// Quarter starts should be 1, 4, 7, or 10
+				expect([1, 4, 7, 10]).toContain(startMonth);
+			});
+		});
+
+		describe('DATE_RANGE_OPTIONS', () => {
+			it('should have 4 preset options', () => {
+				expect(DATE_RANGE_OPTIONS).toHaveLength(4);
+			});
+
+			it('should include all preset types', () => {
+				const ids = DATE_RANGE_OPTIONS.map((opt) => opt.id);
+				expect(ids).toContain('rolling12');
+				expect(ids).toContain('thisYear');
+				expect(ids).toContain('lastYear');
+				expect(ids).toContain('thisQuarter');
+			});
+		});
+
+		describe('isValidDateRange', () => {
+			it('should return true for valid range within max months', () => {
+				expect(isValidDateRange('2025-01', '2025-12')).toBe(true);
+				expect(isValidDateRange('2024-01', '2025-12', 36)).toBe(true);
+			});
+
+			it('should return false for range exceeding max months', () => {
+				// 37 months exceeds default max of 36
+				expect(isValidDateRange('2022-01', '2025-01')).toBe(false); // 37 months > 36 max
+				expect(isValidDateRange('2021-01', '2025-01')).toBe(false); // 49 months
+			});
+
+			it('should return false when start > end', () => {
+				expect(isValidDateRange('2025-12', '2025-01')).toBe(false);
+			});
+
+			it('should return false for invalid month format', () => {
+				expect(isValidDateRange('invalid', '2025-12')).toBe(false);
+				expect(isValidDateRange('2025-01', 'invalid')).toBe(false);
+			});
+		});
+
+		describe('formatDateRange', () => {
+			it('should format same-year range', () => {
+				expect(formatDateRange('2025-01', '2025-12')).toBe('Jan - Dec 2025');
+			});
+
+			it('should format cross-year range', () => {
+				expect(formatDateRange('2024-02', '2025-01')).toBe('Feb 2024 - Jan 2025');
+			});
 		});
 	});
 });

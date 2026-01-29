@@ -181,3 +181,157 @@ export function getMonthCount(startMonth: MonthString, endMonth: MonthString): n
 
   return (endYear - startYear) * 12 + (endM - startM) + 1;
 }
+
+// ============================================
+// Date Range Presets
+// ============================================
+
+export type DateRangePreset = 'rolling12' | 'thisYear' | 'lastYear' | 'thisQuarter' | 'custom';
+
+export interface DateRange {
+  startMonth: MonthString;
+  endMonth: MonthString;
+}
+
+export interface DateRangeOption {
+  id: DateRangePreset;
+  label: string;
+  getRange: () => DateRange;
+}
+
+/**
+ * Get rolling 12 months range (current month + 11 previous)
+ */
+export function getRolling12MonthsRange(): DateRange {
+  const currentMonth = getCurrentMonth();
+  let startMonth = currentMonth;
+
+  for (let i = 0; i < 11; i++) {
+    startMonth = getPreviousMonth(startMonth);
+  }
+
+  return { startMonth, endMonth: currentMonth };
+}
+
+/**
+ * Get this year range (Jan-Dec of current year)
+ */
+export function getThisYearRange(): DateRange {
+  const now = new Date();
+  const year = now.getFullYear();
+  return {
+    startMonth: `${year}-01`,
+    endMonth: `${year}-12`
+  };
+}
+
+/**
+ * Get last year range (Jan-Dec of previous year)
+ */
+export function getLastYearRange(): DateRange {
+  const now = new Date();
+  const year = now.getFullYear() - 1;
+  return {
+    startMonth: `${year}-01`,
+    endMonth: `${year}-12`
+  };
+}
+
+/**
+ * Get this quarter range (current 3 months)
+ */
+export function getThisQuarterRange(): DateRange {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Calculate quarter: Q1=1-3, Q2=4-6, Q3=7-9, Q4=10-12
+  const quarterStart = Math.floor((month - 1) / 3) * 3 + 1;
+  const quarterEnd = quarterStart + 2;
+
+  return {
+    startMonth: `${year}-${String(quarterStart).padStart(2, '0')}`,
+    endMonth: `${year}-${String(quarterEnd).padStart(2, '0')}`
+  };
+}
+
+/**
+ * All available date range preset options
+ */
+export const DATE_RANGE_OPTIONS: DateRangeOption[] = [
+  { id: 'rolling12', label: 'Rolling 12 Months', getRange: getRolling12MonthsRange },
+  { id: 'thisYear', label: 'This Year', getRange: getThisYearRange },
+  { id: 'lastYear', label: 'Last Year', getRange: getLastYearRange },
+  { id: 'thisQuarter', label: 'This Quarter', getRange: getThisQuarterRange }
+];
+
+/**
+ * Validate that a custom date range doesn't exceed the maximum
+ */
+export function isValidDateRange(
+  startMonth: MonthString,
+  endMonth: MonthString,
+  maxMonths: number = 36
+): boolean {
+  if (!isValidMonth(startMonth) || !isValidMonth(endMonth)) {
+    return false;
+  }
+
+  if (startMonth > endMonth) {
+    return false;
+  }
+
+  const count = getMonthCount(startMonth, endMonth);
+  return count <= maxMonths;
+}
+
+/**
+ * Format a date range for display (e.g., "Feb 2024 - Jan 2025")
+ */
+export function formatDateRange(startMonth: MonthString, endMonth: MonthString): string {
+  const startMonthName = formatMonthShort(startMonth);
+  const startYear = getYear(startMonth);
+  const endMonthName = formatMonthShort(endMonth);
+  const endYear = getYear(endMonth);
+
+  if (startYear === endYear) {
+    return `${startMonthName} - ${endMonthName} ${endYear}`;
+  }
+
+  return `${startMonthName} ${startYear} - ${endMonthName} ${endYear}`;
+}
+
+/**
+ * Format a single month for display (e.g., "Feb 2024")
+ */
+export function formatMonthDisplay(month: MonthString): string {
+  return `${formatMonthShort(month)} ${getYear(month)}`;
+}
+
+// ============================================
+// Array-returning preset functions (for compatibility)
+// ============================================
+
+/**
+ * Get this year range as array of months
+ */
+export function getThisYearRangeArray(): MonthString[] {
+  const { startMonth, endMonth } = getThisYearRange();
+  return getMonthRange(startMonth, endMonth);
+}
+
+/**
+ * Get last year range as array of months
+ */
+export function getLastYearRangeArray(): MonthString[] {
+  const { startMonth, endMonth } = getLastYearRange();
+  return getMonthRange(startMonth, endMonth);
+}
+
+/**
+ * Get this quarter range as array of months
+ */
+export function getThisQuarterRangeArray(): MonthString[] {
+  const { startMonth, endMonth } = getThisQuarterRange();
+  return getMonthRange(startMonth, endMonth);
+}
