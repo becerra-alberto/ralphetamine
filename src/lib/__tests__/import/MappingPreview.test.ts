@@ -41,18 +41,21 @@ describe('MappingPreview', () => {
 		expect(screen.getByText('Memo')).toBeTruthy();
 	});
 
-	it('should show 3 preview rows by default', () => {
+	it('should show up to maxRows (default 5) preview rows', () => {
 		render(MappingPreview, { props: { data: sampleData, mappings: sampleMappings } });
 		expect(screen.getByTestId('mapping-preview-row-0')).toBeTruthy();
 		expect(screen.getByTestId('mapping-preview-row-1')).toBeTruthy();
 		expect(screen.getByTestId('mapping-preview-row-2')).toBeTruthy();
-		expect(screen.queryByTestId('mapping-preview-row-3')).toBeNull();
+		expect(screen.getByTestId('mapping-preview-row-3')).toBeTruthy();
+		expect(screen.getByTestId('mapping-preview-row-4')).toBeTruthy();
+		expect(screen.queryByTestId('mapping-preview-row-5')).toBeNull();
 	});
 
 	it('should display data from mapped columns', () => {
 		render(MappingPreview, { props: { data: sampleData, mappings: sampleMappings } });
 		expect(screen.getByText('Store A')).toBeTruthy();
-		expect(screen.getByText('50.00')).toBeTruthy();
+		// formatCellValue adds + prefix for positive amounts
+		expect(screen.getByText('+50.00')).toBeTruthy();
 		expect(screen.getByText('Note A')).toBeTruthy();
 	});
 
