@@ -1,10 +1,13 @@
 <script lang="ts">
 	import SummaryCard from './SummaryCard.svelte';
+	import MoMChange from './MoMChange.svelte';
+	import type { MomChangeData } from '../../api/netWorth';
 
 	export let totalAssetsCents: number = 0;
 	export let totalLiabilitiesCents: number = 0;
 	export let netWorthCents: number = 0;
 	export let hasAccounts: boolean = true;
+	export let momChange: MomChangeData | null = null;
 	export let testId = 'net-worth-summary';
 
 	// Progress bar: percentage of net worth that each component represents
@@ -64,6 +67,9 @@
 				testId="{testId}-net-worth"
 			/>
 		</div>
+		<div class="mom-change-row" data-testid="{testId}-mom-row">
+			<MoMChange data={momChange} testId="{testId}-mom" />
+		</div>
 	{/if}
 </section>
 
@@ -82,6 +88,13 @@
 		flex-wrap: wrap;
 		gap: 16px;
 		position: relative;
+	}
+
+	.mom-change-row {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 8px;
+		padding-right: 4px;
 	}
 
 	.empty-prompt {

@@ -155,6 +155,112 @@ pub fn get_net_worth_summary() -> Result<NetWorthSummary, String> {
     })
 }
 
+/// Net worth history snapshot for a specific month
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetWorthSnapshot {
+    pub month: String,
+    pub total_assets_cents: i64,
+    pub total_liabilities_cents: i64,
+    pub net_worth_cents: i64,
+}
+
+/// Month-over-month change data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MomChangeData {
+    pub has_previous: bool,
+    pub change_cents: i64,
+    pub change_percent: f64,
+    pub previous_month: Option<String>,
+    pub previous_net_worth_cents: Option<i64>,
+    pub current_net_worth_cents: i64,
+}
+
+/// Save a net worth snapshot for the given month
+/// Uses INSERT OR REPLACE to upsert
+#[tauri::command]
+pub fn save_net_worth_snapshot(month: String, total_assets_cents: i64, total_liabilities_cents: i64, net_worth_cents: i64) -> Result<(), String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    db.execute(
+        "INSERT OR REPLACE INTO net_worth_history (month, total_assets_cents, total_liabilities_cents, net_worth_cents)
+         VALUES (?, ?, ?, ?)",
+        &[
+            &month as &dyn rusqlite::ToSql,
+            &total_assets_cents as &dyn rusqlite::ToSql,
+            &total_liabilities_cents as &dyn rusqlite::ToSql,
+            &net_worth_cents as &dyn rusqlite::ToSql,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Get month-over-month change by comparing current net worth to the previous month's snapshot
+#[tauri::command]
+pub fn get_mom_change(current_month: String, current_net_worth_cents: i64) -> Result<MomChangeData, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    // Find the previous month's snapshot (the latest one before current_month)
+    let previous: Option<NetWorthSnapshot> = db
+        .query_map(
+            "SELECT month, total_assets_cents, total_liabilities_cents, net_worth_cents
+             FROM net_worth_history
+             WHERE month < ?
+             ORDER BY month DESC
+             LIMIT 1",
+            &[&current_month as &dyn rusqlite::ToSql],
+            |row| {
+                Ok(NetWorthSnapshot {
+                    month: row.get(0)?,
+                    total_assets_cents: row.get(1)?,
+                    total_liabilities_cents: row.get(2)?,
+                    net_worth_cents: row.get(3)?,
+                })
+            },
+        )
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .next();
+
+    match previous {
+        Some(prev) => {
+            let change_cents = current_net_worth_cents - prev.net_worth_cents;
+            let change_percent = if prev.net_worth_cents == 0 {
+                if current_net_worth_cents == 0 {
+                    0.0
+                } else {
+                    // Previous was 0 but now it's not - show as 100% (or -100%)
+                    if current_net_worth_cents > 0 { 100.0 } else { -100.0 }
+                }
+            } else {
+                (change_cents as f64 / prev.net_worth_cents.abs() as f64) * 100.0
+            };
+
+            Ok(MomChangeData {
+                has_previous: true,
+                change_cents,
+                change_percent,
+                previous_month: Some(prev.month),
+                previous_net_worth_cents: Some(prev.net_worth_cents),
+                current_net_worth_cents,
+            })
+        }
+        None => {
+            Ok(MomChangeData {
+                has_previous: false,
+                change_cents: 0,
+                change_percent: 0.0,
+                previous_month: None,
+                previous_net_worth_cents: None,
+                current_net_worth_cents,
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -449,5 +555,161 @@ mod tests {
         assert!(account_ids.contains(&"acc-checking"), "Checking should be included");
         assert!(account_ids.contains(&"acc-savings"), "Savings should be included");
         assert!(account_ids.contains(&"acc-credit"), "Credit should be included");
+    }
+
+    // --- Net Worth History / MoM tests for Story 5.2 ---
+
+    #[test]
+    fn test_save_net_worth_snapshot_stores_correctly() {
+        let db = setup_test_db();
+
+        db.execute(
+            "INSERT INTO net_worth_history (month, total_assets_cents, total_liabilities_cents, net_worth_cents)
+             VALUES (?, ?, ?, ?)",
+            &[
+                &"2025-12" as &dyn rusqlite::ToSql,
+                &550000_i64 as &dyn rusqlite::ToSql,
+                &75000_i64 as &dyn rusqlite::ToSql,
+                &475000_i64 as &dyn rusqlite::ToSql,
+            ],
+        ).unwrap();
+
+        let snapshot: (String, i64, i64, i64) = db
+            .query_row(
+                "SELECT month, total_assets_cents, total_liabilities_cents, net_worth_cents FROM net_worth_history WHERE month = ?",
+                &[&"2025-12"],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+
+        assert_eq!(snapshot.0, "2025-12");
+        assert_eq!(snapshot.1, 550000);
+        assert_eq!(snapshot.2, 75000);
+        assert_eq!(snapshot.3, 475000);
+    }
+
+    #[test]
+    fn test_get_previous_month_snapshot_returns_correct_record() {
+        let db = setup_test_db();
+
+        // Insert snapshots for Dec and Nov
+        db.execute(
+            "INSERT INTO net_worth_history (month, total_assets_cents, total_liabilities_cents, net_worth_cents)
+             VALUES ('2025-11', 500000, 70000, 430000)",
+            &[],
+        ).unwrap();
+        db.execute(
+            "INSERT INTO net_worth_history (month, total_assets_cents, total_liabilities_cents, net_worth_cents)
+             VALUES ('2025-12', 550000, 75000, 475000)",
+            &[],
+        ).unwrap();
+
+        // Query previous month relative to Jan 2026
+        let previous: Vec<NetWorthSnapshot> = db
+            .query_map(
+                "SELECT month, total_assets_cents, total_liabilities_cents, net_worth_cents
+                 FROM net_worth_history WHERE month < ? ORDER BY month DESC LIMIT 1",
+                &[&"2026-01" as &dyn rusqlite::ToSql],
+                |row| {
+                    Ok(NetWorthSnapshot {
+                        month: row.get(0)?,
+                        total_assets_cents: row.get(1)?,
+                        total_liabilities_cents: row.get(2)?,
+                        net_worth_cents: row.get(3)?,
+                    })
+                },
+            )
+            .unwrap();
+
+        assert_eq!(previous.len(), 1);
+        assert_eq!(previous[0].month, "2025-12", "Should return December as previous month");
+        assert_eq!(previous[0].net_worth_cents, 475000);
+    }
+
+    #[test]
+    fn test_snapshot_query_with_no_previous_returns_empty() {
+        let db = setup_test_db();
+
+        // No snapshots at all
+        let previous: Vec<NetWorthSnapshot> = db
+            .query_map(
+                "SELECT month, total_assets_cents, total_liabilities_cents, net_worth_cents
+                 FROM net_worth_history WHERE month < ? ORDER BY month DESC LIMIT 1",
+                &[&"2026-01" as &dyn rusqlite::ToSql],
+                |row| {
+                    Ok(NetWorthSnapshot {
+                        month: row.get(0)?,
+                        total_assets_cents: row.get(1)?,
+                        total_liabilities_cents: row.get(2)?,
+                        net_worth_cents: row.get(3)?,
+                    })
+                },
+            )
+            .unwrap();
+
+        assert!(previous.is_empty(), "No previous snapshot should exist");
+    }
+
+    #[test]
+    fn test_mom_calculation_large_positive_change() {
+        // Edge case: 1000% increase (100 -> 1100 = 1000 change)
+        let previous_cents: i64 = 10000; // €100
+        let current_cents: i64 = 110000; // €1,100
+        let change = current_cents - previous_cents; // 100000
+        let percent = (change as f64 / previous_cents.abs() as f64) * 100.0;
+
+        assert_eq!(change, 100000, "Change should be 100000 cents");
+        assert!((percent - 1000.0).abs() < 0.01, "Percent should be 1000%");
+    }
+
+    #[test]
+    fn test_mom_calculation_large_negative_change() {
+        // Edge case: -90% decrease (100000 -> 10000)
+        let previous_cents: i64 = 100000; // €1,000
+        let current_cents: i64 = 10000;   // €100
+        let change = current_cents - previous_cents; // -90000
+        let percent = (change as f64 / previous_cents.abs() as f64) * 100.0;
+
+        assert_eq!(change, -90000, "Change should be -90000 cents");
+        assert!((percent - (-90.0)).abs() < 0.01, "Percent should be -90%");
+    }
+
+    #[test]
+    fn test_snapshot_upsert_replaces_existing() {
+        let db = setup_test_db();
+
+        // Insert initial snapshot
+        db.execute(
+            "INSERT INTO net_worth_history (month, total_assets_cents, total_liabilities_cents, net_worth_cents)
+             VALUES ('2025-12', 500000, 70000, 430000)",
+            &[],
+        ).unwrap();
+
+        // Upsert same month with new values
+        db.execute(
+            "INSERT OR REPLACE INTO net_worth_history (month, total_assets_cents, total_liabilities_cents, net_worth_cents)
+             VALUES ('2025-12', 600000, 80000, 520000)",
+            &[],
+        ).unwrap();
+
+        let net_worth: i64 = db
+            .query_row(
+                "SELECT net_worth_cents FROM net_worth_history WHERE month = '2025-12'",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(net_worth, 520000, "Upsert should replace with new value");
+
+        // Should still only have one row
+        let count: i32 = db
+            .query_row(
+                "SELECT COUNT(*) FROM net_worth_history WHERE month = '2025-12'",
+                &[],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "Should have exactly one row after upsert");
     }
 }

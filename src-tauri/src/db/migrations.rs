@@ -160,6 +160,32 @@ BEGIN
 END;
 "#,
     },
+    Migration {
+        version: "003",
+        description: "Create net worth history table",
+        up: r#"
+-- Create net_worth_history table
+-- Stores monthly snapshots for month-over-month comparison
+CREATE TABLE net_worth_history (
+    month TEXT PRIMARY KEY CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'),
+    total_assets_cents INTEGER NOT NULL DEFAULT 0,
+    total_liabilities_cents INTEGER NOT NULL DEFAULT 0,
+    net_worth_cents INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_net_worth_history_month ON net_worth_history(month);
+
+-- Create trigger to update updated_at timestamp on net_worth_history
+CREATE TRIGGER trg_net_worth_history_updated_at
+AFTER UPDATE ON net_worth_history
+FOR EACH ROW
+BEGIN
+    UPDATE net_worth_history SET updated_at = datetime('now')
+    WHERE month = NEW.month;
+END;
+"#,
+    },
 ];
 
 /// Run all pending migrations

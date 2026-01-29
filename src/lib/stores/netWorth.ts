@@ -3,13 +3,14 @@
  */
 
 import { writable, derived } from 'svelte/store';
-import type { NetWorthSummaryData, AccountWithBalance } from '../api/netWorth';
+import type { NetWorthSummaryData, AccountWithBalance, MomChangeData } from '../api/netWorth';
 
 export interface NetWorthStoreState {
 	totalAssetsCents: number;
 	totalLiabilitiesCents: number;
 	netWorthCents: number;
 	accounts: AccountWithBalance[];
+	momChange: MomChangeData | null;
 	isLoading: boolean;
 	error: string | null;
 }
@@ -19,6 +20,7 @@ const initialState: NetWorthStoreState = {
 	totalLiabilitiesCents: 0,
 	netWorthCents: 0,
 	accounts: [],
+	momChange: null,
 	isLoading: false,
 	error: null
 };
@@ -43,6 +45,10 @@ function createNetWorthStore() {
 
 		setLoading(loading: boolean) {
 			update((state) => ({ ...state, isLoading: loading }));
+		},
+
+		setMomChange(data: MomChangeData) {
+			update((state) => ({ ...state, momChange: data }));
 		},
 
 		setError(error: string) {

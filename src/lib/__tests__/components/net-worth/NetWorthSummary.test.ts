@@ -217,4 +217,56 @@ describe('NetWorthSummary', () => {
 			expect(prompt.textContent).toContain('Add your first account');
 		});
 	});
+
+	describe('MoM change integration', () => {
+		it('should render MoM change row when accounts exist', () => {
+			render(NetWorthSummary, {
+				props: {
+					totalAssetsCents: 550000,
+					totalLiabilitiesCents: 75000,
+					netWorthCents: 475000,
+					hasAccounts: true,
+					momChange: null
+				}
+			});
+
+			expect(screen.getByTestId('net-worth-summary-mom-row')).toBeTruthy();
+		});
+
+		it('should pass momChange data to MoMChange component', () => {
+			render(NetWorthSummary, {
+				props: {
+					totalAssetsCents: 550000,
+					totalLiabilitiesCents: 75000,
+					netWorthCents: 475000,
+					hasAccounts: true,
+					momChange: {
+						hasPrevious: true,
+						changeCents: 150000,
+						changePercent: 5.2,
+						previousMonth: '2025-12',
+						previousNetWorthCents: 325000,
+						currentNetWorthCents: 475000
+					}
+				}
+			});
+
+			expect(screen.getByTestId('net-worth-summary-mom')).toBeTruthy();
+			expect(screen.getByTestId('net-worth-summary-mom-indicator')).toBeTruthy();
+		});
+
+		it('should not render MoM row in empty state', () => {
+			render(NetWorthSummary, {
+				props: {
+					totalAssetsCents: 0,
+					totalLiabilitiesCents: 0,
+					netWorthCents: 0,
+					hasAccounts: false,
+					momChange: null
+				}
+			});
+
+			expect(screen.queryByTestId('net-worth-summary-mom-row')).toBeNull();
+		});
+	});
 });

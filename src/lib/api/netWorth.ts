@@ -38,3 +38,40 @@ export async function getNetWorthSummary(): Promise<NetWorthSummaryData> {
 export async function getAccounts(): Promise<Account[]> {
 	return invoke('get_accounts');
 }
+
+/** Month-over-month change data from backend */
+export interface MomChangeData {
+	hasPrevious: boolean;
+	changeCents: number;
+	changePercent: number;
+	previousMonth: string | null;
+	previousNetWorthCents: number | null;
+	currentNetWorthCents: number;
+}
+
+/**
+ * Save a net worth snapshot for the given month
+ */
+export async function saveNetWorthSnapshot(
+	month: string,
+	totalAssetsCents: number,
+	totalLiabilitiesCents: number,
+	netWorthCents: number
+): Promise<void> {
+	return invoke('save_net_worth_snapshot', {
+		month,
+		totalAssetsCents,
+		totalLiabilitiesCents,
+		netWorthCents
+	});
+}
+
+/**
+ * Get month-over-month change for current net worth
+ */
+export async function getMomChange(
+	currentMonth: string,
+	currentNetWorthCents: number
+): Promise<MomChangeData> {
+	return invoke('get_mom_change', { currentMonth, currentNetWorthCents });
+}

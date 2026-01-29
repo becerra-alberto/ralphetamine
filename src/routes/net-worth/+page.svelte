@@ -2,16 +2,34 @@
 	import { onMount } from 'svelte';
 	import NetWorthSummary from '$lib/components/net-worth/NetWorthSummary.svelte';
 	import { netWorthStore } from '$lib/stores/netWorth';
-	import { getNetWorthSummary } from '$lib/api/netWorth';
+	import { getNetWorthSummary, saveNetWorthSnapshot, getMomChange } from '$lib/api/netWorth';
 
 	let isLoading = true;
 	let error: string | null = null;
+
+	function getCurrentMonth(): string {
+		const now = new Date();
+		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+	}
 
 	onMount(async () => {
 		try {
 			netWorthStore.setLoading(true);
 			const summary = await getNetWorthSummary();
 			netWorthStore.setSummary(summary);
+
+			// Auto-snapshot current month
+			const currentMonth = getCurrentMonth();
+			await saveNetWorthSnapshot(
+				currentMonth,
+				summary.totalAssetsCents,
+				summary.totalLiabilitiesCents,
+				summary.netWorthCents
+			);
+
+			// Get month-over-month change
+			const momData = await getMomChange(currentMonth, summary.netWorthCents);
+			netWorthStore.setMomChange(momData);
 		} catch (e) {
 			const message = e instanceof Error ? e.message : String(e);
 			netWorthStore.setError(message);
@@ -40,6 +58,7 @@
 			totalAssetsCents={$netWorthStore.totalAssetsCents}
 			totalLiabilitiesCents={$netWorthStore.totalLiabilitiesCents}
 			netWorthCents={$netWorthStore.netWorthCents}
+			momChange={$netWorthStore.momChange}
 			{hasAccounts}
 		/>
 	{/if}

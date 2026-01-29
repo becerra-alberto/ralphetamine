@@ -231,9 +231,42 @@ describe('netWorthStore', () => {
 		});
 	});
 
+	describe('setMomChange', () => {
+		it('should set MoM change data', () => {
+			const momData = {
+				hasPrevious: true,
+				changeCents: 150000,
+				changePercent: 5.2,
+				previousMonth: '2025-12',
+				previousNetWorthCents: 2884615,
+				currentNetWorthCents: 3034615
+			};
+
+			netWorthStore.setMomChange(momData);
+
+			const state = get(netWorthStore);
+			expect(state.momChange).toEqual(momData);
+			expect(state.momChange?.hasPrevious).toBe(true);
+			expect(state.momChange?.changeCents).toBe(150000);
+		});
+
+		it('should have null momChange initially', () => {
+			const state = get(netWorthStore);
+			expect(state.momChange).toBeNull();
+		});
+	});
+
 	describe('reset', () => {
 		it('should reset to initial state', () => {
 			netWorthStore.setSummary(mockSummary);
+			netWorthStore.setMomChange({
+				hasPrevious: true,
+				changeCents: 100,
+				changePercent: 1.0,
+				previousMonth: '2025-12',
+				previousNetWorthCents: 10000,
+				currentNetWorthCents: 10100
+			});
 			netWorthStore.reset();
 
 			const state = get(netWorthStore);
@@ -241,6 +274,7 @@ describe('netWorthStore', () => {
 			expect(state.totalLiabilitiesCents).toBe(0);
 			expect(state.netWorthCents).toBe(0);
 			expect(state.accounts).toEqual([]);
+			expect(state.momChange).toBeNull();
 		});
 	});
 });
