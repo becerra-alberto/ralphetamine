@@ -188,5 +188,24 @@ Story 5.1: Create Net Worth Summary Section - COMPLETED
 Story 5.1: COMPLETED - feat(story-5.1): Create Net Worth Summary Section
 [DONE] Story 5.1 - Create Net Worth Summary Section - Thu 29 Jan 2026 14:00:00 CST
 
+Story 5.2: Add Month-over-Month Change Indicator - COMPLETED
+  - Migration 003: net_worth_history table (month PK, total_assets_cents, total_liabilities_cents, net_worth_cents)
+  - MoMChange.svelte: Change indicator with +/- prefix, green/red/neutral color, arrow icons, hover tooltip
+  - Tooltip: Shows previous month, previous/current values, change amount and percentage
+  - First month handling: "First month - no comparison" italic text, no error
+  - Rust save_net_worth_snapshot: INSERT OR REPLACE upsert for monthly snapshots
+  - Rust get_mom_change: Queries previous month snapshot, calculates change_cents and change_percent
+  - Division by zero: Handled gracefully (previous=0 -> 100%/-100%)
+  - Auto-snapshot: Net worth page saves snapshot on load, then queries MoM
+  - NetWorthSummary: Integrated MoMChange below summary cards
+  - Store: Added momChange state and setMomChange method
+  - API: saveNetWorthSnapshot, getMomChange wrappers
+  - Unit tests: MoMChange.test.ts (21 tests), netWorth.test.ts (+4 tests), NetWorthSummary.test.ts (+3 tests)
+  - Rust integration tests: 6 tests (save, previous query, no previous, large positive, large negative, upsert)
+  - All 1468 tests passing (1 skipped), 0 type errors, 9 warnings (all pre-existing)
+  - Commit: a2627e9
+Story 5.2: COMPLETED - feat(story-5.2): Add Month-over-Month Change Indicator
+[DONE] Story 5.2 - Add Month-over-Month Change Indicator - Thu 29 Jan 2026 14:25:00 CST
+
 [LEARN] Svelte 5 breaks component.$on() for event testing. Use `events: { eventName: handler }` in render options instead. The parentElement?.addEventListener pattern also doesn't work reliably for createEventDispatcher events in Svelte 5 test environments.
 [LEARN] jsdom doesn't implement scrollIntoView. Use optional chaining: `element?.scrollIntoView?.()` to guard against this in test environments.
