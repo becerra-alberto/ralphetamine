@@ -6,6 +6,7 @@ import {
 	totalPages,
 	searchQuery,
 	isSearchActive,
+	uncategorizedCount,
 	type TransactionWithDisplay
 } from '../../stores/transactions';
 
@@ -113,6 +114,73 @@ describe('transactionStore', () => {
 			const state = get(transactionStore);
 			expect(state.pagination.totalItems).toBe(50);
 			expect(state.unfilteredTotalItems).toBe(50);
+		});
+	});
+
+	describe('uncategorizedCount derived store', () => {
+		it('should return 0 when no transactions', () => {
+			expect(get(uncategorizedCount)).toBe(0);
+		});
+
+		it('should count transactions with null category_id', () => {
+			const transactions = [
+				createMockTransaction({ id: '1', categoryId: 'cat-1' }),
+				createMockTransaction({ id: '2', categoryId: null }),
+				createMockTransaction({ id: '3', categoryId: 'cat-2' }),
+				createMockTransaction({ id: '4', categoryId: null }),
+				createMockTransaction({ id: '5', categoryId: null })
+			];
+			transactionStore.setTransactions(transactions, 5);
+
+			expect(get(uncategorizedCount)).toBe(3);
+		});
+
+		it('should return 0 when all transactions are categorized', () => {
+			const transactions = [
+				createMockTransaction({ id: '1', categoryId: 'cat-1' }),
+				createMockTransaction({ id: '2', categoryId: 'cat-2' })
+			];
+			transactionStore.setTransactions(transactions, 2);
+
+			expect(get(uncategorizedCount)).toBe(0);
+		});
+
+		it('should count all transactions as uncategorized when none have categories', () => {
+			const transactions = [
+				createMockTransaction({ id: '1', categoryId: null }),
+				createMockTransaction({ id: '2', categoryId: null })
+			];
+			transactionStore.setTransactions(transactions, 2);
+
+			expect(get(uncategorizedCount)).toBe(2);
+		});
+
+		it('should count empty string categoryId as uncategorized', () => {
+			const transactions = [
+				createMockTransaction({ id: '1', categoryId: '' }),
+				createMockTransaction({ id: '2', categoryId: 'cat-1' }),
+				createMockTransaction({ id: '3', categoryId: null })
+			];
+			transactionStore.setTransactions(transactions, 3);
+
+			expect(get(uncategorizedCount)).toBe(2);
+		});
+
+		it('should update when transactions change', () => {
+			const transactions = [
+				createMockTransaction({ id: '1', categoryId: null }),
+				createMockTransaction({ id: '2', categoryId: null })
+			];
+			transactionStore.setTransactions(transactions, 2);
+			expect(get(uncategorizedCount)).toBe(2);
+
+			// Update with categorized transactions
+			const updated = [
+				createMockTransaction({ id: '1', categoryId: 'cat-1' }),
+				createMockTransaction({ id: '2', categoryId: null })
+			];
+			transactionStore.setTransactions(updated, 2);
+			expect(get(uncategorizedCount)).toBe(1);
 		});
 	});
 });

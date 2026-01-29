@@ -994,4 +994,72 @@ mod tests {
                 && t.amount_cents < 0
         }));
     }
+
+    // --- Uncategorized count tests for Story 4.4 ---
+
+    #[test]
+    fn test_get_uncategorized_count_returns_accurate_count() {
+        let db = setup_filter_test_db();
+
+        // f-5 has NULL category_id, so count should be 1
+        let count: i64 = db.query_row(
+            "SELECT COUNT(*) FROM transactions WHERE category_id IS NULL OR category_id = ''",
+            &[],
+            |row| row.get(0),
+        ).unwrap();
+
+        assert_eq!(count, 1, "Should have exactly 1 uncategorized transaction (f-5)");
+    }
+
+    #[test]
+    fn test_uncategorized_count_updates_when_category_set() {
+        let db = setup_filter_test_db();
+
+        // Initial: 1 uncategorized (f-5)
+        let initial_count: i64 = db.query_row(
+            "SELECT COUNT(*) FROM transactions WHERE category_id IS NULL OR category_id = ''",
+            &[],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(initial_count, 1);
+
+        // Set category on f-5
+        db.execute(
+            "UPDATE transactions SET category_id = 'cat-essential-groceries' WHERE id = 'f-5'",
+            &[],
+        ).unwrap();
+
+        let updated_count: i64 = db.query_row(
+            "SELECT COUNT(*) FROM transactions WHERE category_id IS NULL OR category_id = ''",
+            &[],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(updated_count, 0, "Count should be 0 after categorizing all transactions");
+    }
+
+    #[test]
+    fn test_uncategorized_count_updates_when_category_removed() {
+        let db = setup_filter_test_db();
+
+        // Initial: 1 uncategorized (f-5)
+        let initial_count: i64 = db.query_row(
+            "SELECT COUNT(*) FROM transactions WHERE category_id IS NULL OR category_id = ''",
+            &[],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(initial_count, 1);
+
+        // Remove category from f-1 (was cat-essential-groceries)
+        db.execute(
+            "UPDATE transactions SET category_id = NULL WHERE id = 'f-1'",
+            &[],
+        ).unwrap();
+
+        let updated_count: i64 = db.query_row(
+            "SELECT COUNT(*) FROM transactions WHERE category_id IS NULL OR category_id = ''",
+            &[],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(updated_count, 2, "Count should be 2 after removing category from f-1");
+    }
 }

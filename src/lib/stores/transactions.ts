@@ -233,3 +233,8 @@ export const isSearchActive = derived(
 	transactionStore,
 	$store => $store.filters.search.length >= 2
 );
+
+export const uncategorizedCount = derived(
+	transactionStore,
+	$store => $store.transactions.filter(t => t.categoryId === null || t.categoryId === undefined || t.categoryId === '').length
+);

@@ -5,9 +5,11 @@
 	import TransactionTable from '$lib/components/transactions/TransactionTable.svelte';
 	import SearchBar from '$lib/components/transactions/SearchBar.svelte';
 	import FilterPanel from '$lib/components/transactions/FilterPanel.svelte';
+	import UncategorizedBanner from '$lib/components/transactions/UncategorizedBanner.svelte';
 	import {
 		transactionStore,
 		filterTransactionsBySearch,
+		uncategorizedCount as uncategorizedCountStore,
 		type TransactionWithDisplay,
 		type SortableColumn
 	} from '$lib/stores/transactions';
@@ -43,13 +45,17 @@
 	$: searchQuery = storeState.filters.search;
 	$: selectedId = storeState.selectedId;
 	$: expandedId = storeState.expandedId;
+	$: uncategorizedCount = $uncategorizedCountStore;
 
-	// Apply search filter first, then panel filters
+	// Apply search filter first, then panel filters, then uncategorized-only filter
 	$: searchFiltered = filterTransactionsBySearch(allTransactions, searchQuery);
-	$: filteredTransactions = applyTransactionFilters(searchFiltered, filterState);
+	$: panelFiltered = applyTransactionFilters(searchFiltered, filterState);
+	$: filteredTransactions = showUncategorizedOnly
+		? panelFiltered.filter((t) => t.categoryId === null || t.categoryId === undefined || t.categoryId === '')
+		: panelFiltered;
 	$: transactions = filteredTransactions;
 	$: displayedTotalItems =
-		searchQuery.length >= 2 || filterCount > 0 ? filteredTransactions.length : totalItems;
+		searchQuery.length >= 2 || filterCount > 0 || showUncategorizedOnly ? filteredTransactions.length : totalItems;
 
 	// Load transactions on mount and when pagination/sort changes
 	onMount(() => {
@@ -284,6 +290,30 @@
 	function handleFilterClose() {
 		transactionFilterStore.close();
 	}
+
+	let showUncategorizedOnly = false;
+
+	function handleCategorizeNow() {
+		// Clear other filters and show only uncategorized
+		transactionFilterStore.clearAll();
+		transactionStore.clearSearch();
+		showUncategorizedOnly = true;
+		// Select the first uncategorized transaction
+		const firstUncategorized = allTransactions.find(
+			(t) => t.categoryId === null || t.categoryId === undefined || t.categoryId === ''
+		);
+		if (firstUncategorized) {
+			transactionStore.selectTransaction(firstUncategorized.id);
+		}
+	}
+
+	function handleBannerDismiss() {
+		// Banner handles its own dismiss state via session storage
+	}
+
+	function handleClearUncategorizedFilter() {
+		showUncategorizedOnly = false;
+	}
 </script>
 
 <svelte:head>
@@ -334,6 +364,21 @@
 			<div class="error-banner" role="alert" data-testid="error-banner">
 				<span>{error}</span>
 				<button type="button" on:click={loadTransactions}>Retry</button>
+			</div>
+		{/if}
+
+		<UncategorizedBanner
+			count={uncategorizedCount}
+			on:categorize={handleCategorizeNow}
+			on:dismiss={handleBannerDismiss}
+		/>
+
+		{#if showUncategorizedOnly}
+			<div class="uncategorized-filter-active" data-testid="uncategorized-filter-active">
+				<span>Showing uncategorized transactions only</span>
+				<button type="button" on:click={handleClearUncategorizedFilter} data-testid="clear-uncategorized-filter">
+					Show all
+				</button>
 			</div>
 		{/if}
 
@@ -451,6 +496,35 @@
 
 	.error-banner button:hover {
 		opacity: 0.9;
+	}
+
+	.uncategorized-filter-active {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8px 16px;
+		background: rgba(79, 70, 229, 0.08);
+		border: 1px solid var(--accent, #4f46e5);
+		border-radius: 8px;
+		color: var(--accent, #4f46e5);
+		font-size: 0.8125rem;
+		font-weight: 500;
+	}
+
+	.uncategorized-filter-active button {
+		padding: 4px 10px;
+		background: transparent;
+		border: 1px solid var(--accent, #4f46e5);
+		border-radius: 4px;
+		color: var(--accent, #4f46e5);
+		cursor: pointer;
+		font-size: 0.8125rem;
+		font-weight: 500;
+	}
+
+	.uncategorized-filter-active button:hover {
+		background: var(--accent, #4f46e5);
+		color: white;
 	}
 
 	.no-results {
