@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import NetWorthSummary from '$lib/components/net-worth/NetWorthSummary.svelte';
+	import AssetsSection from '$lib/components/net-worth/AssetsSection.svelte';
 	import { netWorthStore } from '$lib/stores/netWorth';
 	import { getNetWorthSummary, saveNetWorthSnapshot, getMomChange } from '$lib/api/netWorth';
 
@@ -61,6 +62,13 @@
 			momChange={$netWorthStore.momChange}
 			{hasAccounts}
 		/>
+
+		{#if hasAccounts}
+			<AssetsSection
+				accounts={$netWorthStore.accounts}
+				totalAssetsCents={$netWorthStore.totalAssetsCents}
+			/>
+		{/if}
 	{/if}
 </div>
 
