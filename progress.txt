@@ -469,3 +469,25 @@ Story 7.3: Add Import Preview and Duplicate Detection - COMPLETED
   - Commit: 93e2499
 Story 7.3: COMPLETED - feat(story-7.3): Add Import Preview and Duplicate Detection
 [DONE] Story 7.3 - Import Preview and Duplicate Detection - Thu 29 Jan 2026 17:01:00 CST
+[DONE] Story 7.3 - import preview - Thu 29 Jan 2026 17:07:56 CST
+
+Story 7.4: Add Post-Import Category Assignment - COMPLETED
+  - payeePatterns.ts: Payee grouping and category suggestion utility
+  - normalizePayeeForGrouping: trim, lowercase, collapse whitespace, strip trailing punctuation
+  - groupByPayee: Groups uncategorized transactions by normalized payee, min threshold filtering
+  - detectPayeePatterns: Combines grouping with buildCategoryMap for category suggestions
+  - buildCategoryMap: Finds most-used category per normalized payee from categorized transactions
+  - formatPatternSuggestion: Human-readable suggestion text
+  - ImportComplete.svelte: Success screen with imported/skipped count, uncategorized prompt
+  - ImportProgress.svelte: Added uncategorizedCount prop, categorize event, categorize prompt UI
+  - BulkActions.svelte: Bulk categorization toolbar with progress, select all, category dropdown, patterns
+  - TransactionCheckbox.svelte: Simple checkbox with toggle event for bulk selection
+  - ImportWizard.svelte: Wired uncategorizedCount and on:categorize to ImportProgress
+  - transactions/+page.svelte: Bulk categorization mode with filter, select, assign, pattern apply, done
+  - Rust bulk_categorize_by_payee: Batch update transactions by payee pattern
+  - Unit tests: payeePatterns.test.ts (16), ImportProgress.test.ts (+7), ImportComplete.test.ts (12), BulkActions.test.ts (11), TransactionCheckbox.test.ts (5)
+  - All 2109 tests passing (1 skipped), 0 type errors, 12 warnings (all pre-existing)
+  - Commit: be82f41
+Story 7.4: COMPLETED - feat(story-7.4): Add Post-Import Category Assignment
+
+ALL STORIES COMPLETE - Implementation plan fully executed (45/45 stories)
