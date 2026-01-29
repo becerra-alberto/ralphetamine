@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import BudgetCell from '../../../components/budget/BudgetCell.svelte';
 
 describe('BudgetCell', () => {
@@ -537,6 +538,218 @@ describe('BudgetCell', () => {
 			const cell = screen.getByTestId('budget-cell');
 			expect(cell.classList.contains('budget-cell')).toBe(true);
 			// The cursor: pointer is in the CSS for .budget-cell class
+		});
+	});
+
+	describe('edit mode (Story 3.1)', () => {
+		it('should enter edit mode on double-click', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			await fireEvent.dblClick(cell);
+
+			// Cell should have editing class
+			expect(cell.classList.contains('editing')).toBe(true);
+
+			// CellInput should be visible
+			const cellInput = screen.getByTestId('cell-input');
+			expect(cellInput).toBeTruthy();
+		});
+
+		it('should enter edit mode on Enter key when focused', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			await fireEvent.keyDown(cell, { key: 'Enter' });
+
+			// Cell should have editing class
+			expect(cell.classList.contains('editing')).toBe(true);
+
+			// CellInput should be visible
+			const cellInput = screen.getByTestId('cell-input');
+			expect(cellInput).toBeTruthy();
+		});
+
+		it('should expand on Space key (not edit)', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+			await fireEvent.keyDown(cell, { key: ' ' });
+
+			// Should NOT enter edit mode (Space triggers expand, not edit)
+			expect(cell.classList.contains('editing')).toBe(false);
+		});
+
+		it('should show CellInput with current budget value', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000, // €500.00
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			// Enter edit mode
+			const cell = screen.getByTestId('budget-cell');
+			await fireEvent.dblClick(cell);
+
+			// CellInput should be visible with pre-filled value
+			const input = screen.getByTestId('cell-input-field') as HTMLInputElement;
+			expect(input.value).toBe('500.00');
+		});
+
+		it('should allow editing the input value', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			// Enter edit mode
+			const cell = screen.getByTestId('budget-cell');
+			await fireEvent.dblClick(cell);
+
+			// Change value
+			const input = screen.getByTestId('cell-input-field') as HTMLInputElement;
+			await fireEvent.input(input, { target: { value: '600.00' } });
+
+			// Input should reflect the new value
+			expect(input.value).toBe('600.00');
+		});
+
+		it('should exit edit mode on cancel (Escape)', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			// Enter edit mode
+			const cell = screen.getByTestId('budget-cell');
+			await fireEvent.dblClick(cell);
+
+			// Verify in edit mode
+			expect(cell.classList.contains('editing')).toBe(true);
+
+			// Cancel
+			const input = screen.getByTestId('cell-input-field');
+			await fireEvent.keyDown(input, { key: 'Escape' });
+
+			// Should exit edit mode
+			expect(cell.classList.contains('editing')).toBe(false);
+
+			// Cell display should be back
+			expect(screen.getByTestId('cell-actual')).toBeTruthy();
+			expect(screen.getByTestId('cell-budgeted')).toBeTruthy();
+		});
+
+		it('should hide display values when in edit mode', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			// Enter edit mode
+			const cell = screen.getByTestId('budget-cell');
+			await fireEvent.dblClick(cell);
+
+			// Display values should be hidden
+			expect(screen.queryByTestId('cell-actual')).toBeNull();
+			expect(screen.queryByTestId('cell-budgeted')).toBeNull();
+		});
+
+		it('should set tabindex to -1 when editing', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			const cell = screen.getByTestId('budget-cell');
+
+			// Before edit, tabindex should be 0
+			expect(cell.getAttribute('tabindex')).toBe('0');
+
+			// Enter edit mode
+			await fireEvent.dblClick(cell);
+
+			// During edit, tabindex should be -1
+			expect(cell.getAttribute('tabindex')).toBe('-1');
+		});
+
+		it('should not trigger click handler when in edit mode', async () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense',
+					categoryId: 'cat-123'
+				}
+			});
+
+			// Enter edit mode
+			const cell = screen.getByTestId('budget-cell');
+			await fireEvent.dblClick(cell);
+
+			// Verify we're in edit mode
+			expect(cell.classList.contains('editing')).toBe(true);
+
+			// Click should not exit edit mode (it stays in edit mode)
+			await fireEvent.click(cell);
+			expect(cell.classList.contains('editing')).toBe(true);
 		});
 	});
 });

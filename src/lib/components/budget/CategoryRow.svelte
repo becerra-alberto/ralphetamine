@@ -24,6 +24,7 @@
 	const dispatch = createEventDispatcher<{
 		expand: { categoryId: string; month: MonthString };
 		closeExpansion: void;
+		budgetChange: { categoryId: string; month: MonthString; amountCents: number };
 	}>();
 
 	/**
@@ -59,6 +60,13 @@
 	function handleCloseExpansion() {
 		dispatch('closeExpansion');
 	}
+
+	/**
+	 * Handle budget change from cell editing
+	 */
+	function handleBudgetChange(event: CustomEvent<{ categoryId: string; month: MonthString; amountCents: number }>) {
+		dispatch('budgetChange', event.detail);
+	}
 </script>
 
 <div
@@ -85,6 +93,7 @@
 				categoryId={category.id}
 				isExpanded={isCellExpanded(month)}
 				on:expand={handleCellExpand}
+				on:budgetChange={handleBudgetChange}
 			/>
 		{/each}
 	</div>

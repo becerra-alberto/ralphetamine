@@ -24,6 +24,7 @@
 		calculateUncategorized12MTotals
 	} from '$lib/utils/budgetCalculations';
 	import { getTransactions } from '$lib/api/transactions';
+	import { setBudget } from '$lib/api/budgets';
 	import type { MiniTransaction } from './TransactionMiniList.svelte';
 	import MonthHeader from './MonthHeader.svelte';
 	import YearHeader from './YearHeader.svelte';
@@ -120,6 +121,29 @@
 		}
 		if (expandedCellKey) {
 			closeExpansion();
+		}
+	}
+
+	/**
+	 * Handle budget change from inline editing
+	 * Persists the change to the database and updates the store
+	 */
+	async function handleBudgetChange(event: CustomEvent<{ categoryId: string; month: MonthString; amountCents: number }>) {
+		const { categoryId, month, amountCents } = event.detail;
+
+		try {
+			// Save to database
+			const savedBudget = await setBudget({
+				categoryId,
+				month,
+				amountCents
+			});
+
+			// Update the store with the new budget
+			budgetStore.updateBudget(categoryId, month, savedBudget);
+		} catch (error) {
+			console.error('Failed to save budget:', error);
+			// Could show an error toast here
 		}
 	}
 
@@ -384,6 +408,7 @@
 										{isExpansionLoading}
 										on:expand={handleCellExpand}
 										on:closeExpansion={closeExpansion}
+										on:budgetChange={handleBudgetChange}
 									/>
 								{/each}
 							</div>
@@ -405,6 +430,7 @@
 							{isExpansionLoading}
 							on:expand={handleCellExpand}
 							on:closeExpansion={closeExpansion}
+							on:budgetChange={handleBudgetChange}
 						/>
 					{/each}
 				{/if}

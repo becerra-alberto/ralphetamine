@@ -6,6 +6,7 @@
 	import { tooltip } from '$lib/actions/tooltip';
 	import Tooltip from '$lib/components/shared/Tooltip.svelte';
 	import BudgetCellTooltip from './BudgetCellTooltip.svelte';
+	import CellInput from './CellInput.svelte';
 
 	export let budgetedCents: number = 0;
 	export let actualCents: number = 0;
@@ -17,27 +18,87 @@
 
 	const dispatch = createEventDispatcher<{
 		expand: { categoryId: string; month: MonthString };
+		budgetChange: { categoryId: string; month: MonthString; amountCents: number };
 	}>();
+
+	// Edit mode state
+	let isEditing: boolean = false;
+	let hasInputError: boolean = false;
 
 	// Calculate budget status using the utility
 	$: statusResult = getBudgetStatusWithClass(actualCents, budgetedCents, categoryType);
 	$: statusClass = statusResult.className;
 
 	/**
-	 * Handle click to expand cell
+	 * Handle single click to expand cell
 	 */
 	function handleClick() {
-		dispatch('expand', { categoryId, month });
+		if (!isEditing) {
+			dispatch('expand', { categoryId, month });
+		}
 	}
 
 	/**
-	 * Handle keyboard expand
+	 * Handle double-click to enter edit mode
+	 */
+	function handleDoubleClick(event: MouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		enterEditMode();
+	}
+
+	/**
+	 * Handle keyboard events
 	 */
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' || event.key === ' ') {
+		if (isEditing) {
+			// Let CellInput handle its own keyboard events
+			return;
+		}
+
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			enterEditMode();
+		} else if (event.key === ' ') {
 			event.preventDefault();
 			dispatch('expand', { categoryId, month });
 		}
+	}
+
+	/**
+	 * Enter edit mode
+	 */
+	function enterEditMode() {
+		isEditing = true;
+		hasInputError = false;
+		// Hide tooltip when editing
+		tooltipVisible = false;
+	}
+
+	/**
+	 * Handle save from CellInput
+	 */
+	function handleSave(event: CustomEvent<{ valueCents: number }>) {
+		const newValue = event.detail.valueCents;
+		isEditing = false;
+		hasInputError = false;
+
+		// Only dispatch change if value actually changed
+		if (newValue !== budgetedCents) {
+			dispatch('budgetChange', {
+				categoryId,
+				month,
+				amountCents: newValue
+			});
+		}
+	}
+
+	/**
+	 * Handle cancel from CellInput
+	 */
+	function handleCancel() {
+		isEditing = false;
+		hasInputError = false;
 	}
 
 	// Tooltip state
@@ -46,6 +107,8 @@
 	let isTooltipHovered = false;
 
 	function showTooltip(element: HTMLElement) {
+		// Don't show tooltip while editing
+		if (isEditing) return;
 		cellElement = element;
 		tooltipVisible = true;
 	}
@@ -70,36 +133,49 @@
 	class="budget-cell {statusClass}"
 	class:current-month={isCurrent}
 	class:expanded={isExpanded}
+	class:editing={isEditing}
 	role="cell"
-	tabindex="0"
+	tabindex={isEditing ? -1 : 0}
 	data-testid="budget-cell"
 	data-month={month}
 	on:click={handleClick}
+	on:dblclick={handleDoubleClick}
 	on:keydown={handleKeydown}
 	use:tooltip={{ onShow: showTooltip, onHide: hideTooltip, showDelay: 200, hideDelay: 200 }}
 >
-	<span class="cell-actual" data-testid="cell-actual">
-		{formatCentsCurrency(actualCents)}
-	</span>
-	<span class="cell-budgeted" data-testid="cell-budgeted">
-		{formatCentsCurrency(budgetedCents)}
-	</span>
+	{#if isEditing}
+		<CellInput
+			valueCents={budgetedCents}
+			bind:hasError={hasInputError}
+			on:save={handleSave}
+			on:cancel={handleCancel}
+		/>
+	{:else}
+		<span class="cell-actual" data-testid="cell-actual">
+			{formatCentsCurrency(actualCents)}
+		</span>
+		<span class="cell-budgeted" data-testid="cell-budgeted">
+			{formatCentsCurrency(budgetedCents)}
+		</span>
+	{/if}
 </div>
 
-<Tooltip visible={tooltipVisible} targetElement={cellElement}>
-	<div
-		on:mouseenter={handleTooltipMouseEnter}
-		on:mouseleave={handleTooltipMouseLeave}
-		role="presentation"
-	>
-		<BudgetCellTooltip
-			{actualCents}
-			budgetCents={budgetedCents}
-			{categoryId}
-			{month}
-		/>
-	</div>
-</Tooltip>
+{#if !isEditing}
+	<Tooltip visible={tooltipVisible} targetElement={cellElement}>
+		<div
+			on:mouseenter={handleTooltipMouseEnter}
+			on:mouseleave={handleTooltipMouseLeave}
+			role="presentation"
+		>
+			<BudgetCellTooltip
+				{actualCents}
+				budgetCents={budgetedCents}
+				{categoryId}
+				{month}
+			/>
+		</div>
+	</Tooltip>
+{/if}
 
 <style>
 	.budget-cell {
@@ -129,6 +205,12 @@
 	.budget-cell.expanded {
 		background: var(--bg-expanded, #e0e7ff);
 		border-left: 3px solid var(--color-accent, #4f46e5);
+	}
+
+	.budget-cell.editing {
+		padding: 4px;
+		align-items: stretch;
+		cursor: default;
 	}
 
 	.budget-cell.current-month {

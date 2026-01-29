@@ -176,4 +176,103 @@ describe('Budget API', () => {
 			// module caching issues in the test suite
 		});
 	});
+
+	describe('Story 3.1 - inline editing API', () => {
+		it('should save budget with cents from inline edit', async () => {
+			const { invoke } = await import('@tauri-apps/api/core');
+			const mockBudget: Budget = {
+				categoryId: 'cat-groceries',
+				month: '2025-01',
+				amountCents: 40000, // €400.00
+				note: null,
+				createdAt: '2025-01-01T00:00:00Z',
+				updatedAt: '2025-01-01T00:00:00Z'
+			};
+
+			vi.mocked(invoke).mockResolvedValue(mockBudget);
+
+			const { setBudget } = await import('../../api/budgets');
+
+			// Simulating inline edit: user types 400.00, converted to 40000 cents
+			const input: BudgetInput = {
+				categoryId: 'cat-groceries',
+				month: '2025-01',
+				amountCents: 40000
+			};
+
+			const result = await setBudget(input);
+
+			expect(invoke).toHaveBeenCalledWith('set_budget', {
+				categoryId: 'cat-groceries',
+				month: '2025-01',
+				amountCents: 40000,
+				note: null
+			});
+			expect(result.amountCents).toBe(40000);
+		});
+
+		it('should update existing budget (upsert semantics)', async () => {
+			const { invoke } = await import('@tauri-apps/api/core');
+
+			// First budget
+			const existingBudget: Budget = {
+				categoryId: 'cat-123',
+				month: '2025-01',
+				amountCents: 30000,
+				note: null,
+				createdAt: '2025-01-01T00:00:00Z',
+				updatedAt: '2025-01-01T00:00:00Z'
+			};
+
+			// Updated budget
+			const updatedBudget: Budget = {
+				...existingBudget,
+				amountCents: 50000,
+				updatedAt: '2025-01-15T00:00:00Z'
+			};
+
+			vi.mocked(invoke).mockResolvedValue(updatedBudget);
+
+			const { setBudget } = await import('../../api/budgets');
+
+			// Update existing budget
+			const result = await setBudget({
+				categoryId: 'cat-123',
+				month: '2025-01',
+				amountCents: 50000
+			});
+
+			expect(result.amountCents).toBe(50000);
+		});
+
+		it('should handle zero budget amount', async () => {
+			const { invoke } = await import('@tauri-apps/api/core');
+			const mockBudget: Budget = {
+				categoryId: 'cat-123',
+				month: '2025-01',
+				amountCents: 0,
+				note: null,
+				createdAt: '2025-01-01T00:00:00Z',
+				updatedAt: '2025-01-01T00:00:00Z'
+			};
+
+			vi.mocked(invoke).mockResolvedValue(mockBudget);
+
+			const { setBudget } = await import('../../api/budgets');
+
+			const result = await setBudget({
+				categoryId: 'cat-123',
+				month: '2025-01',
+				amountCents: 0
+			});
+
+			expect(invoke).toHaveBeenCalledWith('set_budget', {
+				categoryId: 'cat-123',
+				month: '2025-01',
+				amountCents: 0,
+				note: null
+			});
+			expect(result.amountCents).toBe(0);
+		});
+	});
 });

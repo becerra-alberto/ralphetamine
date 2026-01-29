@@ -243,4 +243,39 @@ describe('Currency Utilities', () => {
 			expect(DEFAULT_CURRENCY).toBe('EUR');
 		});
 	});
+
+	describe('Story 3.1 - inline editing conversions', () => {
+		it('should convert 400.00 display to 40000 cents for storage', () => {
+			// This test validates the spec requirement: 400.00 display -> 40000 cents storage
+			expect(amountToCents(400.0)).toBe(40000);
+		});
+
+		it('should convert 40000 cents to 400.00 for display', () => {
+			// This test validates the spec requirement: 40000 cents -> 400.00 display
+			expect(centsToAmount(40000)).toBe(400.0);
+			expect(formatCentsToDisplay(40000)).toBe('400.00');
+		});
+
+		it('should handle decimal rounding: 400.999 -> 40100 cents', () => {
+			// This test validates the spec requirement: 400.999 -> 40100 (rounded up)
+			expect(amountToCents(400.999)).toBe(40100);
+		});
+
+		it('should handle decimal rounding: 400.991 -> 40099 cents', () => {
+			// Rounding down case
+			expect(amountToCents(400.991)).toBe(40099);
+		});
+
+		it('should roundtrip conversion without floating point errors', () => {
+			// Test various amounts that commonly cause floating point issues
+			const testValues = [0.01, 0.1, 0.3, 1.99, 19.99, 100.01, 999.99];
+
+			for (const value of testValues) {
+				const cents = amountToCents(value);
+				const backToAmount = centsToAmount(cents);
+				// Allow for minor floating point differences
+				expect(Math.abs(backToAmount - value)).toBeLessThan(0.001);
+			}
+		});
+	});
 });
