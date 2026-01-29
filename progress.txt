@@ -384,3 +384,18 @@ Story 6.6: Add Recent Commands History - COMPLETED
   - Commit: 3b762cd
 Story 6.6: COMPLETED - feat(story-6.6): Add Recent Commands History
 [DONE] Story 6.6 - recent commands - Thu 29 Jan 2026 15:55:22 CST
+
+Story 6.7: Implement Global Keyboard Shortcuts - COMPLETED
+  - shortcuts.ts: Extended with ⌘U, ⌘T, ⌘W letter navigation shortcuts
+  - OS reserved keys: ⌘Q, ⌘H not captured (left to OS)
+  - Shift key support and case-insensitive key matching
+  - modals.ts store: Modal state tracking with open/close/closeAll, isModalOpen derived
+  - shortcuts.ts registry: Central registry with grouped shortcut metadata (nav/action/universal)
+  - ShortcutsHelp.svelte: Help panel with 3 groups (Navigation, Actions, General), backdrop, close button
+  - +layout.svelte: ⌘? handler, ShortcutsHelp integration, openModals $effect tracking
+  - Modal focus trapping: Navigation shortcuts blocked when modal open
+  - Dark mode support
+  - Unit tests: shortcuts.test.ts (19), modals.test.ts (11), ShortcutsHelp.test.ts (15)
+  - All 1825 tests passing (1 skipped), 0 type errors, 10 warnings (all pre-existing)
+  - Commit: a27c955
+Story 6.7: COMPLETED - feat(story-6.7): Implement Global Keyboard Shortcuts
