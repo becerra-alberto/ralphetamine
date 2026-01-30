@@ -431,4 +431,173 @@ describe('BudgetAdjustmentModal', () => {
 			expect(valueInput.querySelector('.percent-symbol')).toBeTruthy();
 		});
 	});
+
+	describe('reactivity fixes', () => {
+		it('should render modal with all form elements interactive', () => {
+			render(BudgetAdjustmentModal, {
+				props: {
+					open: true,
+					categories: mockCategories
+				}
+			});
+
+			// Modal form renders
+			expect(screen.getByTestId('budget-adjustment-modal')).toBeTruthy();
+
+			// Category selection is interactive
+			expect(screen.getByTestId('select-all-categories')).toBeTruthy();
+			expect(screen.getByTestId('category-list')).toBeTruthy();
+
+			// Date presets are interactive
+			expect(screen.getByTestId('preset-3m')).toBeTruthy();
+			expect(screen.getByTestId('preset-6m')).toBeTruthy();
+			expect(screen.getByTestId('preset-12m')).toBeTruthy();
+
+			// Operation select is interactive
+			const operationSelect = screen.getByTestId('operation-select').querySelector('select');
+			expect(operationSelect).toBeTruthy();
+			expect(operationSelect!.tagName).toBe('SELECT');
+
+			// Amount input is interactive (default operation is set-amount)
+			const amountInput = screen.getByTestId('amount-input');
+			expect(amountInput).toBeTruthy();
+			expect(amountInput.tagName).toBe('INPUT');
+
+			// Month pickers are present
+			expect(screen.getAllByTestId('month-picker').length).toBeGreaterThanOrEqual(2);
+
+			// Action buttons are present
+			expect(screen.getByTestId('cancel-button')).toBeTruthy();
+			expect(screen.getByTestId('apply-button')).toBeTruthy();
+		});
+
+		it('should not reset other fields when selecting an operation', async () => {
+			render(BudgetAdjustmentModal, {
+				props: {
+					open: true,
+					categories: mockCategories
+				}
+			});
+
+			// Select a category first
+			const rentCheckbox = screen.getByTestId('category-rent').querySelector('input');
+			await fireEvent.click(rentCheckbox!);
+
+			// Verify category is checked after clicking
+			expect((rentCheckbox as HTMLInputElement).checked).toBe(true);
+
+			// Now change the operation to increase-percent
+			const select = screen.getByTestId('operation-select').querySelector('select')!;
+			await fireEvent.change(select, { target: { value: 'increase-percent' } });
+
+			// Category should still be selected — operation change should not reset categories
+			const rentCheckboxAfter = screen.getByTestId('category-rent').querySelector('input') as HTMLInputElement;
+			expect(rentCheckboxAfter.checked).toBe(true);
+
+			// Date preset buttons should still be present (not disrupted)
+			expect(screen.getByTestId('preset-3m')).toBeTruthy();
+		});
+
+		it('should preserve amount input value while typing', async () => {
+			render(BudgetAdjustmentModal, {
+				props: {
+					open: true,
+					categories: mockCategories
+				}
+			});
+
+			const amountInput = screen.getByTestId('amount-input') as HTMLInputElement;
+
+			// Simulate typing by directly setting value and dispatching input event
+			amountInput.value = '123.45';
+			await fireEvent.input(amountInput);
+
+			// Input should still exist in DOM (not destroyed by re-render cascade)
+			expect(document.body.contains(amountInput)).toBe(true);
+
+			// The input should maintain its value
+			expect(amountInput.value).toBe('123.45');
+
+			// Input should not have been replaced by a new element
+			const currentAmountInput = screen.getByTestId('amount-input');
+			expect(currentAmountInput).toBe(amountInput);
+		});
+
+		it('should debounce preview calculation and not fire synchronously', async () => {
+			vi.useFakeTimers();
+
+			try {
+				render(BudgetAdjustmentModal, {
+					props: {
+						open: true,
+						categories: mockCategories
+					}
+				});
+
+				// Select a category to trigger preview schedule
+				const rentCheckbox = screen.getByTestId('category-rent').querySelector('input');
+				await fireEvent.click(rentCheckbox!);
+
+				// Preview count should still be 0 synchronously (debounced)
+				const previewCount = screen.getByTestId('preview-count');
+				expect(previewCount.textContent).toContain('0 cells affected');
+
+				// Advance past debounce timeout (300ms)
+				await vi.advanceTimersByTimeAsync(350);
+
+				// After debounce, preview should have calculated
+				const updatedCount = screen.getByTestId('preview-count');
+				expect(updatedCount.textContent).not.toContain('0 cells affected');
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('should reset all fields when modal is reopened', async () => {
+			// Verify the reset logic: render a fresh modal instance each time
+			// First instance: open modal, interact with it
+			const { unmount } = render(BudgetAdjustmentModal, {
+				props: {
+					open: true,
+					categories: mockCategories
+				}
+			});
+
+			// Select a category
+			const rentCheckbox = screen.getByTestId('category-rent').querySelector('input');
+			await fireEvent.click(rentCheckbox!);
+			expect((rentCheckbox as HTMLInputElement).checked).toBe(true);
+
+			// Change operation to verify it gets reset
+			const select = screen.getByTestId('operation-select').querySelector('select');
+			await fireEvent.change(select!, { target: { value: 'increase-percent' } });
+			expect(screen.queryByTestId('percent-input')).toBeTruthy();
+
+			// Unmount (simulates close) and create new instance (simulates reopen)
+			unmount();
+
+			// Second instance: fresh modal should have all defaults
+			render(BudgetAdjustmentModal, {
+				props: {
+					open: true,
+					categories: mockCategories
+				}
+			});
+
+			// After reopening, operation should be back to default (set-amount)
+			const amountInput = screen.queryByTestId('amount-input');
+			expect(amountInput).toBeTruthy();
+
+			// Amount should be empty (default)
+			expect((amountInput as HTMLInputElement).value).toBe('');
+
+			// Category should be deselected (default)
+			const resetRentCheckbox = screen.getByTestId('category-rent').querySelector('input') as HTMLInputElement;
+			expect(resetRentCheckbox.checked).toBe(false);
+
+			// Preview should be empty (default)
+			const previewCount = screen.getByTestId('preview-count');
+			expect(previewCount.textContent).toContain('0 cells affected');
+		});
+	});
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import Modal from '$lib/components/shared/Modal.svelte';
 	import MonthPicker from '$lib/components/shared/MonthPicker.svelte';
 	import AdjustmentPreview from './AdjustmentPreview.svelte';
@@ -53,9 +53,22 @@
 	let previewItems: PreviewItem[] = [];
 	let totalAffected: number = 0;
 
+	// Flatten the category tree into a flat list of all categories
+	function flattenCategories(cats: Category[]): Category[] {
+		const result: Category[] = [];
+		for (const cat of cats) {
+			result.push(cat);
+			if ((cat as any).children && (cat as any).children.length > 0) {
+				result.push(...flattenCategories((cat as any).children));
+			}
+		}
+		return result;
+	}
+
 	// Computed
-	$: sections = groupCategoriesBySections(categories);
-	$: selectableCategories = categories.filter((c) => c.parentId !== null);
+	$: flatCategories = flattenCategories(categories);
+	$: sections = groupCategoriesBySections(flatCategories);
+	$: selectableCategories = flatCategories.filter((c) => c.parentId !== null);
 
 	// Maximum range: 24 months
 	const MAX_MONTHS = 24;
@@ -123,15 +136,45 @@
 		isCustomRange = true;
 	}
 
-	// Calculate preview whenever relevant values change
-	$: if (selectedCategories.size > 0 && startMonth && endMonth) {
-		calculatePreview();
-	} else {
-		previewItems = [];
-		totalAffected = 0;
+	// Debounced preview: replace the synchronous reactive chain with debounced calculation.
+	// This reactive statement reads form inputs and schedules a debounced preview update.
+	// It does NOT write back to any form state, preventing the re-render cascade.
+	let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	const PREVIEW_DEBOUNCE_MS = 300;
+
+	$: {
+		// Read all form dependencies to trigger on any change
+		const _cats = selectedCategories.size;
+		const _start = startMonth;
+		const _end = endMonth;
+		const _op = selectedOperation;
+		const _amt = amountValue;
+		const _pct = percentValue;
+
+		// Clear any pending debounce
+		if (previewDebounceTimer) {
+			clearTimeout(previewDebounceTimer);
+		}
+
+		// Schedule debounced preview calculation
+		previewDebounceTimer = setTimeout(() => {
+			previewDebounceTimer = null;
+			if (selectedCategories.size > 0 && startMonth && endMonth) {
+				calculatePreview();
+			} else {
+				previewItems = [];
+				totalAffected = 0;
+			}
+		}, PREVIEW_DEBOUNCE_MS);
 	}
 
-	async function calculatePreview() {
+	onDestroy(() => {
+		if (previewDebounceTimer) {
+			clearTimeout(previewDebounceTimer);
+		}
+	});
+
+	function calculatePreview() {
 		isCalculatingPreview = true;
 
 		try {
@@ -140,7 +183,7 @@
 			const state = get(budgetStore);
 
 			for (const categoryId of selectedCategories) {
-				const category = categories.find((c) => c.id === categoryId);
+				const category = flatCategories.find((c) => c.id === categoryId);
 				if (!category) continue;
 
 				for (const month of months) {
@@ -279,8 +322,10 @@
 		dispatch('close');
 	}
 
-	// Reset state when modal opens
-	$: if (open) {
+	// Reset state only when modal transitions from closed to open
+	let prevOpen = false;
+
+	function resetModalState() {
 		selectedCategories = new Set();
 		allCategoriesSelected = false;
 		selectedOperation = 'set-amount';
@@ -290,6 +335,13 @@
 		previewItems = [];
 		totalAffected = 0;
 	}
+
+	// Watch for open state change — safe now that reactive preview chain is removed
+	$: if (open && !prevOpen) {
+		resetModalState();
+	}
+	// Track open state separately to avoid compound reactive updates
+	$: prevOpen = open;
 </script>
 
 <Modal {open} title="Adjust Budgets" on:close={handleClose}>
