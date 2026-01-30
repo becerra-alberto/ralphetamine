@@ -162,4 +162,31 @@ describe('AddAccountModal', () => {
 		expect(screen.getByTestId('custom-modal')).toBeTruthy();
 		expect(screen.getByTestId('custom-modal-title')).toBeTruthy();
 	});
+
+	it('should show full country names in country dropdown, not just codes', () => {
+		render(AddAccountModal, {
+			props: { isOpen: true }
+		});
+
+		const select = screen.getByTestId('add-account-modal-country-select') as HTMLSelectElement;
+		const options = Array.from(select.options);
+
+		// First option is the placeholder
+		expect(options[0].textContent).toBe('-- Select --');
+
+		// Country options should show full names with code
+		const nlOption = options.find((o) => o.value === 'NL');
+		expect(nlOption).toBeDefined();
+		expect(nlOption!.textContent).toBe('Netherlands (NL)');
+
+		const usOption = options.find((o) => o.value === 'US');
+		expect(usOption).toBeDefined();
+		expect(usOption!.textContent).toBe('United States (US)');
+
+		// No option should show just a bare 2-letter code as text
+		const countryOptions = options.filter((o) => o.value !== '');
+		for (const opt of countryOptions) {
+			expect(opt.textContent!.length).toBeGreaterThan(2);
+		}
+	});
 });

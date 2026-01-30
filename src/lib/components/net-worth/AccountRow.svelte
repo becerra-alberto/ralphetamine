@@ -4,7 +4,7 @@
 	import type { CurrencyCode } from '$lib/utils/currency';
 	import type { AccountWithBalance } from '$lib/api/netWorth';
 	import BalanceEdit from './BalanceEdit.svelte';
-	import { maskBankNumber, validateBankNumber, COUNTRY_CODES } from '$lib/utils/bankIdentifiers';
+	import { maskBankNumber, validateBankNumber, COUNTRY_CODES, getCountryName } from '$lib/utils/bankIdentifiers';
 
 	export let account: AccountWithBalance;
 	export let showAbsoluteBalance = false;
@@ -122,40 +122,56 @@
 {#if isEditing}
 	<div class="account-row account-row--editing" data-testid="{testId}-editing">
 		<div class="edit-fields">
-			<input
-				class="edit-input"
-				type="text"
-				bind:value={editName}
-				placeholder="Account name"
-				on:keydown={handleEditKeydown}
-				data-testid="{testId}-edit-name"
-			/>
-			<input
-				class="edit-input edit-input--small"
-				type="text"
-				bind:value={editInstitution}
-				placeholder="Institution"
-				on:keydown={handleEditKeydown}
-				data-testid="{testId}-edit-institution"
-			/>
-			<input
-				class="edit-input edit-input--small"
-				type="text"
-				bind:value={editBankNumber}
-				placeholder="IBAN / CLABE"
-				on:keydown={handleEditKeydown}
-				data-testid="{testId}-edit-bank-number"
-			/>
-			<select
-				class="edit-input edit-input--tiny"
-				bind:value={editCountry}
-				data-testid="{testId}-edit-country"
-			>
-				<option value="">--</option>
-				{#each COUNTRY_CODES as code}
-					<option value={code}>{code}</option>
-				{/each}
-			</select>
+			<div class="edit-field">
+				<label class="edit-label" for="{testId}-edit-name">Name</label>
+				<input
+					class="edit-input"
+					id="{testId}-edit-name"
+					type="text"
+					bind:value={editName}
+					placeholder="Account name"
+					on:keydown={handleEditKeydown}
+					data-testid="{testId}-edit-name"
+				/>
+			</div>
+			<div class="edit-field edit-field--small">
+				<label class="edit-label" for="{testId}-edit-institution">Institution</label>
+				<input
+					class="edit-input"
+					id="{testId}-edit-institution"
+					type="text"
+					bind:value={editInstitution}
+					placeholder="Institution"
+					on:keydown={handleEditKeydown}
+					data-testid="{testId}-edit-institution"
+				/>
+			</div>
+			<div class="edit-field edit-field--small">
+				<label class="edit-label" for="{testId}-edit-bank-number">Bank Number</label>
+				<input
+					class="edit-input"
+					id="{testId}-edit-bank-number"
+					type="text"
+					bind:value={editBankNumber}
+					placeholder="IBAN / CLABE"
+					on:keydown={handleEditKeydown}
+					data-testid="{testId}-edit-bank-number"
+				/>
+			</div>
+			<div class="edit-field edit-field--tiny">
+				<label class="edit-label" for="{testId}-edit-country">Country</label>
+				<select
+					class="edit-input"
+					id="{testId}-edit-country"
+					bind:value={editCountry}
+					data-testid="{testId}-edit-country"
+				>
+					<option value="">--</option>
+					{#each COUNTRY_CODES as code}
+						<option value={code}>{getCountryName(code)}</option>
+					{/each}
+				</select>
+			</div>
 		</div>
 		{#if bankNumberError}
 			<span class="edit-error" data-testid="{testId}-bank-number-error">{bankNumberError}</span>
@@ -424,6 +440,28 @@
 		flex: 1;
 	}
 
+	.edit-field {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+	}
+
+	.edit-field--small {
+		max-width: 140px;
+	}
+
+	.edit-field--tiny {
+		max-width: 180px;
+	}
+
+	.edit-label {
+		display: block;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		color: var(--text-secondary, #6b7280);
+		margin-bottom: 2px;
+	}
+
 	.edit-input {
 		height: 30px;
 		padding: 0 8px;
@@ -434,20 +472,13 @@
 		font-size: 0.8125rem;
 		font-family: inherit;
 		outline: none;
-		flex: 1;
+		width: 100%;
+		box-sizing: border-box;
 	}
 
 	.edit-input:focus {
 		border-color: var(--accent, #4f46e5);
 		box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
-	}
-
-	.edit-input--small {
-		max-width: 140px;
-	}
-
-	.edit-input--tiny {
-		max-width: 80px;
 	}
 
 	.edit-error {

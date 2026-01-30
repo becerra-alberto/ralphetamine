@@ -5,7 +5,9 @@ import {
 	isIBAN,
 	isCLABE,
 	detectBankNumberFormat,
-	COUNTRY_CODES
+	COUNTRY_CODES,
+	COUNTRY_NAMES,
+	getCountryName
 } from '../../utils/bankIdentifiers';
 
 describe('bankIdentifiers', () => {
@@ -111,6 +113,30 @@ describe('bankIdentifiers', () => {
 				expect(code).toHaveLength(2);
 				expect(code).toMatch(/^[A-Z]{2}$/);
 			}
+		});
+	});
+
+	describe('COUNTRY_NAMES', () => {
+		it('should have an entry for every COUNTRY_CODES value', () => {
+			for (const code of COUNTRY_CODES) {
+				expect(COUNTRY_NAMES[code]).toBeDefined();
+				expect(typeof COUNTRY_NAMES[code]).toBe('string');
+				expect(COUNTRY_NAMES[code].length).toBeGreaterThan(0);
+			}
+		});
+	});
+
+	describe('getCountryName', () => {
+		it('should return full name + code for valid code', () => {
+			expect(getCountryName('NL')).toBe('Netherlands (NL)');
+			expect(getCountryName('DE')).toBe('Germany (DE)');
+			expect(getCountryName('US')).toBe('United States (US)');
+			expect(getCountryName('MX')).toBe('Mexico (MX)');
+		});
+
+		it('should return the code itself for unknown code', () => {
+			expect(getCountryName('ZZ')).toBe('ZZ');
+			expect(getCountryName('XX')).toBe('XX');
 		});
 	});
 });

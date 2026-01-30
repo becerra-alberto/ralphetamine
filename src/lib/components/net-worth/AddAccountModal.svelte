@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import { parseDisplayToCents } from '$lib/utils/currency';
-	import { validateBankNumber, COUNTRY_CODES } from '$lib/utils/bankIdentifiers';
+	import { validateBankNumber, COUNTRY_CODES, getCountryName } from '$lib/utils/bankIdentifiers';
 
 	export let isOpen = false;
 	export let defaultType = 'checking';
@@ -176,7 +176,7 @@
 					<select id="account-country" bind:value={country} data-testid="{testId}-country-select">
 						<option value="">-- Select --</option>
 						{#each COUNTRY_CODES as code}
-							<option value={code}>{code}</option>
+							<option value={code}>{getCountryName(code)}</option>
 						{/each}
 					</select>
 				</div>

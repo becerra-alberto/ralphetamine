@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import AccountRow from '../../../components/net-worth/AccountRow.svelte';
 import type { AccountWithBalance } from '../../../api/netWorth';
 
@@ -124,5 +124,49 @@ describe('AccountRow', () => {
 		expect(balance.textContent).toContain('750.00');
 		// Should not contain negative sign
 		expect(balance.textContent).not.toContain('-');
+	});
+
+	describe('edit mode', () => {
+		async function enterEditMode() {
+			render(AccountRow, { props: { account: eurAccount, editable: true } });
+			const menuBtn = screen.getByTestId('account-row-menu-btn');
+			await fireEvent.click(menuBtn);
+			const editBtn = screen.getByTestId('account-row-menu-edit');
+			await fireEvent.click(editBtn);
+		}
+
+		it('should render label elements above each input', async () => {
+			await enterEditMode();
+
+			const labels = screen.getByTestId('account-row-editing').querySelectorAll('label.edit-label');
+			const labelTexts = Array.from(labels).map((l) => l.textContent);
+			expect(labelTexts).toContain('Name');
+			expect(labelTexts).toContain('Institution');
+			expect(labelTexts).toContain('Bank Number');
+			expect(labelTexts).toContain('Country');
+		});
+
+		it('should show full country name + code in country select options', async () => {
+			await enterEditMode();
+
+			const select = screen.getByTestId('account-row-edit-country') as HTMLSelectElement;
+			const options = Array.from(select.options);
+			// First option is the placeholder "--"
+			const nlOption = options.find((o) => o.value === 'NL');
+			expect(nlOption).toBeDefined();
+			expect(nlOption!.textContent).toBe('Netherlands (NL)');
+			const deOption = options.find((o) => o.value === 'DE');
+			expect(deOption).toBeDefined();
+			expect(deOption!.textContent).toBe('Germany (DE)');
+		});
+
+		it('should have labels matching AddAccountModal pattern', async () => {
+			await enterEditMode();
+
+			const labels = screen.getByTestId('account-row-editing').querySelectorAll('label.edit-label');
+			const labelTexts = Array.from(labels).map((l) => l.textContent);
+			// These labels mirror the AddAccountModal labels
+			expect(labelTexts).toEqual(['Name', 'Institution', 'Bank Number', 'Country']);
+		});
 	});
 });

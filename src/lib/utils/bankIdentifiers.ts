@@ -111,3 +111,44 @@ export const COUNTRY_CODES = [
 ] as const;
 
 export type CountryCode = (typeof COUNTRY_CODES)[number];
+
+/** Map of country codes to full country names */
+export const COUNTRY_NAMES: Record<string, string> = {
+	AD: 'Andorra',
+	AT: 'Austria',
+	BE: 'Belgium',
+	CA: 'Canada',
+	CH: 'Switzerland',
+	CZ: 'Czech Republic',
+	DE: 'Germany',
+	DK: 'Denmark',
+	ES: 'Spain',
+	FI: 'Finland',
+	FR: 'France',
+	GB: 'United Kingdom',
+	GR: 'Greece',
+	HU: 'Hungary',
+	IE: 'Ireland',
+	IT: 'Italy',
+	LU: 'Luxembourg',
+	MX: 'Mexico',
+	NL: 'Netherlands',
+	NO: 'Norway',
+	PL: 'Poland',
+	PT: 'Portugal',
+	RO: 'Romania',
+	SE: 'Sweden',
+	US: 'United States'
+};
+
+/**
+ * Get the full country name for a code, with code in parentheses.
+ * Returns the code itself for unknown codes.
+ */
+export function getCountryName(code: string): string {
+	const name = COUNTRY_NAMES[code];
+	if (name) {
+		return `${name} (${code})`;
+	}
+	return code;
+}
