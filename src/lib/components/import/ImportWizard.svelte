@@ -3,6 +3,8 @@
 	import { fade, scale } from 'svelte/transition';
 	import FileSelection from './FileSelection.svelte';
 	import ColumnMapping from './ColumnMapping.svelte';
+	import AccountValueMapping from './AccountValueMapping.svelte';
+	import type { AccountMappingEntry } from './AccountValueMapping.svelte';
 	import ImportPreview from './ImportPreview.svelte';
 	import ImportProgress from './ImportProgress.svelte';
 	import type { CsvParseResult } from '$lib/utils/csvParser';
@@ -18,7 +20,10 @@
 		type ImportSummary
 	} from '$lib/utils/duplicateDetection';
 	import { getTransactions, importTransactions } from '$lib/api/transactions';
+	import { createAccount } from '$lib/api/netWorth';
 	import type { TransactionInput } from '$lib/types/transaction';
+	import type { Account } from '$lib/types/account';
+	import { invoke } from '@tauri-apps/api/core';
 
 	export let open: boolean = false;
 	export let testId: string = 'import-wizard';
@@ -30,7 +35,6 @@
 	}>();
 
 	let currentStep = 1;
-	const totalSteps = 3;
 	let fileData: CsvParseResult | null = null;
 	let fileName: string | null = null;
 
@@ -42,7 +46,17 @@
 	let templateName = '';
 	let useInflowOutflow = false;
 
-	// Step 3 state
+	// Account mapping state (step between column mapping and preview when account column exists)
+	let uniqueAccountValues: string[] = [];
+	let accountMappings: Record<string, AccountMappingEntry> = {};
+	let accountMappingsAllMapped = false;
+
+	// Dynamic total steps: 3 normally, 4 when account column is mapped
+	$: totalSteps = hasAccountColumn ? 4 : 3;
+	// The preview step is the last step before import
+	$: previewStep = hasAccountColumn ? 4 : 3;
+
+	// Step 3 or 4 state (preview)
 	let previewTransactions: PreviewTransaction[] = [];
 	let duplicateResult: DuplicateCheckResult = { duplicates: [], cleanCount: 0, totalCount: 0 };
 	let importSummary: ImportSummary = { totalTransactions: 0, duplicatesFound: 0, dateRange: null, toImport: 0 };
@@ -55,10 +69,18 @@
 	let importError = '';
 	let uncategorizedImportCount = 0;
 
+	// Account selection for import
+	let availableAccounts: Account[] = [];
+	let selectedAccountId: string = '';
+
+	// Whether CSV has an account column mapped
+	$: hasAccountColumn = mappings.some((m) => m.field === 'account');
+
 	$: hasFile = fileData !== null;
 	$: canProceed = currentStep === 1 ? hasFile
 		: currentStep === 2 ? mappingsValid
-		: currentStep === 3 ? importStatus === 'idle'
+		: (hasAccountColumn && currentStep === 3) ? accountMappingsAllMapped
+		: currentStep === previewStep ? importStatus === 'idle'
 		: false;
 	$: showFooter = importStatus === 'idle';
 
@@ -86,6 +108,9 @@
 		skippedCount = 0;
 		importError = '';
 		uncategorizedImportCount = 0;
+		uniqueAccountValues = [];
+		accountMappings = {};
+		accountMappingsAllMapped = false;
 	}
 
 	function handleBackdropClick(event: MouseEvent) {
@@ -123,7 +148,61 @@
 		useInflowOutflow = event.detail.useInflowOutflow;
 	}
 
-	async function prepareStep3() {
+	function handleAccountMappingChange(event: CustomEvent<{
+		mappings: Record<string, AccountMappingEntry>;
+		allMapped: boolean;
+	}>) {
+		accountMappings = event.detail.mappings;
+		accountMappingsAllMapped = event.detail.allMapped;
+	}
+
+	/**
+	 * Extract unique account values from CSV data using the mapped account column.
+	 */
+	function extractUniqueAccountValues(): string[] {
+		if (!fileData) return [];
+		const accountMapping = mappings.find((m) => m.field === 'account');
+		if (!accountMapping) return [];
+
+		const colIndex = accountMapping.columnIndex;
+		const valuesSet = new Set<string>();
+		for (const row of fileData.rows) {
+			const val = (row[colIndex] ?? '').trim();
+			if (val) valuesSet.add(val);
+		}
+		return Array.from(valuesSet).sort();
+	}
+
+	/**
+	 * Build account lookup from account value mappings.
+	 * Creates new accounts as needed, then returns csvValue→accountId map.
+	 */
+	async function buildAccountMappingLookup(): Promise<Map<string, string>> {
+		const lookup = new Map<string, string>();
+
+		for (const [csvValue, entry] of Object.entries(accountMappings)) {
+			if (entry.action === 'existing' && entry.accountId) {
+				lookup.set(csvValue, entry.accountId);
+			} else if (entry.action === 'create' && entry.newAccount) {
+				// Create the account via API
+				const newId = await createAccount(
+					entry.newAccount.name,
+					entry.newAccount.type,
+					entry.newAccount.institution,
+					'EUR',
+					0,
+					entry.newAccount.bankNumber || null,
+					entry.newAccount.country || null
+				);
+				lookup.set(csvValue, newId);
+			}
+			// 'skip' entries not added to lookup
+		}
+
+		return lookup;
+	}
+
+	async function preparePreviewStep() {
 		if (!fileData) return;
 
 		previewTransactions = fileData.rows.map((row) =>
@@ -142,6 +221,10 @@
 		}
 
 		importSummary = buildImportSummary(previewTransactions, duplicateResult);
+	}
+
+	function prepareAccountMappingStep() {
+		uniqueAccountValues = extractUniqueAccountValues();
 	}
 
 	function handleDuplicateOptionChange(event: CustomEvent<{ option: 'skip' | 'import-all' | 'review' }>) {
@@ -182,19 +265,71 @@
 				: []
 		);
 
+		// When no account column is mapped, require selected account
+		if (!hasAccountColumn && !selectedAccountId) {
+			importStatus = 'error';
+			importError = 'No account selected. Please create an account first.';
+			return;
+		}
+
+		// Build account lookup from the explicit account value mappings
+		let accountValueLookup: Map<string, string> | null = null;
+		if (hasAccountColumn) {
+			try {
+				accountValueLookup = await buildAccountMappingLookup();
+			} catch (err) {
+				importStatus = 'error';
+				importError = err instanceof Error ? err.message : 'Failed to create accounts';
+				return;
+			}
+		}
+
 		const inputs: TransactionInput[] = [];
+		const rowErrors: string[] = [];
+
 		for (let i = 0; i < previewTransactions.length; i++) {
 			if (skipIndices.has(i)) {
 				skippedCount++;
 				continue;
 			}
 			const tx = previewTransactions[i];
+
+			// Validate required fields
+			if (!tx.date) {
+				rowErrors.push(`Row ${i + 1}: Missing date`);
+				continue;
+			}
+			if (!tx.payee) {
+				rowErrors.push(`Row ${i + 1}: Missing payee`);
+				continue;
+			}
+
+			// Resolve account ID per-row using account value mappings
+			let accountId = selectedAccountId;
+			if (accountValueLookup && tx.account) {
+				const resolved = accountValueLookup.get(tx.account.trim());
+				if (resolved) {
+					accountId = resolved;
+				} else if (selectedAccountId) {
+					// Fallback to selected account if not in mapping
+					accountId = selectedAccountId;
+				} else {
+					rowErrors.push(`Row ${i + 1}: Unknown account "${tx.account}"`);
+					continue;
+				}
+			}
+
+			if (!accountId) {
+				rowErrors.push(`Row ${i + 1}: No account resolved`);
+				continue;
+			}
+
 			inputs.push({
 				date: tx.date,
 				payee: tx.payee,
 				amountCents: tx.amountCents,
 				memo: tx.memo || undefined,
-				accountId: '',
+				accountId,
 				importSource: 'CSV'
 			});
 		}
@@ -206,10 +341,18 @@
 			// Count how many imported transactions have no category
 			uncategorizedImportCount = inputs.filter((t) => !t.categoryId).length;
 			importStatus = 'success';
-			dispatch('importComplete', { imported: importedCount, skipped: skippedCount });
+
+			if (rowErrors.length > 0) {
+				importError = `${rowErrors.length} row(s) skipped:\n${rowErrors.slice(0, 5).join('\n')}${rowErrors.length > 5 ? `\n...and ${rowErrors.length - 5} more` : ''}`;
+			}
+
+			dispatch('importComplete', { imported: importedCount, skipped: skippedCount + rowErrors.length });
 		} catch (err) {
 			importStatus = 'error';
 			importError = err instanceof Error ? err.message : 'An error occurred during import';
+			if (rowErrors.length > 0) {
+				importError += `\n\nAdditionally, ${rowErrors.length} row(s) had validation errors.`;
+			}
 		}
 	}
 
@@ -217,9 +360,20 @@
 		if (currentStep === 1 && hasFile) {
 			currentStep = 2;
 		} else if (currentStep === 2 && mappingsValid) {
-			currentStep = 3;
-			await prepareStep3();
-		} else if (currentStep === 3 && importStatus === 'idle') {
+			if (hasAccountColumn) {
+				// Go to account value mapping step
+				currentStep = 3;
+				prepareAccountMappingStep();
+			} else {
+				// Skip account mapping, go to preview
+				currentStep = 3;
+				await preparePreviewStep();
+			}
+		} else if (hasAccountColumn && currentStep === 3 && accountMappingsAllMapped) {
+			// Account mapping done, go to preview
+			currentStep = 4;
+			await preparePreviewStep();
+		} else if (currentStep === previewStep && importStatus === 'idle') {
 			await executeImport();
 		}
 	}
@@ -244,8 +398,16 @@
 		await executeImport();
 	}
 
-	onMount(() => {
+	onMount(async () => {
 		document.addEventListener('keydown', handleKeydown);
+		try {
+			availableAccounts = await invoke<Account[]>('get_accounts');
+			if (availableAccounts.length > 0) {
+				selectedAccountId = availableAccounts[0].id;
+			}
+		} catch {
+			availableAccounts = [];
+		}
 	});
 
 	onDestroy(() => {
@@ -316,7 +478,24 @@
 						testId="{testId}-column-mapping"
 						on:mappingsChange={handleMappingsChange}
 					/>
-				{:else if currentStep === 3}
+				{:else if hasAccountColumn && currentStep === 3}
+					<AccountValueMapping
+						{uniqueAccountValues}
+						existingAccounts={availableAccounts}
+						testId="{testId}-account-mapping"
+						on:mappingChange={handleAccountMappingChange}
+					/>
+				{:else if currentStep === previewStep}
+					{#if !hasAccountColumn && availableAccounts.length > 0}
+						<div class="account-selector" data-testid="import-account-selector">
+							<label for="import-account">Import to account:</label>
+							<select id="import-account" bind:value={selectedAccountId}>
+								{#each availableAccounts as acct}
+									<option value={acct.id}>{acct.name}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
 					<ImportPreview
 						transactions={previewTransactions}
 						summary={importSummary}
@@ -351,7 +530,7 @@
 						data-testid="{testId}-next"
 						on:click={handleNext}
 					>
-						{currentStep < totalSteps ? 'Next' : 'Import'}
+						{currentStep < previewStep ? 'Next' : 'Import'}
 					</button>
 				</footer>
 			{/if}
@@ -478,6 +657,24 @@
 	.btn-next:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.account-selector {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 12px;
+		font-size: 0.875rem;
+		color: var(--text-primary, #111827);
+	}
+
+	.account-selector select {
+		padding: 6px 10px;
+		border: 1px solid var(--border-color, #d1d5db);
+		border-radius: 6px;
+		background: var(--bg-primary, #ffffff);
+		color: var(--text-primary, #111827);
+		font-size: 0.875rem;
 	}
 
 	/* Dark mode */
