@@ -33,6 +33,7 @@
 	import SectionHeader from './SectionHeader.svelte';
 	import TotalsColumn from './TotalsColumn.svelte';
 	import UncategorizedRow from './UncategorizedRow.svelte';
+	import CellExpansion from './CellExpansion.svelte';
 	import { formatCentsCurrency } from '$lib/types/budget';
 	import type { BudgetCell, UncategorizedData } from '$lib/stores/budget';
 	import type { MonthString } from '$lib/types/budget';
@@ -42,6 +43,13 @@
 	let expansionTransactions: MiniTransaction[] = [];
 	let expansionTotalCount: number = 0;
 	let isExpansionLoading: boolean = false;
+
+	// Section expansion state
+	let expandedSectionKey: string | null = null; // "sectionId:month"
+	let sectionExpansionTransactions: MiniTransaction[] = [];
+	let sectionExpansionTotalCount: number = 0;
+	let isSectionExpansionLoading: boolean = false;
+	let expandedSectionName: string = '';
 
 	// Row refs for Tab navigation - keyed by category ID
 	let rowRefs: Record<string, CategoryRow> = {};
@@ -67,6 +75,9 @@
 			closeExpansion();
 			return;
 		}
+
+		// Close any section expansion
+		closeSectionExpansion();
 
 		// Set loading state and new key
 		expandedCellKey = newKey;
@@ -117,16 +128,101 @@
 	}
 
 	/**
+	 * Handle section cell expand event
+	 * Fetches transactions for all categories in the section for the given month
+	 */
+	async function handleSectionCellExpand(event: CustomEvent<{ categoryIds: string[]; month: MonthString; sectionName: string }>) {
+		const { categoryIds, month, sectionName } = event.detail;
+
+		// Find the section by matching children
+		const section = sections.find((s) =>
+			s.children.length > 0 && s.children.some((c) => categoryIds.includes(c.id))
+		);
+		const sectionId = section?.id ?? sectionName;
+		const newKey = `${sectionId}:${month}`;
+
+		// If clicking the same section cell, close it
+		if (expandedSectionKey === newKey) {
+			closeSectionExpansion();
+			return;
+		}
+
+		// Close any existing cell expansion
+		closeExpansion();
+
+		// Set loading state
+		expandedSectionKey = newKey;
+		expandedSectionName = sectionName;
+		isSectionExpansionLoading = true;
+		sectionExpansionTransactions = [];
+		sectionExpansionTotalCount = 0;
+
+		try {
+			const startDate = `${month}-01`;
+			const [year, m] = month.split('-').map(Number);
+			const lastDay = new Date(year, m, 0).getDate();
+			const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+			const transactions = await getTransactions({
+				categoryIds,
+				startDate,
+				endDate
+			});
+
+			sectionExpansionTotalCount = transactions.length;
+			sectionExpansionTransactions = transactions.map((t) => ({
+				id: t.id,
+				date: t.date,
+				payee: t.payee,
+				amountCents: t.amountCents
+			}));
+		} catch (error) {
+			console.error('Failed to fetch transactions for section expansion:', error);
+			sectionExpansionTransactions = [];
+			sectionExpansionTotalCount = 0;
+		} finally {
+			isSectionExpansionLoading = false;
+		}
+	}
+
+	/**
+	 * Close the section expansion panel
+	 */
+	function closeSectionExpansion() {
+		expandedSectionKey = null;
+		sectionExpansionTransactions = [];
+		sectionExpansionTotalCount = 0;
+		isSectionExpansionLoading = false;
+		expandedSectionName = '';
+	}
+
+	/**
+	 * Get the month from a section expansion key
+	 */
+	function getSectionExpansionMonth(key: string | null): MonthString | null {
+		if (!key) return null;
+		const parts = key.split(':');
+		return parts[parts.length - 1] as MonthString;
+	}
+
+	/**
 	 * Handle click outside expansion to close it
 	 */
 	function handleClickOutside(event: MouseEvent) {
 		const target = event.target as HTMLElement;
-		// Don't close if clicking inside the expansion panel or on a budget cell
-		if (target.closest('[data-testid="cell-expansion"]') || target.closest('[data-testid="budget-cell"]')) {
+		// Don't close if clicking inside the expansion panel or on a budget cell or section cell
+		if (
+			target.closest('[data-testid="cell-expansion"]') ||
+			target.closest('[data-testid="budget-cell"]') ||
+			target.closest('[data-testid="section-cell"]')
+		) {
 			return;
 		}
 		if (expandedCellKey) {
 			closeExpansion();
+		}
+		if (expandedSectionKey) {
+			closeSectionExpansion();
 		}
 	}
 
@@ -208,9 +304,10 @@
 
 	/**
 	 * Check if a section is expanded
+	 * Takes collapsed set as parameter to ensure Svelte reactivity
 	 */
-	function isSectionExpanded(section: CategorySection): boolean {
-		return !collapsedSections.has(section.id);
+	function isSectionExpanded(section: CategorySection, collapsed: Set<string>): boolean {
+		return !collapsed.has(section.id);
 	}
 
 	/**
@@ -554,7 +651,7 @@
 				{:else if hasSections}
 					<!-- Render sections with collapsible children -->
 					{#each sections as section (section.id)}
-						{@const isExpanded = isSectionExpanded(section)}
+						{@const isExpanded = isSectionExpanded(section, collapsedSections)}
 						{@const sectionTotals = getSectionTotals(section)}
 						{@const section12MTotals = getSection12MTotals(section)}
 
@@ -565,7 +662,23 @@
 							totals={sectionTotals}
 							totals12M={section12MTotals}
 							isCollapsed={!isExpanded}
+							on:sectionExpand={handleSectionCellExpand}
 						/>
+
+						{#if expandedSectionKey && expandedSectionKey.startsWith(section.id + ':')}
+							{@const sectionMonth = getSectionExpansionMonth(expandedSectionKey)}
+							{#if sectionMonth}
+								<CellExpansion
+									categoryId={section.id}
+									categoryName="{expandedSectionName} (all categories)"
+									month={sectionMonth}
+									transactions={sectionExpansionTransactions}
+									totalCount={sectionExpansionTotalCount}
+									isLoading={isSectionExpansionLoading}
+									on:close={closeSectionExpansion}
+								/>
+							{/if}
+						{/if}
 
 						{#if isExpanded}
 							<div

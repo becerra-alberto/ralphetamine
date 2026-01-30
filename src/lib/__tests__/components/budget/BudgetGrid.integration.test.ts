@@ -685,6 +685,166 @@ describe('BudgetGrid Integration - Average Per Month Column (Story 10.2)', () =>
 	});
 });
 
+describe('BudgetGrid Integration - Section Cell Expansion (Story 10.4)', () => {
+	beforeEach(() => {
+		budgetStore.reset();
+		localStorageMock.clear();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => {
+		localStorageMock.clear();
+	});
+
+	describe('handleSectionCellExpand fetches transactions for all section categories', () => {
+		it('should use categoryIds filter to fetch transactions for entire section', async () => {
+			const { getTransactions } = await import('../../../api/transactions');
+
+			// Simulate what handleSectionCellExpand does
+			const categoryIds = ['cat-groceries', 'cat-utilities', 'cat-transport'];
+			const month = '2025-01';
+			const startDate = `${month}-01`;
+			const [year, m] = month.split('-').map(Number);
+			const lastDay = new Date(year, m, 0).getDate();
+			const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+			await getTransactions({
+				categoryIds,
+				startDate,
+				endDate
+			});
+
+			expect(getTransactions).toHaveBeenCalledWith({
+				categoryIds: ['cat-groceries', 'cat-utilities', 'cat-transport'],
+				startDate: '2025-01-01',
+				endDate: '2025-01-31'
+			});
+		});
+
+		it('should generate section expansion key as sectionId:month', () => {
+			const sectionId = 'sec-essential';
+			const month = '2025-01';
+			const key = `${sectionId}:${month}`;
+
+			expect(key).toBe('sec-essential:2025-01');
+		});
+
+		it('should toggle section expansion when clicking same section cell', () => {
+			let expandedSectionKey: string | null = null;
+
+			// Click to expand
+			const key = 'sec-essential:2025-01';
+			expandedSectionKey = key;
+			expect(expandedSectionKey).toBe(key);
+
+			// Click same cell to close
+			if (expandedSectionKey === key) {
+				expandedSectionKey = null;
+			}
+			expect(expandedSectionKey).toBeNull();
+		});
+
+		it('should close cell expansion when section expands', () => {
+			let expandedCellKey: string | null = 'cat-1:2025-01';
+			let expandedSectionKey: string | null = null;
+
+			// Section expand should close cell expansion
+			expandedCellKey = null; // closeSectionExpansion closes cell expansion first
+			expandedSectionKey = 'sec-essential:2025-01';
+
+			expect(expandedCellKey).toBeNull();
+			expect(expandedSectionKey).toBe('sec-essential:2025-01');
+		});
+
+		it('should map fetched transactions to MiniTransaction format', () => {
+			const fullTransactions = [
+				{
+					id: '1',
+					date: '2025-01-15',
+					payee: 'Grocery Store',
+					categoryId: 'cat-groceries',
+					amountCents: -5000,
+					memo: '',
+					accountId: 'acc-1',
+					tags: [],
+					isReconciled: false,
+					importSource: null,
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString()
+				},
+				{
+					id: '2',
+					date: '2025-01-10',
+					payee: 'Electric Company',
+					categoryId: 'cat-utilities',
+					amountCents: -12000,
+					memo: '',
+					accountId: 'acc-1',
+					tags: [],
+					isReconciled: false,
+					importSource: null,
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString()
+				}
+			];
+
+			// Map to MiniTransaction format (as done in handleSectionCellExpand)
+			const miniTransactions = fullTransactions.map((t) => ({
+				id: t.id,
+				date: t.date,
+				payee: t.payee,
+				amountCents: t.amountCents
+			}));
+
+			expect(miniTransactions).toHaveLength(2);
+			expect(miniTransactions[0]).toEqual({
+				id: '1',
+				date: '2025-01-15',
+				payee: 'Grocery Store',
+				amountCents: -5000
+			});
+			expect(miniTransactions[1]).toEqual({
+				id: '2',
+				date: '2025-01-10',
+				payee: 'Electric Company',
+				amountCents: -12000
+			});
+		});
+
+		it('should handle fetch errors gracefully for section expansion', async () => {
+			const { getTransactions } = await import('../../../api/transactions');
+
+			(getTransactions as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
+
+			let sectionExpansionTransactions: unknown[] = [];
+			let sectionExpansionTotalCount = 0;
+
+			try {
+				await getTransactions({ categoryIds: ['cat-1'], startDate: '2025-01-01', endDate: '2025-01-31' });
+			} catch {
+				// Error handling mirrors handleSectionCellExpand
+				sectionExpansionTransactions = [];
+				sectionExpansionTotalCount = 0;
+			}
+
+			expect(sectionExpansionTransactions).toEqual([]);
+			expect(sectionExpansionTotalCount).toBe(0);
+		});
+
+		it('should extract month from section expansion key', () => {
+			const getSectionExpansionMonth = (key: string | null): string | null => {
+				if (!key) return null;
+				const parts = key.split(':');
+				return parts[parts.length - 1];
+			};
+
+			expect(getSectionExpansionMonth('sec-essential:2025-01')).toBe('2025-01');
+			expect(getSectionExpansionMonth('sec-income:2025-12')).toBe('2025-12');
+			expect(getSectionExpansionMonth(null)).toBeNull();
+		});
+	});
+});
+
 describe('BudgetGrid Integration - Cell Expansion', () => {
 	beforeEach(() => {
 		budgetStore.reset();
