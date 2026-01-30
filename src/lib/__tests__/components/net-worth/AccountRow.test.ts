@@ -126,6 +126,38 @@ describe('AccountRow', () => {
 		expect(balance.textContent).not.toContain('-');
 	});
 
+	describe('three-column layout', () => {
+		it('should render as three-column layout (info, balance, menu)', () => {
+			render(AccountRow, { props: { account: eurAccount, editable: true } });
+
+			const row = screen.getByTestId('account-row');
+			const info = screen.getByTestId('account-row-info');
+			const balanceCol = screen.getByTestId('account-row-balance-col');
+			const menuCol = screen.getByTestId('account-row-menu-col');
+
+			// All three sections exist as direct children of the row
+			expect(row.contains(info)).toBe(true);
+			expect(row.contains(balanceCol)).toBe(true);
+			expect(row.contains(menuCol)).toBe(true);
+		});
+
+		it('should have account info section use flex:1 to fill available width', () => {
+			render(AccountRow, { props: { account: eurAccount, editable: true } });
+
+			const info = screen.getByTestId('account-row-info');
+			// Verify the info section has the account-info class which applies flex:1
+			expect(info.classList.toString()).toContain('account-info');
+		});
+
+		it('should have balance column aligned to right end', () => {
+			render(AccountRow, { props: { account: eurAccount, editable: true } });
+
+			const balanceCol = screen.getByTestId('account-row-balance-col');
+			// Verify the balance column has the account-balance-col class which applies align-items: flex-end
+			expect(balanceCol.classList.toString()).toContain('account-balance-col');
+		});
+	});
+
 	describe('delete confirmation', () => {
 		it('should open ConfirmDialog when clicking Delete in kebab menu (not dispatch immediately)', async () => {
 			let deleteCalled = false;

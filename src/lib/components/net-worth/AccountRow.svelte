@@ -194,7 +194,7 @@
 	</div>
 {:else}
 	<div class="account-row" data-testid={testId}>
-		<div class="account-info">
+		<div class="account-info" data-testid="{testId}-info">
 			<div class="account-name-row">
 				<span class="account-name" data-testid="{testId}-name">{account.name}</span>
 				{#if account.country}
@@ -208,7 +208,7 @@
 				<span class="account-bank-number" data-testid="{testId}-bank-number">{maskedBank}</span>
 			{/if}
 		</div>
-		<div class="account-balance-col">
+		<div class="account-balance-col" data-testid="{testId}-balance-col">
 			<div class="account-balance">
 				{#if editable}
 					<BalanceEdit
@@ -230,7 +230,7 @@
 			{/if}
 		</div>
 		{#if editable}
-			<div class="kebab-menu-container">
+			<div class="kebab-menu-container" data-testid="{testId}-menu-col">
 				<button
 					class="kebab-btn"
 					on:click|stopPropagation={openMenu}
@@ -283,6 +283,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.account-name {
@@ -323,6 +325,7 @@
 		flex-direction: column;
 		align-items: flex-end;
 		gap: 2px;
+		flex-shrink: 0;
 	}
 
 	.account-balance {
@@ -388,6 +391,8 @@
 	.kebab-menu-container {
 		position: relative;
 		margin-left: 8px;
+		width: 28px;
+		flex-shrink: 0;
 	}
 
 	.kebab-btn {

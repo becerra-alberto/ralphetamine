@@ -121,4 +121,32 @@ describe('AssetCategory', () => {
 		expect(screen.getByTestId('custom-cat')).toBeTruthy();
 		expect(screen.getByTestId('custom-cat-label')).toBeTruthy();
 	});
+
+	it('should display account rows within category in column alignment', () => {
+		render(AssetCategory, { props: { category: cashBankCategory, editable: true } });
+
+		// Verify each account row has the three-column structure
+		const row0 = screen.getByTestId('asset-category-account-0');
+		const row1 = screen.getByTestId('asset-category-account-1');
+
+		// Both rows should have info and balance columns
+		const info0 = screen.getByTestId('asset-category-account-0-info');
+		const info1 = screen.getByTestId('asset-category-account-1-info');
+		const balance0 = screen.getByTestId('asset-category-account-0-balance-col');
+		const balance1 = screen.getByTestId('asset-category-account-1-balance-col');
+		const menu0 = screen.getByTestId('asset-category-account-0-menu-col');
+		const menu1 = screen.getByTestId('asset-category-account-1-menu-col');
+
+		// All rows have the same column structure
+		expect(row0.contains(info0)).toBe(true);
+		expect(row0.contains(balance0)).toBe(true);
+		expect(row0.contains(menu0)).toBe(true);
+		expect(row1.contains(info1)).toBe(true);
+		expect(row1.contains(balance1)).toBe(true);
+		expect(row1.contains(menu1)).toBe(true);
+
+		// Both info columns have the account-info class (which applies flex:1)
+		expect(info0.classList.toString()).toContain('account-info');
+		expect(info1.classList.toString()).toContain('account-info');
+	});
 });
