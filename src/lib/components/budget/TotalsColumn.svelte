@@ -2,6 +2,7 @@
 	import type { Trailing12MTotals } from '$lib/utils/budgetCalculations';
 	import { get12MDifferenceClass } from '$lib/utils/budgetCalculations';
 	import { formatCentsCurrency } from '$lib/types/budget';
+	import { formatBudgetAmount } from '$lib/utils/budgetFormatting';
 
 	export let totals: Trailing12MTotals;
 	export let isHeader: boolean = false;
@@ -9,6 +10,10 @@
 	export let isGrandTotal: boolean = false;
 
 	$: differenceClass = get12MDifferenceClass(totals.differenceCents);
+	$: avgActualCents = Math.round(totals.actualCents / 12);
+	$: avgBudgetedCents = Math.round(totals.budgetedCents / 12);
+	$: avgDifferenceCents = Math.round(totals.differenceCents / 12);
+	$: avgDifferenceClass = get12MDifferenceClass(avgDifferenceCents);
 </script>
 
 <div
@@ -21,6 +26,7 @@
 >
 	{#if isHeader}
 		<span class="header-label">Trailing 12M</span>
+		<span class="header-label avg-label" data-testid="avg-header-label">Avg/mo</span>
 	{:else}
 		<span class="totals-actual" data-testid="totals-actual">
 			{formatCentsCurrency(totals.actualCents)}
@@ -30,6 +36,16 @@
 		</span>
 		<span class="totals-difference {differenceClass}" data-testid="totals-difference">
 			{totals.differenceCents >= 0 ? '+' : ''}{formatCentsCurrency(totals.differenceCents)}
+		</span>
+		<span class="avg-divider"></span>
+		<span class="avg-actual" data-testid="avg-actual">
+			{formatBudgetAmount(avgActualCents)}
+		</span>
+		<span class="avg-budgeted" data-testid="avg-budgeted">
+			{formatBudgetAmount(avgBudgetedCents)}
+		</span>
+		<span class="avg-difference {avgDifferenceClass}" data-testid="avg-difference">
+			{avgDifferenceCents >= 0 ? '+' : ''}{formatBudgetAmount(avgDifferenceCents)}
 		</span>
 	{/if}
 </div>
@@ -85,6 +101,35 @@
 
 	.totals-difference {
 		font-size: 0.6875rem;
+		font-weight: 500;
+	}
+
+	.avg-divider {
+		width: 100%;
+		height: 1px;
+		background: var(--border-color, #e5e7eb);
+		margin: 2px 0;
+	}
+
+	.avg-label {
+		margin-top: 2px;
+		font-size: 0.625rem;
+		opacity: 0.7;
+	}
+
+	.avg-actual {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--text-primary, #111827);
+	}
+
+	.avg-budgeted {
+		font-size: 0.625rem;
+		color: var(--text-secondary, #6b7280);
+	}
+
+	.avg-difference {
+		font-size: 0.625rem;
 		font-weight: 500;
 	}
 
