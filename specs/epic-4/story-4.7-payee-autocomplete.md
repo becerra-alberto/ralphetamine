@@ -2,7 +2,7 @@
 id: "4.7"
 epic: 4
 title: "Implement Payee Autocomplete"
-status: pending
+status: done
 priority: high
 estimation: medium
 depends_on: ["4.5"]

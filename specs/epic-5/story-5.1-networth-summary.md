@@ -2,7 +2,7 @@
 id: "5.1"
 epic: 5
 title: "Create Net Worth Summary Section"
-status: pending
+status: done
 priority: high
 estimation: medium
 depends_on: ["1.3"]

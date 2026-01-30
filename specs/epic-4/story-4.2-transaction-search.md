@@ -2,7 +2,7 @@
 id: "4.2"
 epic: 4
 title: "Implement Transaction Search"
-status: pending
+status: done
 priority: high
 estimation: medium
 depends_on: ["4.1"]

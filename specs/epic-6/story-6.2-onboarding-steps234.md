@@ -2,7 +2,7 @@
 id: "6.2"
 epic: 6
 title: "Create Onboarding Wizard - Steps 2-4"
-status: pending
+status: done
 priority: medium
 estimation: large
 depends_on: ["6.1"]

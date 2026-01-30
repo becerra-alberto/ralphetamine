@@ -1084,13 +1084,13 @@ mod tests {
             &[],
         ).unwrap();
 
-        // Create test categories
+        // Ensure test categories exist (migrations may have already seeded them)
         db.execute(
-            "INSERT INTO categories (id, name, type, sort_order) VALUES ('cat-income', 'Income', 'income', 1)",
+            "INSERT OR IGNORE INTO categories (id, name, type, sort_order) VALUES ('cat-income', 'Income', 'income', 1)",
             &[],
         ).unwrap();
         db.execute(
-            "INSERT INTO categories (id, name, type, parent_id, sort_order) VALUES ('cat-income-salary', 'Salary', 'income', 'cat-income', 1)",
+            "INSERT OR IGNORE INTO categories (id, name, type, parent_id, sort_order) VALUES ('cat-income-salary', 'Salary', 'income', 'cat-income', 1)",
             &[],
         ).unwrap();
 
@@ -1141,7 +1141,7 @@ mod tests {
 
         // Should exclude f-1 (Jan 5) and f-3 (Feb 10)
         assert_eq!(results.len(), 3, "Should find 3 transactions in Jan 10-31 range");
-        assert!(results.iter().all(|t| t.date >= "2025-01-10" && t.date <= "2025-01-31"));
+        assert!(results.iter().all(|t| t.date.as_str() >= "2025-01-10" && t.date.as_str() <= "2025-01-31"));
     }
 
     #[test]
@@ -1268,7 +1268,7 @@ mod tests {
         // Excludes: f-3 (Feb), f-4 (income), f-5 (savings-account)
         assert_eq!(results.len(), 2, "Should find 2 transactions matching all combined filters");
         assert!(results.iter().all(|t| {
-            t.date >= "2025-01-01" && t.date <= "2025-01-31"
+            t.date.as_str() >= "2025-01-01" && t.date.as_str() <= "2025-01-31"
                 && t.account_id == "test-account"
                 && t.amount_cents < 0
         }));
@@ -1516,14 +1516,12 @@ mod tests {
 
         // Query with ORDER BY date DESC (most recent first)
         let results: Vec<String> = db
-            .prepare(
+            .query_map(
                 "SELECT date FROM transactions WHERE payee = 'Sort Test' ORDER BY date DESC",
+                &[],
+                |row| row.get(0),
             )
-            .unwrap()
-            .query_map([], |row| row.get(0))
-            .unwrap()
-            .filter_map(|r| r.ok())
-            .collect();
+            .unwrap();
 
         assert_eq!(results.len(), 5);
         assert_eq!(results[0], "2025-03-15", "Most recent date should be first");
@@ -1534,14 +1532,12 @@ mod tests {
 
         // Query with ORDER BY date ASC (oldest first)
         let asc_results: Vec<String> = db
-            .prepare(
+            .query_map(
                 "SELECT date FROM transactions WHERE payee = 'Sort Test' ORDER BY date ASC",
+                &[],
+                |row| row.get(0),
             )
-            .unwrap()
-            .query_map([], |row| row.get(0))
-            .unwrap()
-            .filter_map(|r| r.ok())
-            .collect();
+            .unwrap();
 
         assert_eq!(asc_results[0], "2024-12-31", "Oldest date should be first in ASC order");
         assert_eq!(asc_results[4], "2025-03-15", "Newest date should be last in ASC order");

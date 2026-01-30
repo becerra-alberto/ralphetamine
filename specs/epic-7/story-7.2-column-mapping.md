@@ -2,7 +2,7 @@
 id: "7.2"
 epic: 7
 title: "Implement Column Mapping"
-status: pending
+status: done
 priority: high
 estimation: large
 depends_on: ["7.1"]

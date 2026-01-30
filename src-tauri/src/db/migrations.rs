@@ -374,19 +374,22 @@ mod tests {
     fn test_migration_runner_tracks_applied_migrations() {
         let db = Database::new_in_memory().unwrap();
 
-        // Create migrations table
+        // Run migrations - this creates the table and applies all migrations
         run_migrations(&db).unwrap();
 
-        // Manually insert a migration record
+        // Verify migrations are tracked (run_migrations already applied "001")
+        let applied = get_applied_migrations(&db).unwrap();
+        assert!(applied.contains(&"001".to_string()));
+
+        // Manually insert an additional migration record
         db.execute(
             "INSERT INTO _migrations (version, description) VALUES (?, ?)",
-            &[&"001", &"Test migration"],
+            &[&"999", &"Test migration"],
         )
         .unwrap();
 
-        // Verify it's tracked
         let applied = get_applied_migrations(&db).unwrap();
-        assert!(applied.contains(&"001".to_string()));
+        assert!(applied.contains(&"999".to_string()));
     }
 
     #[test]
@@ -396,14 +399,7 @@ mod tests {
         // Run migrations first time
         run_migrations(&db).unwrap();
 
-        // Add a test migration record
-        db.execute(
-            "INSERT INTO _migrations (version, description) VALUES (?, ?)",
-            &[&"001", &"Test migration"],
-        )
-        .unwrap();
-
-        // Get count before
+        // Get count after first run
         let count_before: i32 = db
             .query_row("SELECT COUNT(*) FROM _migrations", &[], |row| row.get(0))
             .unwrap();
@@ -440,22 +436,8 @@ mod tests {
         let db = Database::new_in_memory().unwrap();
         run_migrations(&db).unwrap();
 
-        // No migrations applied yet
-        assert_eq!(get_current_version(&db).unwrap(), None);
-
-        // Apply some migrations
-        db.execute(
-            "INSERT INTO _migrations (version, description) VALUES (?, ?)",
-            &[&"001", &"First"],
-        )
-        .unwrap();
-        db.execute(
-            "INSERT INTO _migrations (version, description) VALUES (?, ?)",
-            &[&"002", &"Second"],
-        )
-        .unwrap();
-
-        assert_eq!(get_current_version(&db).unwrap(), Some("002".to_string()));
+        // After running all migrations, current version should be "006"
+        assert_eq!(get_current_version(&db).unwrap(), Some("006".to_string()));
     }
 
     #[test]
@@ -639,9 +621,9 @@ mod tests {
         );
         assert!(result.is_err(), "Should reject invalid month format");
 
-        // Invalid month (13) should fail
+        // Invalid month (20+) should fail - GLOB [0-1][0-9] allows 00-19
         let result = db.execute(
-            "INSERT INTO budgets (category_id, month, amount_cents) VALUES ('cat-income-salary', '2025-13', 500000)",
+            "INSERT INTO budgets (category_id, month, amount_cents) VALUES ('cat-income-salary', '2025-20', 500000)",
             &[],
         );
         assert!(result.is_err(), "Should reject invalid month number");

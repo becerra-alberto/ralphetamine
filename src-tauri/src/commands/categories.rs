@@ -62,43 +62,44 @@ pub fn get_categories() -> Result<Vec<CategoryWithChildren>, String> {
 
 /// Build a tree structure from flat category list
 fn build_category_tree(categories: Vec<Category>) -> Vec<CategoryWithChildren> {
-    // Create a map for quick lookup
-    let mut category_map: HashMap<String, CategoryWithChildren> = HashMap::new();
-
-    // First pass: create all nodes
-    for cat in categories {
-        let id = cat.id.clone();
-        category_map.insert(
-            id,
-            CategoryWithChildren {
-                category: cat,
-                children: Vec::new(),
-            },
-        );
-    }
-
-    // Second pass: build tree
+    // Separate roots and children
     let mut roots: Vec<CategoryWithChildren> = Vec::new();
-    let ids: Vec<String> = category_map.keys().cloned().collect();
+    let mut children_map: HashMap<String, Vec<CategoryWithChildren>> = HashMap::new();
 
-    for id in ids {
-        let cat = category_map.remove(&id).unwrap();
-        match &cat.category.parent_id {
+    for cat in categories {
+        let node = CategoryWithChildren {
+            category: cat,
+            children: Vec::new(),
+        };
+        match &node.category.parent_id {
             Some(parent_id) => {
-                if let Some(parent) = category_map.get_mut(parent_id) {
-                    parent.children.push(cat);
-                } else {
-                    // Parent not found in map (might have been moved already)
-                    roots.push(cat);
-                }
+                children_map
+                    .entry(parent_id.clone())
+                    .or_default()
+                    .push(node);
             }
             None => {
-                roots.push(cat);
+                roots.push(node);
             }
         }
     }
 
-    // Sort children by sort_order
+    // Attach children to roots
+    fn attach_children(
+        nodes: &mut Vec<CategoryWithChildren>,
+        children_map: &mut HashMap<String, Vec<CategoryWithChildren>>,
+    ) {
+        for node in nodes.iter_mut() {
+            if let Some(mut children) = children_map.remove(&node.category.id) {
+                attach_children(&mut children, children_map);
+                node.children = children;
+            }
+        }
+    }
+
+    attach_children(&mut roots, &mut children_map);
+
+    // Sort by sort_order
     fn sort_children(nodes: &mut Vec<CategoryWithChildren>) {
         nodes.sort_by_key(|n| n.category.sort_order);
         for node in nodes {

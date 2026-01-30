@@ -2,7 +2,7 @@
 id: "6.4"
 epic: 6
 title: "Create Returning User Dashboard"
-status: pending
+status: done
 priority: high
 estimation: medium
 depends_on: ["6.1"]

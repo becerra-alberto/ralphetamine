@@ -2,7 +2,7 @@
 id: "7.1"
 epic: 7
 title: "Create CSV Import Wizard - File Selection"
-status: pending
+status: done
 priority: high
 estimation: medium
 depends_on: ["4.1"]

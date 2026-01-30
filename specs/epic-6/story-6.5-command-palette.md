@@ -2,7 +2,7 @@
 id: "6.5"
 epic: 6
 title: "Implement Command Palette"
-status: pending
+status: done
 priority: critical
 estimation: large
 depends_on: ["1.4"]

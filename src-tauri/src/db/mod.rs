@@ -5,5 +5,5 @@
 pub mod connection;
 pub mod migrations;
 
-pub use connection::{Database, DbError};
+pub use connection::{get_database, init_database, Database, DbError};
 pub use migrations::run_migrations;

@@ -2,7 +2,7 @@
 id: "4.4"
 epic: 4
 title: "Add Uncategorized Warning Banner"
-status: pending
+status: done
 priority: high
 estimation: small
 depends_on: ["4.1"]

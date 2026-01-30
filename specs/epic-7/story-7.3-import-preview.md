@@ -2,7 +2,7 @@
 id: "7.3"
 epic: 7
 title: "Add Import Preview and Duplicate Detection"
-status: pending
+status: done
 priority: high
 estimation: medium
 depends_on: ["7.2"]

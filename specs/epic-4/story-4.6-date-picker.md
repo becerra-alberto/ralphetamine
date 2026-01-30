@@ -2,7 +2,7 @@
 id: "4.6"
 epic: 4
 title: "Add Date Picker with Auto-Fill"
-status: pending
+status: done
 priority: medium
 estimation: medium
 depends_on: ["4.5"]

@@ -2,7 +2,7 @@
 id: "6.7"
 epic: 6
 title: "Implement Global Keyboard Shortcuts"
-status: pending
+status: done
 priority: high
 estimation: medium
 depends_on: ["1.4"]

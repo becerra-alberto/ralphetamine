@@ -2,7 +2,7 @@
 id: "4.5"
 epic: 4
 title: "Implement Quick-Add Transaction Row"
-status: pending
+status: done
 priority: critical
 estimation: medium
 depends_on: ["4.1"]

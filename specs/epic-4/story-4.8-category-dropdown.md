@@ -2,7 +2,7 @@
 id: "4.8"
 epic: 4
 title: "Create Hierarchical Category Dropdown"
-status: pending
+status: done
 priority: high
 estimation: medium
 depends_on: ["4.5"]

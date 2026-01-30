@@ -2,7 +2,7 @@
 id: "6.6"
 epic: 6
 title: "Add Recent Commands History"
-status: pending
+status: done
 priority: medium
 estimation: small
 depends_on: ["6.5"]

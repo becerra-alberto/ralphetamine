@@ -2,7 +2,7 @@
 id: "4.3"
 epic: 4
 title: "Create Filter Panel"
-status: pending
+status: done
 priority: high
 estimation: large
 depends_on: ["4.1"]

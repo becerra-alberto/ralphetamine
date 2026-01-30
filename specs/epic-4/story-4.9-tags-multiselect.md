@@ -2,7 +2,7 @@
 id: "4.9"
 epic: 4
 title: "Implement Tags Multi-Select"
-status: pending
+status: done
 priority: medium
 estimation: medium
 depends_on: ["4.5"]
