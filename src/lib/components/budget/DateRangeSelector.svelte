@@ -100,6 +100,8 @@
 				break;
 			case 'custom':
 				showCustom = true;
+				customStart = startMonth;
+				customEnd = endMonth;
 				return;
 			default:
 				return;
@@ -110,6 +112,15 @@
 		emitChange(startMonth, endMonth);
 		isOpen = false;
 		showCustom = false;
+	}
+
+	/**
+	 * Handle Custom Range button click with stopPropagation
+	 * Prevents handleClickOutside from closing the dropdown on the same click
+	 */
+	function handleCustomClick(event: MouseEvent) {
+		event.stopPropagation();
+		applyPreset('custom');
 	}
 
 	/**
@@ -158,6 +169,7 @@
 
 	/**
 	 * Close dropdown when clicking outside
+	 * Checks both .date-range-selector and .custom-range containers
 	 */
 	function handleClickOutside(event: MouseEvent) {
 		const target = event.target as HTMLElement;
@@ -258,7 +270,7 @@
 					type="button"
 					class="preset-option"
 					class:selected={currentPreset === 'custom'}
-					on:click={() => applyPreset('custom')}
+					on:click={handleCustomClick}
 					role="option"
 					aria-selected={currentPreset === 'custom'}
 				>
@@ -269,7 +281,9 @@
 				</button>
 			{:else}
 				<!-- Custom range picker -->
-				<div class="custom-range">
+				<!-- svelte-ignore a11y-click-events-have-key-events -->
+				<!-- svelte-ignore a11y-no-static-element-interactions -->
+				<div class="custom-range" on:click|stopPropagation>
 					<div class="custom-header">
 						<button type="button" class="back-btn" on:click={cancelCustom}>
 							← Back

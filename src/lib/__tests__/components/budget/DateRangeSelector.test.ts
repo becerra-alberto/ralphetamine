@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import DateRangeSelector from '../../../components/budget/DateRangeSelector.svelte';
 import { getCurrentMonth, getDefaultDateRange, formatMonthDisplay } from '../../../utils/dates';
 
@@ -391,6 +391,120 @@ describe('DateRangeSelector', () => {
 
 			const options = screen.getAllByRole('option');
 			expect(options.length).toBeGreaterThanOrEqual(5);
+		});
+	});
+
+	describe('custom panel show/hide (story 8.6)', () => {
+		it('clicking Custom sets showCustom to true and panel appears', async () => {
+			render(DateRangeSelector, {
+				props: {
+					startMonth: '2024-02',
+					endMonth: '2025-01'
+				}
+			});
+
+			// Open dropdown
+			const trigger = screen.getByRole('button', { name: /Feb 2024 - Jan 2025/i });
+			await fireEvent.click(trigger);
+
+			// Click Custom Range...
+			const customOption = screen.getByText('Custom Range...');
+			await fireEvent.click(customOption);
+
+			// Custom panel should be visible with title, pickers, and apply button
+			expect(screen.getByText('Custom Range')).toBeTruthy();
+			expect(screen.getByText('Start')).toBeTruthy();
+			expect(screen.getByText('End')).toBeTruthy();
+			expect(screen.getByRole('button', { name: /Apply/i })).toBeTruthy();
+
+			// Dropdown should still be open (listbox still present via the panel)
+			expect(screen.getByTestId('date-range-selector')).toBeTruthy();
+		});
+
+		it('click-outside does not close when clicking inside custom panel', async () => {
+			render(DateRangeSelector, {
+				props: {
+					startMonth: '2024-02',
+					endMonth: '2025-01'
+				}
+			});
+
+			// Open dropdown and select custom
+			const trigger = screen.getByRole('button', { name: /Feb 2024 - Jan 2025/i });
+			await fireEvent.click(trigger);
+
+			const customOption = screen.getByText('Custom Range...');
+			await fireEvent.click(customOption);
+
+			// Verify custom panel is visible
+			expect(screen.getByText('Custom Range')).toBeTruthy();
+
+			// Click inside the custom panel (on the "Custom Range" title)
+			const customTitle = screen.getByText('Custom Range');
+			await fireEvent.click(customTitle);
+
+			// Panel should still be visible — not closed by click-outside
+			expect(screen.getByText('Custom Range')).toBeTruthy();
+			expect(screen.getByText('Start')).toBeTruthy();
+			expect(screen.getByRole('button', { name: /Apply/i })).toBeTruthy();
+		});
+
+		it('Apply button applies start/end months and closes dropdown', async () => {
+			const changeFn = vi.fn();
+			render(DateRangeSelector, {
+				props: {
+					startMonth: '2024-06',
+					endMonth: '2025-01',
+					onchange: changeFn
+				}
+			});
+
+			// Open dropdown and select custom
+			const trigger = screen.getByRole('button');
+			await fireEvent.click(trigger);
+
+			const customOption = screen.getByText('Custom Range...');
+			await fireEvent.click(customOption);
+
+			// Click Apply
+			const applyButton = screen.getByRole('button', { name: /Apply/i });
+			await fireEvent.click(applyButton);
+
+			// Dropdown should close
+			expect(screen.queryByText('Custom Range')).toBeFalsy();
+
+			// Change callback should have been called with start/end months
+			expect(changeFn).toHaveBeenCalledTimes(1);
+			const event = changeFn.mock.calls[0][0] as CustomEvent;
+			expect(event.detail.startMonth).toBeDefined();
+			expect(event.detail.endMonth).toBeDefined();
+		});
+
+		it('36-month max range enforced - Apply disabled and error shown', async () => {
+			// Start with a range that exceeds 36 months when custom opens
+			render(DateRangeSelector, {
+				props: {
+					startMonth: '2020-01',
+					endMonth: '2025-01'
+				}
+			});
+
+			// Open dropdown and select custom
+			const trigger = screen.getByRole('button');
+			await fireEvent.click(trigger);
+
+			const customOption = screen.getByText('Custom Range...');
+			await fireEvent.click(customOption);
+
+			// The custom panel should show the range info with error
+			await waitFor(() => {
+				const errorText = screen.queryByText(/max 36/i);
+				expect(errorText).toBeTruthy();
+			});
+
+			// Apply button should be disabled
+			const applyButton = screen.getByRole('button', { name: /Apply/i });
+			expect(applyButton.hasAttribute('disabled')).toBe(true);
 		});
 	});
 });

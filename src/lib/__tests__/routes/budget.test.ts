@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import { afterNavigate } from '$app/navigation';
 import BudgetPage from '../../../routes/budget/+page.svelte';
 
@@ -103,6 +103,52 @@ describe('Budget Page Navigation Refresh', () => {
 		document.dispatchEvent(new Event('visibilitychange'));
 
 		// Wait for the re-fetch triggered by visibilitychange
+		await vi.waitFor(() => {
+			expect(vi.mocked(getBudgetsForMonth).mock.calls.length).toBeGreaterThan(initialCallCount);
+		});
+	});
+});
+
+describe('Budget Page Custom Date Range (story 8.6)', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('custom range applies start/end months to budget grid display', async () => {
+		const { getBudgetsForMonth } = await import('$lib/api/budgets');
+
+		render(BudgetPage);
+
+		// Wait for initial mount load
+		await vi.waitFor(() => {
+			expect(getBudgetsForMonth).toHaveBeenCalled();
+		});
+
+		const initialCallCount = vi.mocked(getBudgetsForMonth).mock.calls.length;
+
+		// Find and open the date range selector
+		const dateSelector = screen.getByTestId('date-range-selector');
+		expect(dateSelector).toBeTruthy();
+
+		const trigger = dateSelector.querySelector('.selector-trigger') as HTMLElement;
+		expect(trigger).toBeTruthy();
+		await fireEvent.click(trigger);
+
+		// Click "Custom Range..."
+		const customOption = screen.getByText('Custom Range...');
+		await fireEvent.click(customOption);
+
+		// Verify custom panel is visible
+		expect(screen.getByText('Custom Range')).toBeTruthy();
+
+		// Click Apply to apply the custom range
+		const applyButton = screen.getByRole('button', { name: /Apply/i });
+		await fireEvent.click(applyButton);
+
+		// Dropdown should close after applying
+		expect(screen.queryByText('Custom Range')).toBeFalsy();
+
+		// Budget data should be re-fetched with the custom range
 		await vi.waitFor(() => {
 			expect(vi.mocked(getBudgetsForMonth).mock.calls.length).toBeGreaterThan(initialCallCount);
 		});
