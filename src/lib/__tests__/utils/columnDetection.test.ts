@@ -226,6 +226,60 @@ describe('getAvailableFields', () => {
 		expect(fieldValues).not.toContain('inflow');
 		expect(fieldValues).not.toContain('outflow');
 	});
+
+	it('should include account when not used by another column', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '', field: 'amount' },
+			{ columnIndex: 3, columnHeader: 'Extra', sampleValue: '', field: 'skip' }
+		];
+		const options = getAvailableFields(mappings, 3);
+		const fieldValues = options.map((o) => o.value);
+		expect(fieldValues).toContain('account');
+	});
+
+	it('should exclude account when used by another column', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '', field: 'amount' },
+			{ columnIndex: 3, columnHeader: 'Account', sampleValue: '', field: 'account' },
+			{ columnIndex: 4, columnHeader: 'Extra', sampleValue: '', field: 'skip' }
+		];
+		const options = getAvailableFields(mappings, 4);
+		const fieldValues = options.map((o) => o.value);
+		expect(fieldValues).not.toContain('account');
+	});
+
+	it('should always include skip option', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '', field: 'amount' },
+			{ columnIndex: 3, columnHeader: 'Memo', sampleValue: '', field: 'memo' },
+			{ columnIndex: 4, columnHeader: 'Category', sampleValue: '', field: 'category' },
+			{ columnIndex: 5, columnHeader: 'Account', sampleValue: '', field: 'account' }
+		];
+		// Even when many fields are used, skip should always be available
+		for (let i = 0; i < mappings.length; i++) {
+			const options = getAvailableFields(mappings, i);
+			const fieldValues = options.map((o) => o.value);
+			expect(fieldValues).toContain('skip');
+		}
+	});
+
+	it('should include current columns field even when used', () => {
+		const mappings: ColumnMapping[] = [
+			{ columnIndex: 0, columnHeader: 'Date', sampleValue: '', field: 'date' },
+			{ columnIndex: 1, columnHeader: 'Payee', sampleValue: '', field: 'payee' },
+			{ columnIndex: 2, columnHeader: 'Account', sampleValue: '', field: 'account' }
+		];
+		// Column 2 has 'account' — when viewing its own dropdown, 'account' should still appear
+		const options = getAvailableFields(mappings, 2);
+		const fieldValues = options.map((o) => o.value);
+		expect(fieldValues).toContain('account');
+	});
 });
 
 describe('isInflowOutflowMode', () => {

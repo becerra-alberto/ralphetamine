@@ -31,6 +31,7 @@
 	let useInflowOutflow = false;
 	let saveTemplate = false;
 	let templateName = '';
+	let instructionsExpanded = true;
 
 	// Auto-detect on first load
 	$: {
@@ -82,6 +83,34 @@
 	<div class="step-intro">
 		<h2 class="step-title" data-testid="{testId}-title">Map Columns</h2>
 		<p class="step-subtitle" data-testid="{testId}-subtitle">Tell us which columns contain which data</p>
+	</div>
+
+	<!-- Instructions banner -->
+	<div class="instructions-banner" data-testid="{testId}-instructions">
+		<button
+			class="instructions-toggle"
+			on:click={() => instructionsExpanded = !instructionsExpanded}
+			data-testid="{testId}-instructions-toggle"
+			aria-expanded={instructionsExpanded}
+		>
+			<svg class="info-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<circle cx="12" cy="12" r="10" />
+				<line x1="12" y1="16" x2="12" y2="12" />
+				<line x1="12" y1="8" x2="12.01" y2="8" />
+			</svg>
+			<span class="instructions-toggle-text">How to map columns</span>
+			<svg class="chevron-icon" class:collapsed={!instructionsExpanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<polyline points="6 9 12 15 18 9" />
+			</svg>
+		</button>
+		{#if instructionsExpanded}
+			<div class="instructions-content" data-testid="{testId}-instructions-content">
+				<p><strong>Required:</strong> Map at least <em>Date</em>, <em>Payee</em>, and either <em>Amount</em> or both <em>Inflow</em> &amp; <em>Outflow</em> columns.</p>
+				<p><strong>Optional:</strong> <em>Memo</em>, <em>Category</em>, and <em>Account</em> can be mapped if your CSV includes them.</p>
+				<p><strong>Skip:</strong> Select "Skip this column" for any column you don't need to import.</p>
+				<p><strong>Inflow/Outflow mode:</strong> Toggle above if your bank uses separate credit/debit columns instead of a single amount.</p>
+			</div>
+		{/if}
 	</div>
 
 	<!-- Amount mode toggle -->
@@ -176,6 +205,72 @@
 		margin: 4px 0 0;
 		font-size: 0.875rem;
 		color: var(--text-secondary, #6b7280);
+	}
+
+	.instructions-banner {
+		border: 1px solid var(--border-color, #e5e7eb);
+		border-radius: 8px;
+		overflow: hidden;
+	}
+
+	.instructions-toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		padding: 10px 14px;
+		background: var(--bg-secondary, #f9fafb);
+		border: none;
+		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--text-primary, #111827);
+		text-align: left;
+	}
+
+	.instructions-toggle:hover {
+		background: var(--bg-tertiary, #f3f4f6);
+	}
+
+	.instructions-toggle-text {
+		flex: 1;
+	}
+
+	.info-icon {
+		color: var(--accent, #4f46e5);
+		flex-shrink: 0;
+	}
+
+	.chevron-icon {
+		flex-shrink: 0;
+		color: var(--text-secondary, #6b7280);
+		transition: transform 0.15s ease;
+	}
+
+	.chevron-icon.collapsed {
+		transform: rotate(-90deg);
+	}
+
+	.instructions-content {
+		padding: 10px 14px 12px;
+		border-top: 1px solid var(--border-color, #e5e7eb);
+	}
+
+	.instructions-content p {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--text-secondary, #6b7280);
+		line-height: 1.5;
+	}
+
+	.instructions-content p + p {
+		margin-top: 6px;
+	}
+
+	.instructions-content em {
+		font-style: normal;
+		font-weight: 500;
+		color: var(--text-primary, #111827);
 	}
 
 	.amount-mode-toggle {
@@ -279,6 +374,27 @@
 
 	/* Dark mode */
 	:global(.dark) .step-title {
+		color: #f9fafb;
+	}
+
+	:global(.dark) .instructions-banner {
+		border-color: #374151;
+	}
+
+	:global(.dark) .instructions-toggle {
+		background: #1a1a1a;
+		color: #f9fafb;
+	}
+
+	:global(.dark) .instructions-toggle:hover {
+		background: #252525;
+	}
+
+	:global(.dark) .instructions-content {
+		border-top-color: #374151;
+	}
+
+	:global(.dark) .instructions-content em {
 		color: #f9fafb;
 	}
 

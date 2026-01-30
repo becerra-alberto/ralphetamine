@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import ColumnMapping from '../../components/import/ColumnMapping.svelte';
 import type { CsvParseResult } from '../../utils/csvParser';
 
@@ -91,5 +91,46 @@ describe('ColumnMapping', () => {
 	it('should accept custom testId', () => {
 		render(ColumnMapping, { props: { data: sampleData, testId: 'custom-mapping' } });
 		expect(screen.getByTestId('custom-mapping')).toBeTruthy();
+	});
+
+	it('should render instructions banner with correct content', () => {
+		render(ColumnMapping, { props: { data: sampleData } });
+		const instructions = screen.getByTestId('column-mapping-instructions');
+		expect(instructions).toBeTruthy();
+		// Banner should show toggle text
+		expect(screen.getByText('How to map columns')).toBeTruthy();
+		// Content should be visible by default (expanded)
+		const content = screen.getByTestId('column-mapping-instructions-content');
+		expect(content).toBeTruthy();
+		// Should mention required fields
+		expect(content.textContent).toContain('Date');
+		expect(content.textContent).toContain('Payee');
+		expect(content.textContent).toContain('Amount');
+		expect(content.textContent).toContain('Inflow');
+		expect(content.textContent).toContain('Outflow');
+		// Should mention optional fields
+		expect(content.textContent).toContain('Memo');
+		expect(content.textContent).toContain('Category');
+		expect(content.textContent).toContain('Account');
+		// Should mention Skip
+		expect(content.textContent).toContain('Skip this column');
+		// Should mention inflow/outflow mode
+		expect(content.textContent).toContain('Inflow/Outflow mode');
+	});
+
+	it('should collapse and expand instructions banner', async () => {
+		render(ColumnMapping, { props: { data: sampleData } });
+		// Initially expanded
+		expect(screen.getByTestId('column-mapping-instructions-content')).toBeTruthy();
+		const toggleBtn = screen.getByTestId('column-mapping-instructions-toggle');
+		expect(toggleBtn.getAttribute('aria-expanded')).toBe('true');
+		// Click to collapse
+		await fireEvent.click(toggleBtn);
+		expect(screen.queryByTestId('column-mapping-instructions-content')).toBeNull();
+		expect(toggleBtn.getAttribute('aria-expanded')).toBe('false');
+		// Click to expand again
+		await fireEvent.click(toggleBtn);
+		expect(screen.getByTestId('column-mapping-instructions-content')).toBeTruthy();
+		expect(toggleBtn.getAttribute('aria-expanded')).toBe('true');
 	});
 });
