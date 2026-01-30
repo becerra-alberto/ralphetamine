@@ -9,6 +9,10 @@
 	import { getDefaultDateRange, getMonthRange, isValidMonth } from '$lib/utils/dates';
 	import type { MonthString } from '$lib/types/budget';
 	import type { Category } from '$lib/types/category';
+	import { invoke } from '@tauri-apps/api/core';
+	import { getBudgetsForMonth } from '$lib/api/budgets';
+	import { getCategoryTotals, getUncategorizedTotal } from '$lib/api/transactions';
+	import { flattenCategoryTree_toFlat } from '$lib/utils/categoryGroups';
 
 	// Get initial range from URL params or use default
 	let startMonth: MonthString;
@@ -35,6 +39,60 @@
 		showAdjustmentModal = false;
 	}
 
+	async function loadBudgetData(months: MonthString[]) {
+		budgetStore.setLoading(true);
+		try {
+			// Fetch categories (get_categories returns a tree; flatten for budget grid)
+			const rawCats = await invoke<Category[]>('get_categories');
+			const cats = flattenCategoryTree_toFlat(rawCats || []);
+			budgetStore.setCategories(cats);
+			categories = cats;
+
+			// Fetch budgets and actuals for each month in range
+			const allBudgets: any[] = [];
+			const allActuals: any[] = [];
+			const allUncategorized: any[] = [];
+
+			await Promise.all(
+				months.map(async (month) => {
+					const [monthBudgets, categoryTotals, uncatTotal] = await Promise.all([
+						getBudgetsForMonth(month),
+						getCategoryTotals(month),
+						getUncategorizedTotal(month)
+					]);
+
+					allBudgets.push(...monthBudgets);
+
+					for (const ct of categoryTotals) {
+						if (ct.categoryId) {
+							allActuals.push({
+								categoryId: ct.categoryId,
+								month,
+								totalCents: ct.totalCents
+							});
+						}
+					}
+
+					allUncategorized.push({
+						month,
+						totalCents: uncatTotal,
+						transactionCount: 0
+					});
+				})
+			);
+
+			budgetStore.setBudgets(allBudgets);
+			budgetStore.setActuals(allActuals);
+			budgetStore.setUncategorized(allUncategorized);
+			budgetStore.setError(null);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			budgetStore.setError(msg);
+		} finally {
+			budgetStore.setLoading(false);
+		}
+	}
+
 	// Initialize from URL params on mount
 	onMount(() => {
 		document.addEventListener('keydown', handleKeydown);
@@ -51,8 +109,10 @@
 			endMonth = defaultRange[defaultRange.length - 1];
 		}
 
-		// Update store with initial range
-		budgetStore.setDateRange(getMonthRange(startMonth, endMonth));
+		// Update store with initial range and load data
+		const months = getMonthRange(startMonth, endMonth);
+		budgetStore.setDateRange(months);
+		loadBudgetData(months);
 
 		return () => {
 			document.removeEventListener('keydown', handleKeydown);
@@ -68,8 +128,10 @@
 		startMonth = newStart;
 		endMonth = newEnd;
 
-		// Update store
-		budgetStore.setDateRange(getMonthRange(newStart, newEnd));
+		// Update store and reload data
+		const months = getMonthRange(newStart, newEnd);
+		budgetStore.setDateRange(months);
+		loadBudgetData(months);
 
 		// Update URL without navigation (for bookmarking)
 		const url = new URL(window.location.href);

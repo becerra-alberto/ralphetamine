@@ -10,7 +10,8 @@ import {
 	flattenCategoryTree,
 	getSelectableItems,
 	filterCategoryTree,
-	groupCategoriesByParent
+	groupCategoriesByParent,
+	flattenCategoryTree_toFlat
 } from '../../utils/categoryGroups';
 import type { Category } from '../../types/category';
 import type { BudgetCell } from '../../stores/budget';
@@ -142,6 +143,205 @@ describe('Category Groups Utilities', () => {
 
 			const sections = groupCategoriesBySections(categories);
 			expect(sections).toEqual([]);
+		});
+
+		it('should return 5 sections with children from a full flat list', () => {
+			const categories: Category[] = [
+				{ ...createCategory('sec-income', 'Income'), type: 'income' },
+				{ ...createCategory('sec-housing', 'Housing') },
+				{ ...createCategory('sec-essential', 'Essential') },
+				{ ...createCategory('sec-lifestyle', 'Lifestyle') },
+				{ ...createCategory('sec-savings', 'Savings') },
+				{ ...createCategory('cat-salary', 'Salary', 'sec-income'), type: 'income', sortOrder: 0 },
+				{ ...createCategory('cat-freelance', 'Freelance', 'sec-income'), type: 'income', sortOrder: 1 },
+				{ ...createCategory('cat-rent', 'Rent', 'sec-housing'), sortOrder: 0 },
+				{ ...createCategory('cat-mortgage', 'Mortgage', 'sec-housing'), sortOrder: 1 },
+				{ ...createCategory('cat-groceries', 'Groceries', 'sec-essential'), sortOrder: 0 },
+				{ ...createCategory('cat-utilities', 'Utilities', 'sec-essential'), sortOrder: 1 },
+				{ ...createCategory('cat-transport', 'Transport', 'sec-essential'), sortOrder: 2 },
+				{ ...createCategory('cat-dining', 'Dining', 'sec-lifestyle'), sortOrder: 0 },
+				{ ...createCategory('cat-entertainment', 'Entertainment', 'sec-lifestyle'), sortOrder: 1 },
+				{ ...createCategory('cat-emergency', 'Emergency Fund', 'sec-savings'), sortOrder: 0 },
+				{ ...createCategory('cat-retirement', 'Retirement', 'sec-savings'), sortOrder: 1 }
+			];
+
+			const sections = groupCategoriesBySections(categories);
+
+			expect(sections).toHaveLength(5);
+			expect(sections[0].name).toBe('Income');
+			expect(sections[0].children).toHaveLength(2);
+			expect(sections[1].name).toBe('Housing');
+			expect(sections[1].children).toHaveLength(2);
+			expect(sections[2].name).toBe('Essential');
+			expect(sections[2].children).toHaveLength(3);
+			expect(sections[3].name).toBe('Lifestyle');
+			expect(sections[3].children).toHaveLength(2);
+			expect(sections[4].name).toBe('Savings');
+			expect(sections[4].children).toHaveLength(2);
+		});
+
+		it('should handle tree-structured input gracefully (auto-flatten)', () => {
+			// Simulate what get_categories returns: tree with children arrays
+			const treeCategories = [
+				{
+					...createCategory('sec-income', 'Income'),
+					type: 'income' as const,
+					children: [
+						{ ...createCategory('cat-salary', 'Salary', 'sec-income'), type: 'income' as const, children: [] },
+						{ ...createCategory('cat-freelance', 'Freelance', 'sec-income'), type: 'income' as const, children: [] }
+					]
+				},
+				{
+					...createCategory('sec-housing', 'Housing'),
+					children: [
+						{ ...createCategory('cat-rent', 'Rent', 'sec-housing'), children: [] }
+					]
+				},
+				{
+					...createCategory('sec-essential', 'Essential'),
+					children: [
+						{ ...createCategory('cat-groceries', 'Groceries', 'sec-essential'), children: [] }
+					]
+				},
+				{
+					...createCategory('sec-lifestyle', 'Lifestyle'),
+					children: [
+						{ ...createCategory('cat-dining', 'Dining', 'sec-lifestyle'), children: [] }
+					]
+				},
+				{
+					...createCategory('sec-savings', 'Savings'),
+					children: [
+						{ ...createCategory('cat-emergency', 'Emergency Fund', 'sec-savings'), children: [] }
+					]
+				}
+			] as unknown as Category[];
+
+			const sections = groupCategoriesBySections(treeCategories);
+
+			// Should auto-flatten and produce 5 sections with children
+			expect(sections).toHaveLength(5);
+			expect(sections[0].name).toBe('Income');
+			expect(sections[0].children).toHaveLength(2);
+			expect(sections[0].children[0].name).toBe('Salary');
+			expect(sections[0].children[1].name).toBe('Freelance');
+			expect(sections[1].name).toBe('Housing');
+			expect(sections[1].children).toHaveLength(1);
+			expect(sections[2].name).toBe('Essential');
+			expect(sections[2].children).toHaveLength(1);
+			expect(sections[3].name).toBe('Lifestyle');
+			expect(sections[3].children).toHaveLength(1);
+			expect(sections[4].name).toBe('Savings');
+			expect(sections[4].children).toHaveLength(1);
+		});
+
+		it('should treat categories without parentId as section headers', () => {
+			const categories: Category[] = [
+				createCategory('sec-income', 'Income'),
+				createCategory('sec-housing', 'Housing'),
+				createCategory('cat-salary', 'Salary', 'sec-income')
+			];
+
+			const sections = groupCategoriesBySections(categories);
+
+			// Income and Housing are sections; Salary is a child
+			const incomeSection = sections.find((s) => s.name === 'Income');
+			const housingSection = sections.find((s) => s.name === 'Housing');
+
+			expect(incomeSection).toBeDefined();
+			expect(incomeSection!.category.parentId).toBeNull();
+			expect(incomeSection!.children).toHaveLength(1);
+			expect(housingSection).toBeDefined();
+			expect(housingSection!.category.parentId).toBeNull();
+			expect(housingSection!.children).toHaveLength(0);
+		});
+
+		it('should group categories with parentId under correct section', () => {
+			const categories: Category[] = [
+				createCategory('sec-income', 'Income'),
+				createCategory('sec-essential', 'Essential'),
+				createCategory('cat-salary', 'Salary', 'sec-income'),
+				createCategory('cat-groceries', 'Groceries', 'sec-essential'),
+				createCategory('cat-utilities', 'Utilities', 'sec-essential')
+			];
+
+			const sections = groupCategoriesBySections(categories);
+
+			const income = sections.find((s) => s.name === 'Income')!;
+			const essential = sections.find((s) => s.name === 'Essential')!;
+
+			expect(income.children.map((c) => c.name)).toEqual(['Salary']);
+			expect(essential.children.map((c) => c.name)).toContain('Groceries');
+			expect(essential.children.map((c) => c.name)).toContain('Utilities');
+		});
+	});
+
+	describe('flattenCategoryTree_toFlat', () => {
+		it('should flatten tree-structured categories into flat list', () => {
+			const tree = [
+				{
+					...createCategory('sec-income', 'Income'),
+					children: [
+						{ ...createCategory('cat-salary', 'Salary', 'sec-income'), children: [] },
+						{ ...createCategory('cat-freelance', 'Freelance', 'sec-income'), children: [] }
+					]
+				},
+				{
+					...createCategory('sec-housing', 'Housing'),
+					children: [
+						{ ...createCategory('cat-rent', 'Rent', 'sec-housing'), children: [] }
+					]
+				}
+			];
+
+			const flat = flattenCategoryTree_toFlat(tree);
+
+			expect(flat).toHaveLength(5);
+			expect(flat[0].name).toBe('Income');
+			expect(flat[0].parentId).toBeNull();
+			expect(flat[1].name).toBe('Salary');
+			expect(flat[1].parentId).toBe('sec-income');
+			expect(flat[2].name).toBe('Freelance');
+			expect(flat[2].parentId).toBe('sec-income');
+			expect(flat[3].name).toBe('Housing');
+			expect(flat[3].parentId).toBeNull();
+			expect(flat[4].name).toBe('Rent');
+			expect(flat[4].parentId).toBe('sec-housing');
+		});
+
+		it('should return flat list as-is (no children arrays)', () => {
+			const flat = [
+				createCategory('sec-income', 'Income'),
+				createCategory('cat-salary', 'Salary', 'sec-income')
+			];
+
+			const result = flattenCategoryTree_toFlat(flat);
+
+			expect(result).toHaveLength(2);
+			expect(result[0].name).toBe('Income');
+			expect(result[1].name).toBe('Salary');
+		});
+
+		it('should strip children property from output', () => {
+			const tree = [
+				{
+					...createCategory('sec-income', 'Income'),
+					children: [
+						{ ...createCategory('cat-salary', 'Salary', 'sec-income'), children: [] }
+					]
+				}
+			];
+
+			const flat = flattenCategoryTree_toFlat(tree);
+
+			flat.forEach((cat) => {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				expect((cat as any).children).toBeUndefined();
+			});
+		});
+
+		it('should handle empty input', () => {
+			expect(flattenCategoryTree_toFlat([])).toEqual([]);
 		});
 	});
 

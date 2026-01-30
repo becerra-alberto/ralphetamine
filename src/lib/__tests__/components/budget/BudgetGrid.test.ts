@@ -152,4 +152,72 @@ describe('BudgetGrid', () => {
 			expect(screen.queryByRole('rowheader', { name: /total/i })).not.toBeTruthy();
 		});
 	});
+
+	describe('section headers (Story 8.2)', () => {
+		const createCategory = (
+			id: string,
+			name: string,
+			parentId: string | null = null,
+			type: 'income' | 'expense' = 'expense',
+			sortOrder: number = 0
+		): Category => ({
+			id,
+			name,
+			parentId,
+			type,
+			icon: null,
+			color: null,
+			sortOrder,
+			createdAt: '2025-01-01T00:00:00Z',
+			updatedAt: '2025-01-01T00:00:00Z'
+		});
+
+		const sectionCategories: Category[] = [
+			createCategory('cat-income', 'Income', null, 'income', 0),
+			createCategory('cat-housing', 'Housing', null, 'expense', 1),
+			createCategory('cat-essential', 'Essential', null, 'expense', 2),
+			createCategory('cat-lifestyle', 'Lifestyle', null, 'expense', 3),
+			createCategory('cat-savings', 'Savings', null, 'expense', 4),
+			createCategory('cat-salary', 'Salary', 'cat-income', 'income', 0),
+			createCategory('cat-freelance', 'Freelance', 'cat-income', 'income', 1),
+			createCategory('cat-rent', 'Rent', 'cat-housing', 'expense', 0),
+			createCategory('cat-groceries', 'Groceries', 'cat-essential', 'expense', 0),
+			createCategory('cat-utilities', 'Utilities', 'cat-essential', 'expense', 1),
+			createCategory('cat-dining', 'Dining Out', 'cat-lifestyle', 'expense', 0),
+			createCategory('cat-emergency', 'Emergency Fund', 'cat-savings', 'expense', 0)
+		];
+
+		it('should render all 5 section headers', () => {
+			budgetStore.setCategories(sectionCategories);
+			render(BudgetGrid);
+
+			const sectionHeaders = screen.getAllByTestId('section-header');
+			expect(sectionHeaders).toHaveLength(5);
+		});
+
+		it('should render section headers with correct names', () => {
+			budgetStore.setCategories(sectionCategories);
+			render(BudgetGrid);
+
+			expect(screen.getByText('Income')).toBeTruthy();
+			expect(screen.getByText('Housing')).toBeTruthy();
+			expect(screen.getByText('Essential')).toBeTruthy();
+			expect(screen.getByText('Lifestyle')).toBeTruthy();
+			expect(screen.getByText('Savings')).toBeTruthy();
+		});
+
+		it('should show child categories when section is expanded (default)', () => {
+			budgetStore.setCategories(sectionCategories);
+			render(BudgetGrid);
+
+			// By default all sections are expanded, so child categories should be visible
+			const sectionContents = screen.getAllByTestId('section-content');
+			expect(sectionContents.length).toBeGreaterThan(0);
+
+			// Child category names should be visible
+			expect(screen.getByText('Salary')).toBeTruthy();
+			expect(screen.getByText('Rent')).toBeTruthy();
+			expect(screen.getByText('Groceries')).toBeTruthy();
+		});
+	});
 });

@@ -66,14 +66,73 @@ export interface SectionTotals {
 }
 
 /**
+ * Flatten tree-structured categories (CategoryWithChildren) into a flat Category array.
+ * If the input is already flat (no `children` arrays), returns it as-is.
+ * This handles the case where `get_categories` returns a nested tree structure.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function flattenCategoryTree_toFlat(categories: any[]): Category[] {
+	const result: Category[] = [];
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	function walk(cat: any) {
+		// Extract Category fields (strip children)
+		const flat: Category = {
+			id: cat.id,
+			name: cat.name,
+			parentId: cat.parentId ?? null,
+			type: cat.type,
+			icon: cat.icon ?? null,
+			color: cat.color ?? null,
+			sortOrder: cat.sortOrder ?? 0,
+			createdAt: cat.createdAt ?? '',
+			updatedAt: cat.updatedAt ?? ''
+		};
+		result.push(flat);
+
+		// Recurse into children if present
+		if (Array.isArray(cat.children)) {
+			for (const child of cat.children) {
+				walk(child);
+			}
+		}
+	}
+
+	for (const cat of categories) {
+		walk(cat);
+	}
+
+	return result;
+}
+
+/**
+ * Check if categories array appears to be tree-structured (has children arrays with entries)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isTreeStructured(categories: any[]): boolean {
+	return categories.some(
+		(c) => Array.isArray(c.children) && c.children.length > 0
+	);
+}
+
+/**
  * Group categories by section
  * Returns sections in the defined order: Income, Housing, Essential, Lifestyle, Savings
+ *
+ * Handles both flat and tree-structured input:
+ * - Flat: categories with parentId fields (standard)
+ * - Tree: CategoryWithChildren from get_categories (auto-flattened)
  */
 export function groupCategoriesBySections(categories: Category[]): CategorySection[] {
+	// Auto-flatten if input is tree-structured (from get_categories Rust command)
+	const flatCategories = isTreeStructured(categories)
+		? flattenCategoryTree_toFlat(categories)
+		: categories;
+
 	const sectionMap = new Map<SectionName, CategorySection>();
 
 	// First, find all section (parent) categories
-	categories.forEach((category) => {
+	flatCategories.forEach((category) => {
 		if (category.parentId === null && SECTION_ORDER.includes(category.name as SectionName)) {
 			sectionMap.set(category.name as SectionName, {
 				id: category.id,
@@ -86,10 +145,10 @@ export function groupCategoriesBySections(categories: Category[]): CategorySecti
 	});
 
 	// Then, add children to their parent sections
-	categories.forEach((category) => {
+	flatCategories.forEach((category) => {
 		if (category.parentId) {
 			// Find the parent
-			const parent = categories.find((c) => c.id === category.parentId);
+			const parent = flatCategories.find((c) => c.id === category.parentId);
 			if (parent && sectionMap.has(parent.name as SectionName)) {
 				const section = sectionMap.get(parent.name as SectionName);
 				if (section) {
