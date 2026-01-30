@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import AccountRow from '../../../components/net-worth/AccountRow.svelte';
 import type { AccountWithBalance } from '../../../api/netWorth';
 
@@ -124,6 +124,86 @@ describe('AccountRow', () => {
 		expect(balance.textContent).toContain('750.00');
 		// Should not contain negative sign
 		expect(balance.textContent).not.toContain('-');
+	});
+
+	describe('delete confirmation', () => {
+		it('should open ConfirmDialog when clicking Delete in kebab menu (not dispatch immediately)', async () => {
+			let deleteCalled = false;
+
+			render(AccountRow, {
+				props: { account: eurAccount, editable: true },
+				events: { delete: () => { deleteCalled = true; } }
+			} as any);
+
+			const menuBtn = screen.getByTestId('account-row-menu-btn');
+			await fireEvent.click(menuBtn);
+			const deleteBtn = screen.getByTestId('account-row-menu-delete');
+			await fireEvent.click(deleteBtn);
+
+			// Dialog should be open
+			const dialogMessage = screen.getByTestId('account-row-delete-confirm-message');
+			expect(dialogMessage).toBeTruthy();
+
+			// Delete should NOT have been dispatched yet
+			expect(deleteCalled).toBe(false);
+		});
+
+		it('should show account name in confirmation message', async () => {
+			render(AccountRow, { props: { account: eurAccount, editable: true } });
+
+			const menuBtn = screen.getByTestId('account-row-menu-btn');
+			await fireEvent.click(menuBtn);
+			const deleteBtn = screen.getByTestId('account-row-menu-delete');
+			await fireEvent.click(deleteBtn);
+
+			const dialogMessage = screen.getByTestId('account-row-delete-confirm-message');
+			expect(dialogMessage.textContent).toContain('Main Checking');
+		});
+
+		it('should dispatch delete event when confirming dialog', async () => {
+			let deleteEvent: any = null;
+
+			render(AccountRow, {
+				props: { account: eurAccount, editable: true },
+				events: { delete: (e: any) => { deleteEvent = e.detail; } }
+			} as any);
+
+			const menuBtn = screen.getByTestId('account-row-menu-btn');
+			await fireEvent.click(menuBtn);
+			await fireEvent.click(screen.getByTestId('account-row-menu-delete'));
+
+			const confirmBtn = screen.getByTestId('account-row-delete-confirm-confirm');
+			await fireEvent.click(confirmBtn);
+
+			expect(deleteEvent).toEqual({ accountId: 'acc-1' });
+			// Dialog should be closed
+			await waitFor(() => {
+				expect(screen.queryByTestId('account-row-delete-confirm-message')).toBeNull();
+			});
+		});
+
+		it('should close dialog without dispatching delete when canceling', async () => {
+			let deleteCalled = false;
+
+			render(AccountRow, {
+				props: { account: eurAccount, editable: true },
+				events: { delete: () => { deleteCalled = true; } }
+			} as any);
+
+			const menuBtn = screen.getByTestId('account-row-menu-btn');
+			await fireEvent.click(menuBtn);
+			await fireEvent.click(screen.getByTestId('account-row-menu-delete'));
+
+			const cancelBtn = screen.getByTestId('account-row-delete-confirm-cancel');
+			await fireEvent.click(cancelBtn);
+
+			// Dialog should be closed
+			await waitFor(() => {
+				expect(screen.queryByTestId('account-row-delete-confirm-message')).toBeNull();
+			});
+			// Delete should NOT have been dispatched
+			expect(deleteCalled).toBe(false);
+		});
 	});
 
 	describe('edit mode', () => {

@@ -4,6 +4,7 @@
 	import type { CurrencyCode } from '$lib/utils/currency';
 	import type { AccountWithBalance } from '$lib/api/netWorth';
 	import BalanceEdit from './BalanceEdit.svelte';
+	import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 	import { maskBankNumber, validateBankNumber, COUNTRY_CODES, getCountryName } from '$lib/utils/bankIdentifiers';
 
 	export let account: AccountWithBalance;
@@ -18,6 +19,7 @@
 	}>();
 
 	let showMenu = false;
+	let showDeleteConfirm = false;
 	let isEditing = false;
 	let editName = '';
 	let editInstitution = '';
@@ -68,7 +70,16 @@
 
 	function handleDelete() {
 		showMenu = false;
+		showDeleteConfirm = true;
+	}
+
+	function handleDeleteConfirm() {
+		showDeleteConfirm = false;
 		dispatch('delete', { accountId: account.id });
+	}
+
+	function handleDeleteCancel() {
+		showDeleteConfirm = false;
 	}
 
 	function handleEditKeydown(event: KeyboardEvent) {
@@ -242,6 +253,18 @@
 		{/if}
 	</div>
 {/if}
+
+<ConfirmDialog
+	open={showDeleteConfirm}
+	title="Delete account?"
+	message="Are you sure you want to delete &quot;{account.name}&quot;? This action cannot be undone."
+	confirmLabel="Delete"
+	cancelLabel="Cancel"
+	confirmVariant="danger"
+	testId="{testId}-delete-confirm"
+	on:confirm={handleDeleteConfirm}
+	on:cancel={handleDeleteCancel}
+/>
 
 <style>
 	.account-row {
