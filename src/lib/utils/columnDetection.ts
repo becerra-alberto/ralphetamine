@@ -3,7 +3,7 @@
  * Matches common header names (English, Dutch, German) to transaction fields.
  */
 
-export type MappableField = 'date' | 'payee' | 'amount' | 'inflow' | 'outflow' | 'memo' | 'category' | 'skip';
+export type MappableField = 'date' | 'payee' | 'amount' | 'inflow' | 'outflow' | 'memo' | 'category' | 'account' | 'skip';
 
 export interface ColumnMapping {
 	columnIndex: number;
@@ -20,6 +20,7 @@ export const FIELD_LABELS: Record<MappableField, string> = {
 	outflow: 'Outflow',
 	memo: 'Memo',
 	category: 'Category',
+	account: 'Account',
 	skip: 'Skip this column'
 };
 
@@ -27,13 +28,14 @@ export const REQUIRED_FIELDS: Exclude<MappableField, 'skip'>[] = ['date', 'payee
 
 /** Patterns for auto-detecting column purpose from header name. Case-insensitive. */
 const HEADER_PATTERNS: Record<MappableField, string[]> = {
-	date: ['date', 'datum', 'transaction date', 'trade date', 'booking date', 'value date', 'fecha'],
-	payee: ['description', 'payee', 'name', 'omschrijving', 'beschreibung', 'merchant', 'counterparty', 'recipient', 'beneficiary'],
-	amount: ['amount', 'bedrag', 'betrag', 'value', 'sum', 'total', 'importe', 'monto'],
+	date: ['date', 'datum', 'transaction date', 'trade date', 'booking date', 'value date', 'fecha', 'created on'],
+	payee: ['description', 'payee', 'name', 'omschrijving', 'beschreibung', 'merchant', 'counterparty', 'counterparty_name', 'recipient', 'beneficiary', 'target name'],
+	amount: ['amount', 'amount_eur', 'bedrag', 'betrag', 'value', 'sum', 'total', 'importe', 'monto', 'source amount (after fees)'],
 	inflow: ['inflow', 'credit', 'deposit', 'bij', 'eingang', 'income'],
 	outflow: ['outflow', 'debit', 'withdrawal', 'af', 'ausgang', 'expense'],
-	memo: ['memo', 'notes', 'reference', 'remarks', 'notizen', 'opmerkingen', 'comment'],
+	memo: ['memo', 'notes', 'reference', 'remarks', 'notizen', 'opmerkingen', 'comment', 'note'],
 	category: ['category', 'type', 'categorie', 'kategorie'],
+	account: ['account', 'account name', 'konto', 'rekening', 'cuenta', 'compte'],
 	skip: []
 };
 
@@ -68,19 +70,37 @@ export function autoDetectMappings(headers: string[], firstRow: string[]): Colum
 /**
  * Detect field type from a column header string.
  */
+/** Headers that should be skipped even if they contain a matching pattern keyword. */
+const HEADER_SKIP_PATTERNS = ['fee', 'interest date', 'source name', 'created by'];
+
 function detectFieldFromHeader(header: string, usedFields: Set<MappableField>): MappableField {
 	const normalized = header.toLowerCase().trim();
 
+	// Pass 1: exact matches only (highest priority)
 	for (const [field, patterns] of Object.entries(HEADER_PATTERNS)) {
 		if (field === 'skip') continue;
 		const mappableField = field as MappableField;
-
-		// Don't map to a field that's already been assigned
 		if (usedFields.has(mappableField)) continue;
 
 		for (const pattern of patterns) {
-			if (normalized === pattern || normalized.includes(pattern)) {
+			if (normalized === pattern) {
 				return mappableField;
+			}
+		}
+	}
+
+	// Pass 2: substring matches (lower priority), but skip fee/interest columns
+	const shouldSkip = HEADER_SKIP_PATTERNS.some((skip) => normalized.includes(skip));
+	if (!shouldSkip) {
+		for (const [field, patterns] of Object.entries(HEADER_PATTERNS)) {
+			if (field === 'skip') continue;
+			const mappableField = field as MappableField;
+			if (usedFields.has(mappableField)) continue;
+
+			for (const pattern of patterns) {
+				if (normalized.includes(pattern)) {
+					return mappableField;
+				}
 			}
 		}
 	}
@@ -221,8 +241,8 @@ export function parseRawDate(raw: string): string | null {
 	if (!raw || !raw.trim()) return null;
 	const trimmed = raw.trim();
 
-	// ISO datetime: 2025-01-28T10:30:00Z -> 2025-01-28
-	const isoDatetime = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+	// ISO datetime: 2025-01-28T10:30:00Z or 2025-01-28 10:30:00 -> 2025-01-28
+	const isoDatetime = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T ]\d{2}:\d{2}/);
 	if (isoDatetime) {
 		return `${isoDatetime[1]}-${isoDatetime[2]}-${isoDatetime[3]}`;
 	}
@@ -266,6 +286,25 @@ export interface PreviewTransaction {
 	amountCents: number;
 	memo: string;
 	category: string;
+	account: string;
+}
+
+/**
+ * Per-row parsing error with context.
+ */
+export interface RowParseError {
+	row: number;
+	column: string;
+	value: string;
+	message: string;
+}
+
+/**
+ * Result of building preview transactions from CSV rows.
+ */
+export interface PreviewBuildResult {
+	transactions: PreviewTransaction[];
+	errors: RowParseError[];
 }
 
 export function buildPreviewTransaction(
@@ -277,7 +316,8 @@ export function buildPreviewTransaction(
 		payee: '',
 		amountCents: 0,
 		memo: '',
-		category: ''
+		category: '',
+		account: ''
 	};
 
 	for (const mapping of mappings) {
@@ -304,10 +344,90 @@ export function buildPreviewTransaction(
 			case 'category':
 				preview.category = value;
 				break;
+			case 'account':
+				preview.account = value;
+				break;
 		}
 	}
 
 	return preview;
+}
+
+/**
+ * Build preview transactions from all CSV rows with per-row error tracking.
+ * Valid rows produce transactions; invalid rows produce errors with row context.
+ */
+export function buildPreviewTransactions(
+	rows: string[][],
+	mappings: ColumnMapping[]
+): PreviewBuildResult {
+	const transactions: PreviewTransaction[] = [];
+	const errors: RowParseError[] = [];
+
+	for (let i = 0; i < rows.length; i++) {
+		const row = rows[i];
+		const rowNumber = i + 2; // +2 because row 1 is headers, data starts at row 2
+		const preview = buildPreviewTransaction(row, mappings);
+		const rowErrors: RowParseError[] = [];
+
+		// Validate date
+		const dateMapping = mappings.find((m) => m.field === 'date');
+		if (dateMapping) {
+			const rawDate = row[dateMapping.columnIndex] ?? '';
+			if (!rawDate.trim()) {
+				rowErrors.push({
+					row: rowNumber,
+					column: dateMapping.columnHeader,
+					value: rawDate,
+					message: `Row ${rowNumber}: Missing date value in "${dateMapping.columnHeader}" column`
+				});
+			} else if (!parseRawDate(rawDate)) {
+				rowErrors.push({
+					row: rowNumber,
+					column: dateMapping.columnHeader,
+					value: rawDate,
+					message: `Row ${rowNumber}: Could not parse date "${rawDate}" in "${dateMapping.columnHeader}" column`
+				});
+			}
+		}
+
+		// Validate payee
+		const payeeMapping = mappings.find((m) => m.field === 'payee');
+		if (payeeMapping) {
+			const rawPayee = row[payeeMapping.columnIndex] ?? '';
+			if (!rawPayee.trim()) {
+				rowErrors.push({
+					row: rowNumber,
+					column: payeeMapping.columnHeader,
+					value: rawPayee,
+					message: `Row ${rowNumber}: Missing payee value in "${payeeMapping.columnHeader}" column`
+				});
+			}
+		}
+
+		// Validate amount
+		const amountMapping = mappings.find((m) => m.field === 'amount');
+		if (amountMapping) {
+			const rawAmount = row[amountMapping.columnIndex] ?? '';
+			if (rawAmount.trim() && parseRawAmountToCents(rawAmount) === 0 && !/^[0.,\s€$£¥C]*$/.test(rawAmount)) {
+				rowErrors.push({
+					row: rowNumber,
+					column: amountMapping.columnHeader,
+					value: rawAmount,
+					message: `Row ${rowNumber}: Could not parse amount "${rawAmount}" in "${amountMapping.columnHeader}" column`
+				});
+			}
+		}
+
+		if (rowErrors.length > 0) {
+			errors.push(...rowErrors);
+		}
+
+		// Always include the transaction (even with errors) to preserve row indices
+		transactions.push(preview);
+	}
+
+	return { transactions, errors };
 }
 
 /**

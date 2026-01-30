@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { parseCsv, isValidCsvFile, readCsvFile, getPreviewRows, type CsvParseResult } from '../../utils/csvParser';
+import {
+	parseRawDate,
+	parseRawAmountToCents,
+	buildPreviewTransactions,
+	autoDetectMappings,
+	type ColumnMapping
+} from '../../utils/columnDetection';
 
 describe('parseCsv', () => {
 	it('should parse basic CSV with headers and rows', () => {
@@ -255,5 +262,164 @@ describe('getPreviewRows', () => {
 		};
 		const preview = getPreviewRows(data, 3);
 		expect(preview).toHaveLength(3);
+	});
+});
+
+describe('parseRawDate', () => {
+	it('should parse DD/MM/YYYY format', () => {
+		expect(parseRawDate('28/01/2025')).toBe('2025-01-28');
+	});
+
+	it('should parse DD/MM/YYYY with single-digit day', () => {
+		expect(parseRawDate('5/03/2025')).toBe('2025-03-05');
+	});
+
+	it('should parse YYYY-MM-DD format', () => {
+		expect(parseRawDate('2025-01-28')).toBe('2025-01-28');
+	});
+
+	it('should parse ISO datetime format (2025-01-28T10:30:00Z)', () => {
+		expect(parseRawDate('2025-01-28T10:30:00Z')).toBe('2025-01-28');
+	});
+
+	it('should parse space-separated datetime (2026-01-12 18:02:22)', () => {
+		// Wise format: "2026-01-12 18:02:22"
+		expect(parseRawDate('2026-01-12 18:02:22')).toBe('2026-01-12');
+	});
+
+	it('should return null for empty string', () => {
+		expect(parseRawDate('')).toBeNull();
+	});
+
+	it('should return null for invalid date string', () => {
+		expect(parseRawDate('not-a-date')).toBeNull();
+	});
+
+	it('should parse DD-MM-YYYY with dash separator', () => {
+		expect(parseRawDate('15-06-2025')).toBe('2025-06-15');
+	});
+
+	it('should parse DD.MM.YYYY with period separator', () => {
+		expect(parseRawDate('15.06.2025')).toBe('2025-06-15');
+	});
+});
+
+describe('parseRawAmountToCents', () => {
+	it('should parse European format (1.234,56)', () => {
+		expect(parseRawAmountToCents('1.234,56')).toBe(123456);
+	});
+
+	it('should parse US format (1,234.56)', () => {
+		expect(parseRawAmountToCents('1,234.56')).toBe(123456);
+	});
+
+	it('should parse plain format (1234.56)', () => {
+		expect(parseRawAmountToCents('1234.56')).toBe(123456);
+	});
+
+	it('should parse negative amounts', () => {
+		expect(parseRawAmountToCents('-50.00')).toBe(-5000);
+	});
+
+	it('should parse amounts with euro symbol', () => {
+		expect(parseRawAmountToCents('€50.00')).toBe(5000);
+	});
+
+	it('should parse amounts with dollar symbol', () => {
+		expect(parseRawAmountToCents('$1,234.56')).toBe(123456);
+	});
+
+	it('should return 0 for empty string', () => {
+		expect(parseRawAmountToCents('')).toBe(0);
+	});
+
+	it('should return 0 for whitespace', () => {
+		expect(parseRawAmountToCents('   ')).toBe(0);
+	});
+
+	it('should parse European negative format (-1.234,56)', () => {
+		expect(parseRawAmountToCents('-1.234,56')).toBe(-123456);
+	});
+
+	it('should parse small amounts (0.50)', () => {
+		expect(parseRawAmountToCents('0.50')).toBe(50);
+	});
+
+	it('should parse amounts without decimals', () => {
+		expect(parseRawAmountToCents('100')).toBe(10000);
+	});
+});
+
+describe('buildPreviewTransactions error reporting', () => {
+	const mappings: ColumnMapping[] = [
+		{ columnIndex: 0, columnHeader: 'Date', sampleValue: '2025-01-01', field: 'date' },
+		{ columnIndex: 1, columnHeader: 'Payee', sampleValue: 'Store', field: 'payee' },
+		{ columnIndex: 2, columnHeader: 'Amount', sampleValue: '50.00', field: 'amount' }
+	];
+
+	it('should report error with row number for missing date', () => {
+		const rows = [['', 'Store', '50.00']];
+		const result = buildPreviewTransactions(rows, mappings);
+		expect(result.errors).toHaveLength(1);
+		expect(result.errors[0].row).toBe(2); // row 2 (header is row 1)
+		expect(result.errors[0].column).toBe('Date');
+		expect(result.errors[0].message).toContain('Row 2');
+		expect(result.errors[0].message).toContain('Missing date');
+	});
+
+	it('should report error with row number for unparseable date', () => {
+		const rows = [['not-a-date', 'Store', '50.00']];
+		const result = buildPreviewTransactions(rows, mappings);
+		expect(result.errors).toHaveLength(1);
+		expect(result.errors[0].row).toBe(2);
+		expect(result.errors[0].value).toBe('not-a-date');
+		expect(result.errors[0].message).toContain('not-a-date');
+		expect(result.errors[0].message).toContain('Date');
+	});
+
+	it('should report error with row number for missing payee', () => {
+		const rows = [['2025-01-01', '', '50.00']];
+		const result = buildPreviewTransactions(rows, mappings);
+		expect(result.errors).toHaveLength(1);
+		expect(result.errors[0].row).toBe(2);
+		expect(result.errors[0].column).toBe('Payee');
+		expect(result.errors[0].message).toContain('Missing payee');
+	});
+
+	it('should report correct row numbers for multiple rows', () => {
+		const rows = [
+			['2025-01-01', 'Store', '50.00'],  // valid
+			['invalid-date', 'Store', '50.00'], // error on row 3
+			['2025-01-03', '', '50.00'],         // error on row 4
+		];
+		const result = buildPreviewTransactions(rows, mappings);
+		expect(result.transactions).toHaveLength(3); // all rows included
+		expect(result.errors).toHaveLength(2);
+		expect(result.errors[0].row).toBe(3); // row 3 in CSV
+		expect(result.errors[1].row).toBe(4); // row 4 in CSV
+	});
+
+	it('should still include transactions for rows with errors (preserving indices)', () => {
+		const rows = [['invalid', 'Store', '50.00']];
+		const result = buildPreviewTransactions(rows, mappings);
+		expect(result.transactions).toHaveLength(1);
+		expect(result.errors).toHaveLength(1);
+	});
+
+	it('should produce no errors for valid data', () => {
+		const rows = [
+			['2025-01-01', 'Store A', '50.00'],
+			['2025-01-02', 'Store B', '-25.50'],
+		];
+		const result = buildPreviewTransactions(rows, mappings);
+		expect(result.transactions).toHaveLength(2);
+		expect(result.errors).toHaveLength(0);
+	});
+
+	it('should include column value in error', () => {
+		const rows = [['garbage-date', 'Store', '50.00']];
+		const result = buildPreviewTransactions(rows, mappings);
+		expect(result.errors[0].value).toBe('garbage-date');
+		expect(result.errors[0].column).toBe('Date');
 	});
 });

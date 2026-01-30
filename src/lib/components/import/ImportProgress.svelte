@@ -4,6 +4,7 @@
 	export let status: 'idle' | 'importing' | 'success' | 'error' = 'idle';
 	export let imported: number = 0;
 	export let skipped: number = 0;
+	export let failed: number = 0;
 	export let total: number = 0;
 	export let errorMessage: string = '';
 	export let uncategorizedCount: number = 0;
@@ -45,6 +46,17 @@
 					<span class="skipped-info">({skipped} duplicate{skipped === 1 ? '' : 's'} skipped)</span>
 				{/if}
 			</p>
+			{#if failed > 0}
+				<p class="failed-info" data-testid="{testId}-failed-detail">
+					{failed} row{failed === 1 ? '' : 's'} failed to import
+				</p>
+			{/if}
+			{#if errorMessage}
+				<details class="error-details" data-testid="{testId}-error-details">
+					<summary class="error-summary">View details</summary>
+					<pre class="error-pre">{errorMessage}</pre>
+				</details>
+			{/if}
 			{#if uncategorizedCount > 0}
 				<p class="categorize-prompt" data-testid="{testId}-categorize-prompt">
 					{uncategorizedCount} transaction{uncategorizedCount === 1 ? '' : 's'} need{uncategorizedCount === 1 ? 's' : ''} categorization
@@ -184,6 +196,40 @@
 
 	.skipped-info {
 		color: var(--text-secondary, #9ca3af);
+	}
+
+	.failed-info {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--color-danger, #ef4444);
+		font-weight: 500;
+	}
+
+	.error-details {
+		width: 100%;
+		margin-top: 4px;
+		text-align: left;
+	}
+
+	.error-summary {
+		font-size: 0.75rem;
+		color: var(--text-secondary, #6b7280);
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.error-pre {
+		margin: 4px 0 0;
+		padding: 8px;
+		font-size: 0.6875rem;
+		font-family: monospace;
+		background: var(--bg-secondary, #f3f4f6);
+		border-radius: 4px;
+		color: var(--text-secondary, #6b7280);
+		white-space: pre-wrap;
+		word-break: break-word;
+		max-height: 120px;
+		overflow-y: auto;
 	}
 
 	.categorize-prompt {

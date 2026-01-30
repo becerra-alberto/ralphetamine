@@ -10,8 +10,10 @@
 	import type { CsvParseResult } from '$lib/utils/csvParser';
 	import {
 		buildPreviewTransaction,
+		buildPreviewTransactions,
 		type ColumnMapping as ColumnMappingType,
-		type PreviewTransaction
+		type PreviewTransaction,
+		type RowParseError
 	} from '$lib/utils/columnDetection';
 	import {
 		detectDuplicates,
@@ -66,8 +68,10 @@
 	let importStatus: 'idle' | 'importing' | 'success' | 'error' = 'idle';
 	let importedCount = 0;
 	let skippedCount = 0;
+	let failedCount = 0;
 	let importError = '';
 	let uncategorizedImportCount = 0;
+	let parseErrors: RowParseError[] = [];
 
 	// Account selection for import
 	let availableAccounts: Account[] = [];
@@ -106,8 +110,10 @@
 		importStatus = 'idle';
 		importedCount = 0;
 		skippedCount = 0;
+		failedCount = 0;
 		importError = '';
 		uncategorizedImportCount = 0;
+		parseErrors = [];
 		uniqueAccountValues = [];
 		accountMappings = {};
 		accountMappingsAllMapped = false;
@@ -205,9 +211,9 @@
 	async function preparePreviewStep() {
 		if (!fileData) return;
 
-		previewTransactions = fileData.rows.map((row) =>
-			buildPreviewTransaction(row, mappings)
-		);
+		const buildResult = buildPreviewTransactions(fileData.rows, mappings);
+		previewTransactions = buildResult.transactions;
+		parseErrors = buildResult.errors;
 
 		try {
 			const existing = await getTransactions();
@@ -258,6 +264,7 @@
 		importStatus = 'importing';
 		importedCount = 0;
 		skippedCount = 0;
+		failedCount = 0;
 
 		const skipIndices = new Set(
 			duplicateOption !== 'import-all'
@@ -284,6 +291,9 @@
 			}
 		}
 
+		// Build set of row numbers (1-indexed CSV rows) that have parse errors
+		const errorRows = new Set(parseErrors.map((e) => e.row - 1)); // convert to 0-indexed
+
 		const inputs: TransactionInput[] = [];
 		const rowErrors: string[] = [];
 
@@ -293,14 +303,27 @@
 				continue;
 			}
 			const tx = previewTransactions[i];
+			const csvRow = i + 2; // row 1 is header, data starts at row 2
+
+			// Skip rows that had parse errors (they will be reported in the summary)
+			if (errorRows.has(i)) {
+				const rowParseErrors = parseErrors.filter((e) => e.row === csvRow);
+				for (const err of rowParseErrors) {
+					rowErrors.push(err.message);
+				}
+				failedCount++;
+				continue;
+			}
 
 			// Validate required fields
 			if (!tx.date) {
-				rowErrors.push(`Row ${i + 1}: Missing date`);
+				rowErrors.push(`Row ${csvRow}: Missing date`);
+				failedCount++;
 				continue;
 			}
 			if (!tx.payee) {
-				rowErrors.push(`Row ${i + 1}: Missing payee`);
+				rowErrors.push(`Row ${csvRow}: Missing payee`);
+				failedCount++;
 				continue;
 			}
 
@@ -314,13 +337,15 @@
 					// Fallback to selected account if not in mapping
 					accountId = selectedAccountId;
 				} else {
-					rowErrors.push(`Row ${i + 1}: Unknown account "${tx.account}"`);
+					rowErrors.push(`Row ${csvRow}: Unknown account "${tx.account}"`);
+					failedCount++;
 					continue;
 				}
 			}
 
 			if (!accountId) {
-				rowErrors.push(`Row ${i + 1}: No account resolved`);
+				rowErrors.push(`Row ${csvRow}: No account resolved`);
+				failedCount++;
 				continue;
 			}
 
@@ -343,15 +368,15 @@
 			importStatus = 'success';
 
 			if (rowErrors.length > 0) {
-				importError = `${rowErrors.length} row(s) skipped:\n${rowErrors.slice(0, 5).join('\n')}${rowErrors.length > 5 ? `\n...and ${rowErrors.length - 5} more` : ''}`;
+				importError = `${failedCount} row(s) failed:\n${rowErrors.slice(0, 5).join('\n')}${rowErrors.length > 5 ? `\n...and ${rowErrors.length - 5} more` : ''}`;
 			}
 
-			dispatch('importComplete', { imported: importedCount, skipped: skippedCount + rowErrors.length });
+			dispatch('importComplete', { imported: importedCount, skipped: skippedCount + failedCount });
 		} catch (err) {
 			importStatus = 'error';
 			importError = err instanceof Error ? err.message : 'An error occurred during import';
 			if (rowErrors.length > 0) {
-				importError += `\n\nAdditionally, ${rowErrors.length} row(s) had validation errors.`;
+				importError += `\n\nAdditionally, ${failedCount} row(s) had validation errors:\n${rowErrors.slice(0, 3).join('\n')}`;
 			}
 		}
 	}
@@ -459,6 +484,7 @@
 						status={importStatus}
 						imported={importedCount}
 						skipped={skippedCount}
+						failed={failedCount}
 						total={importSummary.toImport}
 						errorMessage={importError}
 						uncategorizedCount={uncategorizedImportCount}
