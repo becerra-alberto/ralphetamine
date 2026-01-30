@@ -17,6 +17,14 @@
 	function handleBalanceSave(event: CustomEvent) {
 		dispatch('balanceSave', event.detail);
 	}
+
+	function handleEdit(event: CustomEvent) {
+		dispatch('edit', event.detail);
+	}
+
+	function handleDelete(event: CustomEvent) {
+		dispatch('delete', event.detail);
+	}
 </script>
 
 <div class="liability-category" data-testid={testId}>
@@ -29,7 +37,7 @@
 	</div>
 	<div class="account-list" data-testid="{testId}-accounts">
 		{#each category.accounts as account, i (account.id)}
-			<AccountRow {account} {editable} showAbsoluteBalance={true} testId="{testId}-account-{i}" on:balanceSave={handleBalanceSave} />
+			<AccountRow {account} {editable} showAbsoluteBalance={true} testId="{testId}-account-{i}" on:balanceSave={handleBalanceSave} on:edit={handleEdit} on:delete={handleDelete} />
 		{/each}
 	</div>
 </div>
@@ -39,7 +47,7 @@
 		background: var(--bg-primary, #ffffff);
 		border: 1px solid var(--border-color, #e5e7eb);
 		border-radius: 8px;
-		overflow: hidden;
+		overflow: visible;
 	}
 
 	.category-header {
@@ -49,6 +57,7 @@
 		padding: 12px 16px;
 		background: var(--bg-secondary, #f9fafb);
 		border-bottom: 1px solid var(--border-color, #e5e7eb);
+		border-radius: 7px 7px 0 0;
 	}
 
 	.header-left {

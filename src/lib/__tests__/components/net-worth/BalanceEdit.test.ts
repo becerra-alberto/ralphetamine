@@ -164,4 +164,69 @@ describe('BalanceEdit', () => {
 
 		expect(screen.getByTestId('custom-edit-trigger')).toBeTruthy();
 	});
+
+	it('should accept typing in the input field', async () => {
+		render(BalanceEdit, {
+			props: { balanceCents: 15050 }
+		});
+
+		const trigger = screen.getByTestId('balance-edit-trigger');
+		await fireEvent.click(trigger);
+
+		const input = screen.getByTestId('balance-edit-input') as HTMLInputElement;
+		await fireEvent.input(input, { target: { value: '999.99' } });
+
+		expect(input.value).toBe('999.99');
+	});
+
+	it('should not cancel edit when blur moves to a related element inside the container', async () => {
+		let cancelCalled = false;
+
+		render(BalanceEdit, {
+			props: { balanceCents: 15050 },
+			events: {
+				cancel: () => {
+					cancelCalled = true;
+				},
+				save: () => {}
+			}
+		} as any);
+
+		const trigger = screen.getByTestId('balance-edit-trigger');
+		await fireEvent.click(trigger);
+
+		const input = screen.getByTestId('balance-edit-input');
+		const container = screen.getByTestId('balance-edit-container');
+
+		// Simulate blur where relatedTarget is inside the edit container
+		await fireEvent.blur(input, { relatedTarget: container });
+
+		// Should NOT have cancelled — focus moved to related element
+		expect(cancelCalled).toBe(false);
+	});
+
+	it('should save on blur when focus leaves to an unrelated element', async () => {
+		let savedDetail: { newBalanceCents: number } | undefined;
+
+		render(BalanceEdit, {
+			props: { balanceCents: 15050 },
+			events: {
+				save: (event: CustomEvent) => {
+					savedDetail = event.detail;
+				}
+			}
+		} as any);
+
+		const trigger = screen.getByTestId('balance-edit-trigger');
+		await fireEvent.click(trigger);
+
+		const input = screen.getByTestId('balance-edit-input') as HTMLInputElement;
+		await fireEvent.input(input, { target: { value: '200.00' } });
+
+		// Blur with no relatedTarget (or unrelated element) should save
+		await fireEvent.blur(input, { relatedTarget: null });
+
+		expect(savedDetail).toBeDefined();
+		expect(savedDetail!.newBalanceCents).toBe(20000);
+	});
 });

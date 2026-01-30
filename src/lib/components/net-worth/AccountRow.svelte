@@ -460,6 +460,8 @@
 		gap: 8px;
 		padding: 8px 12px;
 		border-bottom: 1px solid var(--border-color, #f3f4f6);
+		position: relative;
+		z-index: 10;
 	}
 
 	.edit-fields {

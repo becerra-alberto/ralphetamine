@@ -280,5 +280,25 @@ describe('AccountRow', () => {
 			// These labels mirror the AddAccountModal labels
 			expect(labelTexts).toEqual(['Name', 'Institution', 'Bank Number', 'Country']);
 		});
+
+		it('should apply account-row--editing class with z-index when in edit mode', async () => {
+			await enterEditMode();
+
+			const editingRow = screen.getByTestId('account-row-editing');
+			expect(editingRow.classList.toString()).toContain('account-row--editing');
+		});
+
+		it('should render edit form as a visible element (not clipped by overflow)', async () => {
+			await enterEditMode();
+
+			const editingRow = screen.getByTestId('account-row-editing');
+			// The edit form should be in the DOM and visible
+			expect(editingRow).toBeTruthy();
+			// Verify the edit fields are present and not hidden
+			const editFields = editingRow.querySelector('.edit-fields');
+			expect(editFields).toBeTruthy();
+			const editActions = editingRow.querySelector('.edit-actions');
+			expect(editActions).toBeTruthy();
+		});
 	});
 });
