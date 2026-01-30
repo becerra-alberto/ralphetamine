@@ -465,6 +465,103 @@ describe('TransactionTable', () => {
 		});
 	});
 
+	describe('Story 8.10: Edit button integration', () => {
+		it('should render edit icon buttons in transaction rows', () => {
+			const transactions = [
+				createMockTransaction({ id: 'txn-1', payee: 'Store A' }),
+				createMockTransaction({ id: 'txn-2', payee: 'Store B' })
+			];
+
+			render(TransactionTable, {
+				props: {
+					transactions,
+					totalItems: 2,
+					currentPage: 1,
+					itemsPerPage: 50,
+					sortColumn: 'date',
+					sortDirection: 'desc',
+					isLoading: false,
+					selectedId: null,
+					expandedId: null
+				}
+			});
+
+			const editBtns = screen.getAllByTestId('edit-icon-btn');
+			expect(editBtns.length).toBe(2);
+		});
+
+		it('should show expansion row when expandedId matches a transaction', () => {
+			const transactions = [
+				createMockTransaction({ id: 'txn-expand-1', payee: 'Store A' }),
+				createMockTransaction({ id: 'txn-expand-2', payee: 'Store B' })
+			];
+
+			render(TransactionTable, {
+				props: {
+					transactions,
+					totalItems: 2,
+					currentPage: 1,
+					itemsPerPage: 50,
+					sortColumn: 'date',
+					sortDirection: 'desc',
+					isLoading: false,
+					selectedId: null,
+					expandedId: 'txn-expand-1'
+				}
+			});
+
+			const expansionRows = screen.getAllByTestId('expansion-row');
+			expect(expansionRows.length).toBe(1);
+		});
+
+		it('should only expand one row at a time', () => {
+			const transactions = [
+				createMockTransaction({ id: 'txn-only-1', payee: 'Store A' }),
+				createMockTransaction({ id: 'txn-only-2', payee: 'Store B' }),
+				createMockTransaction({ id: 'txn-only-3', payee: 'Store C' })
+			];
+
+			render(TransactionTable, {
+				props: {
+					transactions,
+					totalItems: 3,
+					currentPage: 1,
+					itemsPerPage: 50,
+					sortColumn: 'date',
+					sortDirection: 'desc',
+					isLoading: false,
+					selectedId: null,
+					expandedId: 'txn-only-2'
+				}
+			});
+
+			const expansionRows = screen.getAllByTestId('expansion-row');
+			// Only 1 expansion row should exist
+			expect(expansionRows.length).toBe(1);
+		});
+
+		it('should render actions column header', () => {
+			const transactions = [createMockTransaction()];
+
+			render(TransactionTable, {
+				props: {
+					transactions,
+					totalItems: 1,
+					currentPage: 1,
+					itemsPerPage: 50,
+					sortColumn: 'date',
+					sortDirection: 'desc',
+					isLoading: false,
+					selectedId: null,
+					expandedId: null
+				}
+			});
+
+			const actionsHeader = screen.getByTestId('header-actions');
+			expect(actionsHeader).toBeTruthy();
+		});
+	});
+
 	describe('Pagination integration', () => {
 		it('should render pagination component with correct page info', () => {
 			const transactions = [createMockTransaction()];

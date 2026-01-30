@@ -3,6 +3,8 @@
 	import TransactionRow from './TransactionRow.svelte';
 	import Pagination from '$lib/components/shared/Pagination.svelte';
 	import type { TransactionWithDisplay, SortableColumn, SortDirection } from '$lib/stores/transactions';
+	import type { Account } from '$lib/types/account';
+	import type { CategoryNode } from '$lib/types/ui';
 
 	export let transactions: TransactionWithDisplay[] = [];
 	export let totalItems: number = 0;
@@ -13,12 +15,16 @@
 	export let isLoading: boolean = false;
 	export let selectedId: string | null = null;
 	export let expandedId: string | null = null;
+	export let accounts: Account[] = [];
+	export let categories: CategoryNode[] = [];
 
 	const dispatch = createEventDispatcher<{
 		pageChange: { page: number };
 		sort: { column: SortableColumn };
 		rowClick: { id: string };
 		rowExpand: { id: string };
+		save: { id: string; update: Record<string, any> };
+		delete: { id: string };
 	}>();
 
 	type ColumnDef = {
@@ -109,6 +115,9 @@
 								</span>
 							</th>
 						{/each}
+						<th class="header-cell header-cell-actions" data-testid="header-actions" role="columnheader">
+							<span class="sr-only">Actions</span>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -118,8 +127,12 @@
 							categoryName={transaction.categoryName}
 							accountName={transaction.accountName}
 							isExpanded={expandedId === transaction.id}
+							{accounts}
+							{categories}
 							on:click={() => dispatch('rowClick', { id: transaction.id })}
 							on:expand={() => dispatch('rowExpand', { id: transaction.id })}
+							on:save={(e) => dispatch('save', e.detail)}
+							on:delete={(e) => dispatch('delete', e.detail)}
 						/>
 					{/each}
 				</tbody>
@@ -269,6 +282,23 @@
 		color: var(--text-secondary, #6b7280);
 		margin: 0;
 		max-width: 300px;
+	}
+
+	.header-cell-actions {
+		width: 40px;
+		padding: 12px 8px;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border-width: 0;
 	}
 
 	:global(.dark) .transaction-table-container {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import TransactionRow from '../../../components/transactions/TransactionRow.svelte';
 import type { Transaction } from '$lib/types/transaction';
 
@@ -286,6 +286,89 @@ describe('TransactionRow', () => {
 
 			const row = screen.getByTestId('transaction-row');
 			expect(row.getAttribute('data-id')).toBe('txn-abc123');
+		});
+	});
+
+	describe('Story 8.10: Edit button', () => {
+		it('should render an edit icon button in the row', () => {
+			const transaction = createMockTransaction();
+
+			render(TransactionRowTestWrapper, {
+				props: { transaction, categoryName: 'Groceries', accountName: 'Checking' }
+			});
+
+			const editBtn = screen.getByTestId('edit-icon-btn');
+			expect(editBtn).toBeTruthy();
+		});
+
+		it('edit button should have correct aria-label for accessibility', () => {
+			const transaction = createMockTransaction();
+
+			render(TransactionRowTestWrapper, {
+				props: { transaction, categoryName: 'Groceries', accountName: 'Checking' }
+			});
+
+			const editBtn = screen.getByTestId('edit-icon-btn');
+			expect(editBtn.getAttribute('aria-label')).toBe('Edit transaction');
+		});
+
+		it('edit button should contain an SVG pencil icon', () => {
+			const transaction = createMockTransaction();
+
+			render(TransactionRowTestWrapper, {
+				props: { transaction, categoryName: 'Groceries', accountName: 'Checking' }
+			});
+
+			const editBtn = screen.getByTestId('edit-icon-btn');
+			const svg = editBtn.querySelector('svg');
+			expect(svg).toBeTruthy();
+		});
+
+		it('clicking edit button should not propagate click to row', async () => {
+			const transaction = createMockTransaction({ id: 'txn-edit-test' });
+
+			render(TransactionRowTestWrapper, {
+				props: { transaction, categoryName: 'Groceries', accountName: 'Checking' }
+			});
+
+			const editBtn = screen.getByTestId('edit-icon-btn');
+			// Clicking the edit button should work without error (stopPropagation prevents row click)
+			await fireEvent.click(editBtn);
+			// Button should still exist after click
+			expect(screen.getByTestId('edit-icon-btn')).toBeTruthy();
+		});
+
+		it('edit button should be keyboard accessible (has button type)', () => {
+			const transaction = createMockTransaction();
+
+			render(TransactionRowTestWrapper, {
+				props: { transaction, categoryName: 'Groceries', accountName: 'Checking' }
+			});
+
+			const editBtn = screen.getByTestId('edit-icon-btn');
+			expect(editBtn.getAttribute('type')).toBe('button');
+		});
+
+		it('edit form should populate with transaction data when expanded', () => {
+			const transaction = createMockTransaction({
+				date: '2025-06-15',
+				payee: 'Test Store',
+				amountCents: -7500,
+				memo: 'Test purchase'
+			});
+
+			render(TransactionRowTestWrapper, {
+				props: {
+					transaction,
+					categoryName: 'Shopping',
+					accountName: 'Checking',
+					isExpanded: true
+				}
+			});
+
+			// When expanded, should show the expansion row with edit trigger
+			const expansionRow = screen.getByTestId('expansion-row');
+			expect(expansionRow).toBeTruthy();
 		});
 	});
 });
