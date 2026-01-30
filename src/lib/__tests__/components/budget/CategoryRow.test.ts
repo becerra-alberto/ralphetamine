@@ -144,8 +144,8 @@ describe('CategoryRow', () => {
 				}
 			});
 
-			// €500.00 for budgeted (en-US locale format)
-			expect(screen.getByText('€500.00')).toBeTruthy();
+			// Compact format: €500 (no .00 suffix)
+			expect(screen.getByText('€500')).toBeTruthy();
 		});
 	});
 

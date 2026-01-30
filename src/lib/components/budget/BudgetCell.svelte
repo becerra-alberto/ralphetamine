@@ -2,6 +2,7 @@
 	import { createEventDispatcher } from 'svelte';
 	import type { MonthString } from '$lib/types/budget';
 	import { formatCentsCurrency } from '$lib/utils/currency';
+	import { formatBudgetAmount } from '$lib/utils/budgetFormatting';
 	import { getBudgetStatusWithClass } from '$lib/utils/budgetStatus';
 	import { tooltip } from '$lib/actions/tooltip';
 	import Tooltip from '$lib/components/shared/Tooltip.svelte';
@@ -267,10 +268,10 @@
 		/>
 	{:else}
 		<span class="cell-actual" data-testid="cell-actual">
-			{formatCentsCurrency(actualCents)}
+			{formatBudgetAmount(actualCents)}
 		</span>
 		<span class="cell-budgeted" data-testid="cell-budgeted">
-			{formatCentsCurrency(budgetedCents)}
+			{formatBudgetAmount(budgetedCents)}
 		</span>
 	{/if}
 </div>

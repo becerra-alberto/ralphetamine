@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import BudgetCell from '../../../components/budget/BudgetCell.svelte';
-import { formatCentsCurrency } from '../../../utils/currency';
+import { formatBudgetAmount } from '../../../utils/budgetFormatting';
 
 describe('BudgetCell Integration', () => {
 	describe('actual amount calculation', () => {
 		it('should display actual as SUM of amount_cents for category + month', () => {
 			// Simulate aggregated transactions: 3 transactions of -10000, -15000, -10000 cents
-			const sumAmountCents = -10000 + -15000 + -10000; // -35000 cents = -€350.00
+			const sumAmountCents = -10000 + -15000 + -10000; // -35000 cents = -€350
 
 			render(BudgetCell, {
 				props: {
@@ -20,12 +20,12 @@ describe('BudgetCell Integration', () => {
 			});
 
 			const actual = screen.getByTestId('cell-actual');
-			// Should show the aggregated amount
-			expect(actual.textContent).toContain('350.00');
+			// Should show the aggregated amount in compact format
+			expect(actual.textContent).toContain('€350');
 		});
 
 		it('should display budget from budgets.amount_cents for category + month', () => {
-			// Budget set to 50000 cents = €500.00
+			// Budget set to 50000 cents = €500
 			const budgetAmountCents = 50000;
 
 			render(BudgetCell, {
@@ -39,12 +39,12 @@ describe('BudgetCell Integration', () => {
 			});
 
 			const budgeted = screen.getByTestId('cell-budgeted');
-			expect(budgeted.textContent).toContain('€500.00');
+			expect(budgeted.textContent).toContain('€500');
 		});
 	});
 
 	describe('income category display', () => {
-		it('should display positive amounts correctly for income', () => {
+		it('should display positive amounts correctly for income with K suffix', () => {
 			// Income: positive actual means money received
 			render(BudgetCell, {
 				props: {
@@ -59,8 +59,8 @@ describe('BudgetCell Integration', () => {
 			const actual = screen.getByTestId('cell-actual');
 			const budgeted = screen.getByTestId('cell-budgeted');
 
-			expect(actual.textContent).toContain('5,500.00');
-			expect(budgeted.textContent).toContain('5,000.00');
+			expect(actual.textContent).toContain('€5.5K');
+			expect(budgeted.textContent).toContain('€5K');
 		});
 
 		it('should show status-success when income exceeds target', () => {
@@ -114,8 +114,8 @@ describe('BudgetCell Integration', () => {
 	});
 
 	describe('currency formatting integration', () => {
-		it('should use formatCentsCurrency for consistent formatting', () => {
-			const testAmount = 123456;
+		it('should use formatBudgetAmount for compact formatting', () => {
+			const testAmount = 123456; // 1234.56 dollars → €1.2K
 
 			render(BudgetCell, {
 				props: {
@@ -128,12 +128,12 @@ describe('BudgetCell Integration', () => {
 			});
 
 			const actual = screen.getByTestId('cell-actual');
-			const expected = formatCentsCurrency(testAmount);
-			expect(actual.textContent).toContain('1,234.56');
+			const expected = formatBudgetAmount(testAmount);
+			expect(actual.textContent).toContain(expected);
 		});
 
-		it('should display amounts as integers (cents) converted to currency', () => {
-			// Verify no floating point issues: 1999 cents = €19.99 exactly
+		it('should display amounts as compact integers (no .00 suffix)', () => {
+			// 1999 cents = 19.99 → "€19" in compact format
 			render(BudgetCell, {
 				props: {
 					month: '2025-01',
@@ -147,8 +147,8 @@ describe('BudgetCell Integration', () => {
 			const actual = screen.getByTestId('cell-actual');
 			const budgeted = screen.getByTestId('cell-budgeted');
 
-			expect(actual.textContent).toContain('19.99');
-			expect(budgeted.textContent).toContain('19.99');
+			expect(actual.textContent).toBe('€19');
+			expect(budgeted.textContent).toBe('€19');
 		});
 	});
 
@@ -274,7 +274,7 @@ describe('BudgetCell Integration', () => {
 			});
 
 			let actual = screen.getByTestId('cell-actual');
-			expect(actual.textContent).toContain('300.00');
+			expect(actual.textContent).toContain('€300');
 
 			// Add more transactions (simulated by changing actualCents)
 			await rerender({
@@ -286,7 +286,7 @@ describe('BudgetCell Integration', () => {
 			});
 
 			actual = screen.getByTestId('cell-actual');
-			expect(actual.textContent).toContain('750.00');
+			expect(actual.textContent).toContain('€750');
 		});
 	});
 
@@ -323,8 +323,8 @@ describe('BudgetCell Integration', () => {
 			const actual = screen.getByTestId('cell-actual');
 			const budgeted = screen.getByTestId('cell-budgeted');
 
-			expect(actual.textContent).toContain('€0.00');
-			expect(budgeted.textContent).toContain('€0.00');
+			expect(actual.textContent).toContain('€0');
+			expect(budgeted.textContent).toContain('€0');
 		});
 	});
 
@@ -384,8 +384,8 @@ describe('BudgetCell Integration', () => {
 			const actualEl = screen.getByTestId('cell-actual');
 			const budgetedEl = screen.getByTestId('cell-budgeted');
 
-			expect(actualEl.textContent).toContain('300.00');
-			expect(budgetedEl.textContent).toContain('750.00');
+			expect(actualEl.textContent).toContain('€300');
+			expect(budgetedEl.textContent).toContain('€750');
 		});
 	});
 });

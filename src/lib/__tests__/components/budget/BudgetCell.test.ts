@@ -91,7 +91,7 @@ describe('BudgetCell', () => {
 	});
 
 	describe('no data handling', () => {
-		it('should show €0.00 when no transactions exist', () => {
+		it('should show €0 when no transactions exist', () => {
 			render(BudgetCell, {
 				props: {
 					month: '2025-01',
@@ -103,10 +103,10 @@ describe('BudgetCell', () => {
 			});
 
 			const actual = screen.getByTestId('cell-actual');
-			expect(actual.textContent).toContain('€0.00');
+			expect(actual.textContent).toContain('€0');
 		});
 
-		it('should show €0.00 when no budget is set', () => {
+		it('should show €0 when no budget is set', () => {
 			render(BudgetCell, {
 				props: {
 					month: '2025-01',
@@ -118,10 +118,10 @@ describe('BudgetCell', () => {
 			});
 
 			const budgeted = screen.getByTestId('cell-budgeted');
-			expect(budgeted.textContent).toContain('€0.00');
+			expect(budgeted.textContent).toContain('€0');
 		});
 
-		it('should show €0.00 for both when no data', () => {
+		it('should show €0 for both when no data', () => {
 			render(BudgetCell, {
 				props: {
 					month: '2025-01',
@@ -134,13 +134,13 @@ describe('BudgetCell', () => {
 
 			const actual = screen.getByTestId('cell-actual');
 			const budgeted = screen.getByTestId('cell-budgeted');
-			expect(actual.textContent).toContain('€0.00');
-			expect(budgeted.textContent).toContain('€0.00');
+			expect(actual.textContent).toContain('€0');
+			expect(budgeted.textContent).toContain('€0');
 		});
 	});
 
 	describe('currency formatting', () => {
-		it('should format actual amount as currency', () => {
+		it('should format actual amount with compact format', () => {
 			render(BudgetCell, {
 				props: {
 					month: '2025-01',
@@ -152,12 +152,12 @@ describe('BudgetCell', () => {
 			});
 
 			const actual = screen.getByTestId('cell-actual');
-			// en-US locale: -€350.00
-			expect(actual.textContent).toContain('350.00');
+			// Compact format: -€350
+			expect(actual.textContent).toContain('350');
 			expect(actual.textContent).toContain('€');
 		});
 
-		it('should format budget amount as currency', () => {
+		it('should format budget amount with compact format', () => {
 			render(BudgetCell, {
 				props: {
 					month: '2025-01',
@@ -169,8 +169,8 @@ describe('BudgetCell', () => {
 			});
 
 			const budgeted = screen.getByTestId('cell-budgeted');
-			// en-US locale: €500.00
-			expect(budgeted.textContent).toContain('€500.00');
+			// Compact format: €500 (no .00)
+			expect(budgeted.textContent).toContain('€500');
 		});
 	});
 
@@ -332,7 +332,7 @@ describe('BudgetCell', () => {
 			expect(cell.classList.contains('status-danger')).toBe(true);
 		});
 
-		it('should display positive amounts for income', () => {
+		it('should display positive amounts for income with K suffix', () => {
 			render(BudgetCell, {
 				props: {
 					month: '2025-01',
@@ -344,8 +344,8 @@ describe('BudgetCell', () => {
 			});
 
 			const actual = screen.getByTestId('cell-actual');
-			// en-US locale: €5,500.00
-			expect(actual.textContent).toContain('5,500.00');
+			// Compact format: €5.5K
+			expect(actual.textContent).toContain('5.5K');
 			expect(actual.textContent).toContain('€');
 		});
 	});
@@ -871,6 +871,45 @@ describe('BudgetCell', () => {
 			// is tested through E2E tests - here we verify the cell
 			// renders correctly and handles the right-click
 			expect(cell).toBeTruthy();
+		});
+	});
+
+	describe('compact formatting (Story 10.1)', () => {
+		it('should render compact format without ".00" suffix', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 50000,
+					actualCents: -35000,
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const actual = screen.getByTestId('cell-actual');
+			const budgeted = screen.getByTestId('cell-budgeted');
+
+			// Should NOT contain .00
+			expect(actual.textContent).not.toContain('.00');
+			expect(budgeted.textContent).not.toContain('.00');
+		});
+
+		it('should show K suffix for amounts over 1000', () => {
+			render(BudgetCell, {
+				props: {
+					month: '2025-01',
+					budgetedCents: 150000,
+					actualCents: -200000,
+					isCurrent: false,
+					categoryType: 'expense'
+				}
+			});
+
+			const actual = screen.getByTestId('cell-actual');
+			const budgeted = screen.getByTestId('cell-budgeted');
+
+			expect(actual.textContent).toContain('K');
+			expect(budgeted.textContent).toContain('K');
 		});
 	});
 });
