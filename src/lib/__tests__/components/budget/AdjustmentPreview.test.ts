@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import AdjustmentPreview from '../../../components/budget/AdjustmentPreview.svelte';
 import type { PreviewItem } from '../../../types/ui';
 
@@ -123,20 +123,6 @@ describe('AdjustmentPreview', () => {
 			expect(previewRows.length).toBe(5);
 		});
 
-		it('should show "...and X more" when more items exist', () => {
-			render(AdjustmentPreview, {
-				props: {
-					items: mockItems,
-					totalAffected: 6,
-					isLoading: false,
-					maxDisplay: 5
-				}
-			});
-
-			const more = screen.getByTestId('preview-more');
-			expect(more.textContent).toContain('...and 1 more');
-		});
-
 		it('should show empty state when no items', () => {
 			render(AdjustmentPreview, {
 				props: {
@@ -163,6 +149,119 @@ describe('AdjustmentPreview', () => {
 			const loading = screen.getByTestId('preview-loading');
 			expect(loading).toBeTruthy();
 			expect(loading.textContent).toContain('Calculating preview');
+		});
+	});
+
+	describe('expandable "Show N more" (AC3)', () => {
+		it('renders "Show N more" clickable button when more items exist', () => {
+			render(AdjustmentPreview, {
+				props: {
+					items: mockItems,
+					totalAffected: 6,
+					isLoading: false,
+					maxDisplay: 5
+				}
+			});
+
+			const showMore = screen.getByTestId('preview-show-more');
+			expect(showMore).toBeTruthy();
+			expect(showMore.tagName).toBe('BUTTON');
+			expect(showMore.textContent).toContain('Show 1 more');
+		});
+
+		it('clicking expands to show all items', async () => {
+			render(AdjustmentPreview, {
+				props: {
+					items: mockItems,
+					totalAffected: 6,
+					isLoading: false,
+					maxDisplay: 5
+				}
+			});
+
+			// Before expanding: 5 rows
+			expect(screen.getAllByTestId('preview-row').length).toBe(5);
+
+			// Click show more
+			const showMore = screen.getByTestId('preview-show-more');
+			await fireEvent.click(showMore);
+
+			// After expanding: all 6 rows visible
+			expect(screen.getAllByTestId('preview-row').length).toBe(6);
+		});
+
+		it('expanded state shows all items', async () => {
+			render(AdjustmentPreview, {
+				props: {
+					items: mockItems,
+					totalAffected: 6,
+					isLoading: false,
+					maxDisplay: 5
+				}
+			});
+
+			// Click show more to expand
+			const showMore = screen.getByTestId('preview-show-more');
+			await fireEvent.click(showMore);
+
+			// All 6 items should be visible
+			const rows = screen.getAllByTestId('preview-row');
+			expect(rows.length).toBe(6);
+
+			// "Show more" button should be gone, replaced by "Show less"
+			expect(screen.queryByTestId('preview-show-more')).toBeNull();
+			expect(screen.getByTestId('preview-show-less')).toBeTruthy();
+		});
+
+		it('clicking "Show less" collapses back to limited view', async () => {
+			render(AdjustmentPreview, {
+				props: {
+					items: mockItems,
+					totalAffected: 6,
+					isLoading: false,
+					maxDisplay: 5
+				}
+			});
+
+			// Expand
+			await fireEvent.click(screen.getByTestId('preview-show-more'));
+			expect(screen.getAllByTestId('preview-row').length).toBe(6);
+
+			// Collapse
+			await fireEvent.click(screen.getByTestId('preview-show-less'));
+			expect(screen.getAllByTestId('preview-row').length).toBe(5);
+
+			// "Show more" button should be back
+			expect(screen.getByTestId('preview-show-more')).toBeTruthy();
+		});
+
+		it('should not show "Show more" when items fit within maxDisplay', () => {
+			render(AdjustmentPreview, {
+				props: {
+					items: mockItems.slice(0, 3),
+					totalAffected: 3,
+					isLoading: false,
+					maxDisplay: 5
+				}
+			});
+
+			// Should show all 3 rows without "Show more"
+			expect(screen.getAllByTestId('preview-row').length).toBe(3);
+			expect(screen.queryByTestId('preview-show-more')).toBeNull();
+		});
+
+		it('should show correct remaining count in "Show N more"', () => {
+			render(AdjustmentPreview, {
+				props: {
+					items: mockItems,
+					totalAffected: 6,
+					isLoading: false,
+					maxDisplay: 3
+				}
+			});
+
+			const showMore = screen.getByTestId('preview-show-more');
+			expect(showMore.textContent).toContain('Show 3 more');
 		});
 	});
 

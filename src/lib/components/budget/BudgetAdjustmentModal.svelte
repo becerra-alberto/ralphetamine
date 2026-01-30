@@ -9,7 +9,7 @@
 	import { getCurrentMonth, getNextMonth, getMonthRange } from '$lib/types/budget';
 	import { groupCategoriesBySections, type CategorySection } from '$lib/utils/categoryGroups';
 	import { budgetStore, createCellKey } from '$lib/stores/budget';
-	import { setBudgetsBatch, getBudgetsForCategory } from '$lib/api/budgets';
+	import { setBudgetsBatch } from '$lib/api/budgets';
 	import { toastStore } from '$lib/stores/toast';
 	import { get } from 'svelte/store';
 
@@ -22,12 +22,12 @@
 	}>();
 
 	// Operations
-	type OperationType = 'set-amount' | 'increase-percent' | 'decrease-percent' | 'copy-previous';
+	type OperationType = 'set' | 'add' | 'subtract' | 'multiply';
 	const operations: { id: OperationType; label: string }[] = [
-		{ id: 'set-amount', label: 'Set amount' },
-		{ id: 'increase-percent', label: 'Increase by %' },
-		{ id: 'decrease-percent', label: 'Decrease by %' },
-		{ id: 'copy-previous', label: 'Copy from previous period' }
+		{ id: 'set', label: 'Set' },
+		{ id: 'add', label: 'Add' },
+		{ id: 'subtract', label: 'Subtract' },
+		{ id: 'multiply', label: 'Multiply' }
 	];
 
 	// Date range presets
@@ -39,9 +39,8 @@
 
 	// State
 	let selectedCategories: Set<string> = new Set();
-	let selectedOperation: OperationType = 'set-amount';
+	let selectedOperation: OperationType = 'set';
 	let amountValue: string = '';
-	let percentValue: string = '';
 	let startMonth: MonthString = getCurrentMonth();
 	let endMonth: MonthString = '';
 	let isCustomRange: boolean = false;
@@ -197,7 +196,6 @@
 		const _end = endMonth;
 		const _op = selectedOperation;
 		const _amt = amountValue;
-		const _pct = percentValue;
 
 		// Clear any pending debounce
 		if (previewDebounceTimer) {
@@ -260,44 +258,25 @@
 		}
 	}
 
-	function calculateNewAmount(currentCents: number, month: MonthString): number {
+	function calculateNewAmount(currentCents: number, _month: MonthString): number {
 		const parsedAmount = parseFloat(amountValue) || 0;
-		const parsedPercent = parseFloat(percentValue) || 0;
 
 		switch (selectedOperation) {
-			case 'set-amount':
+			case 'set':
 				return Math.round(parsedAmount * 100);
 
-			case 'increase-percent':
-				return Math.round(currentCents + (currentCents * parsedPercent) / 100);
+			case 'add':
+				return Math.round(currentCents + parsedAmount * 100);
 
-			case 'decrease-percent':
-				return Math.max(0, Math.round(currentCents - (currentCents * parsedPercent) / 100));
+			case 'subtract':
+				return Math.max(0, Math.round(currentCents - parsedAmount * 100));
 
-			case 'copy-previous': {
-				// Get previous month's budget
-				const state = get(budgetStore);
-				const prevMonth = getPreviousMonth(month);
-				const selectedCat = Array.from(selectedCategories)[0]; // Use first selected for now
-				if (selectedCat) {
-					const prevKey = createCellKey(selectedCat, prevMonth);
-					const prevBudget = state.budgets.get(prevKey);
-					return prevBudget?.amountCents ?? currentCents;
-				}
-				return currentCents;
-			}
+			case 'multiply':
+				return Math.round(currentCents * parsedAmount);
 
 			default:
 				return currentCents;
 		}
-	}
-
-	function getPreviousMonth(month: MonthString): MonthString {
-		const [year, m] = month.split('-').map(Number);
-		if (m === 1) {
-			return `${year - 1}-12`;
-		}
-		return `${year}-${String(m - 1).padStart(2, '0')}`;
 	}
 
 	async function handleApply() {
@@ -356,7 +335,8 @@
 			dispatch('close');
 		} catch (error) {
 			console.error('Error applying batch adjustment:', error);
-			toastStore.error('Failed to apply budget adjustments');
+			const message = error instanceof Error ? error.message : String(error);
+			toastStore.error(`Failed to apply budget adjustments: ${message}`);
 		} finally {
 			isLoading = false;
 		}
@@ -375,9 +355,8 @@
 
 	function resetModalState() {
 		selectedCategories = new Set();
-		selectedOperation = 'set-amount';
+		selectedOperation = 'set';
 		amountValue = '';
-		percentValue = '';
 		setPresetRange('3m');
 		previewItems = [];
 		totalAffected = 0;
@@ -498,7 +477,14 @@
 			<h3 class="section-title">Operation</h3>
 
 			<div class="operation-select" data-testid="operation-select">
-				<select bind:value={selectedOperation}>
+				<!-- svelte-ignore a11y-no-static-element-interactions -->
+				<select
+					bind:value={selectedOperation}
+					on:change|stopPropagation
+					on:click|stopPropagation
+					on:mousedown|stopPropagation
+					data-testid="operation-dropdown"
+				>
 					{#each operations as op}
 						<option value={op.id}>{op.label}</option>
 					{/each}
@@ -506,42 +492,31 @@
 			</div>
 
 			<div class="value-input" data-testid="value-input">
-				{#if selectedOperation === 'set-amount'}
-					<label class="input-label">
+				<label class="input-label">
+					{#if selectedOperation === 'multiply'}
+						Multiplier
+					{:else}
 						Amount
-						<div class="currency-input">
+					{/if}
+					<div class="currency-input">
+						{#if selectedOperation !== 'multiply'}
 							<span class="currency-symbol">$</span>
-							<input
-								type="number"
-								bind:value={amountValue}
-								placeholder="0.00"
-								min="0"
-								step="0.01"
-								data-testid="amount-input"
-							/>
-						</div>
-					</label>
-				{:else if selectedOperation === 'increase-percent' || selectedOperation === 'decrease-percent'}
-					<label class="input-label">
-						Percentage
-						<div class="percent-input">
-							<input
-								type="number"
-								bind:value={percentValue}
-								placeholder="0"
-								min="0"
-								max="100"
-								step="1"
-								data-testid="percent-input"
-							/>
-							<span class="percent-symbol">%</span>
-						</div>
-					</label>
-				{:else if selectedOperation === 'copy-previous'}
-					<p class="operation-info">
-						Budget values from the month before each selected month will be copied.
-					</p>
-				{/if}
+						{/if}
+						<input
+							type="number"
+							bind:value={amountValue}
+							on:keydown|stopPropagation
+							on:input|stopPropagation
+							placeholder={selectedOperation === 'multiply' ? '1.0' : '0.00'}
+							min="0"
+							step={selectedOperation === 'multiply' ? '0.1' : '0.01'}
+							data-testid="amount-input"
+						/>
+						{#if selectedOperation === 'multiply'}
+							<span class="multiply-symbol">x</span>
+						{/if}
+					</div>
+				</label>
 			</div>
 		</section>
 
@@ -791,8 +766,7 @@
 		color: var(--text-primary, #111827);
 	}
 
-	.currency-input,
-	.percent-input {
+	.currency-input {
 		display: flex;
 		align-items: center;
 		border: 1px solid var(--border-color, #e5e7eb);
@@ -801,15 +775,14 @@
 	}
 
 	.currency-symbol,
-	.percent-symbol {
+	.multiply-symbol {
 		padding: 8px 12px;
 		background: var(--bg-secondary, #f8f9fa);
 		color: var(--text-secondary, #6b7280);
 		font-size: 0.875rem;
 	}
 
-	.currency-input input,
-	.percent-input input {
+	.currency-input input {
 		flex: 1;
 		padding: 8px 12px;
 		font-size: 0.875rem;
@@ -818,21 +791,13 @@
 		color: var(--text-primary, #111827);
 	}
 
-	.currency-input input:focus,
-	.percent-input input:focus {
+	.currency-input input:focus {
 		outline: none;
 	}
 
-	.currency-input:focus-within,
-	.percent-input:focus-within {
+	.currency-input:focus-within {
 		outline: 2px solid var(--color-accent, #4f46e5);
 		outline-offset: 1px;
-	}
-
-	.operation-info {
-		font-size: 0.875rem;
-		color: var(--text-secondary, #6b7280);
-		margin: 0;
 	}
 
 	/* Buttons */

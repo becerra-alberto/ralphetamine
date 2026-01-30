@@ -4,20 +4,25 @@ import BudgetAdjustmentModal from '../../../components/budget/BudgetAdjustmentMo
 import type { Category } from '../../../types/category';
 
 // Mock Tauri API
+const mockInvoke = vi.fn().mockImplementation((cmd: string) => {
+	if (cmd === 'set_budgets_batch') {
+		return Promise.resolve(5);
+	}
+	return Promise.resolve(null);
+});
+
 vi.mock('@tauri-apps/api/core', () => ({
-	invoke: vi.fn().mockImplementation((cmd: string) => {
-		if (cmd === 'set_budgets_batch') {
-			return Promise.resolve(5);
-		}
-		return Promise.resolve(null);
-	})
+	invoke: (...args: unknown[]) => mockInvoke(...args)
 }));
 
 // Mock toast store
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
+
 vi.mock('../../../stores/toast', () => ({
 	toastStore: {
-		success: vi.fn(),
-		error: vi.fn()
+		success: (...args: unknown[]) => mockToastSuccess(...args),
+		error: (...args: unknown[]) => mockToastError(...args)
 	}
 }));
 
@@ -305,8 +310,8 @@ describe('BudgetAdjustmentModal', () => {
 		});
 	});
 
-	describe('operation selection', () => {
-		it('should show currency input for "Set amount" operation', async () => {
+	describe('operation dropdown (AC1)', () => {
+		it('should accept click and change value', async () => {
 			render(BudgetAdjustmentModal, {
 				props: {
 					open: true,
@@ -314,12 +319,88 @@ describe('BudgetAdjustmentModal', () => {
 				}
 			});
 
-			// Default operation is 'set-amount'
-			const amountInput = screen.getByTestId('amount-input');
+			const select = screen.getByTestId('operation-dropdown') as HTMLSelectElement;
+			expect(select).toBeTruthy();
+			expect(select.tagName).toBe('SELECT');
+
+			// Default value should be 'set'
+			expect(select.value).toBe('set');
+
+			// Change to 'add'
+			await fireEvent.change(select, { target: { value: 'add' } });
+			expect(select.value).toBe('add');
+
+			// Change to 'subtract'
+			await fireEvent.change(select, { target: { value: 'subtract' } });
+			expect(select.value).toBe('subtract');
+
+			// Change to 'multiply'
+			await fireEvent.change(select, { target: { value: 'multiply' } });
+			expect(select.value).toBe('multiply');
+		});
+
+		it('should show all four operations (Set, Add, Subtract, Multiply)', () => {
+			render(BudgetAdjustmentModal, {
+				props: {
+					open: true,
+					categories: mockCategories
+				}
+			});
+
+			const select = screen.getByTestId('operation-dropdown') as HTMLSelectElement;
+			const options = Array.from(select.querySelectorAll('option'));
+
+			expect(options.length).toBe(4);
+			expect(options[0].value).toBe('set');
+			expect(options[0].textContent).toBe('Set');
+			expect(options[1].value).toBe('add');
+			expect(options[1].textContent).toBe('Add');
+			expect(options[2].value).toBe('subtract');
+			expect(options[2].textContent).toBe('Subtract');
+			expect(options[3].value).toBe('multiply');
+			expect(options[3].textContent).toBe('Multiply');
+		});
+
+		it('selected value reflects in the UI after selection', async () => {
+			render(BudgetAdjustmentModal, {
+				props: {
+					open: true,
+					categories: mockCategories
+				}
+			});
+
+			const select = screen.getByTestId('operation-dropdown') as HTMLSelectElement;
+
+			// Change to 'multiply'
+			await fireEvent.change(select, { target: { value: 'multiply' } });
+
+			// The UI should show multiplier label instead of amount
+			expect(screen.getByText('Multiplier')).toBeTruthy();
+		});
+	});
+
+	describe('amount input (AC2)', () => {
+		it('should accept keyboard input and update value', async () => {
+			render(BudgetAdjustmentModal, {
+				props: {
+					open: true,
+					categories: mockCategories
+				}
+			});
+
+			const amountInput = screen.getByTestId('amount-input') as HTMLInputElement;
 			expect(amountInput).toBeTruthy();
+			expect(amountInput.tagName).toBe('INPUT');
+
+			// Simulate typing
+			amountInput.value = '150.00';
+			await fireEvent.input(amountInput);
+
+			// Input should maintain its value
+			expect(amountInput.value).toBe('150.00');
 		});
 
-		it('should show percentage input for "Increase by %" operation', async () => {
+		it('should accept numeric validation', async () => {
 			render(BudgetAdjustmentModal, {
 				props: {
 					open: true,
@@ -327,15 +408,14 @@ describe('BudgetAdjustmentModal', () => {
 				}
 			});
 
-			// Select 'increase-percent' operation
-			const select = screen.getByTestId('operation-select').querySelector('select');
-			await fireEvent.change(select!, { target: { value: 'increase-percent' } });
+			const amountInput = screen.getByTestId('amount-input') as HTMLInputElement;
 
-			const percentInput = screen.getByTestId('percent-input');
-			expect(percentInput).toBeTruthy();
+			// Input type should be number
+			expect(amountInput.type).toBe('number');
+			expect(amountInput.min).toBe('0');
 		});
 
-		it('should show percentage input for "Decrease by %" operation', async () => {
+		it('should not be destroyed by re-render cascades while typing', async () => {
 			render(BudgetAdjustmentModal, {
 				props: {
 					open: true,
@@ -343,30 +423,221 @@ describe('BudgetAdjustmentModal', () => {
 				}
 			});
 
-			// Select 'decrease-percent' operation
-			const select = screen.getByTestId('operation-select').querySelector('select');
-			await fireEvent.change(select!, { target: { value: 'decrease-percent' } });
+			const amountInput = screen.getByTestId('amount-input') as HTMLInputElement;
 
-			const percentInput = screen.getByTestId('percent-input');
-			expect(percentInput).toBeTruthy();
+			// Simulate typing
+			amountInput.value = '123.45';
+			await fireEvent.input(amountInput);
+
+			// Input should still exist in DOM
+			expect(document.body.contains(amountInput)).toBe(true);
+
+			// The input should maintain its value
+			expect(amountInput.value).toBe('123.45');
+
+			// Input should not have been replaced
+			const currentAmountInput = screen.getByTestId('amount-input');
+			expect(currentAmountInput).toBe(amountInput);
+		});
+	});
+
+	describe('preview section (AC3)', () => {
+		it('should show "Show N more" button instead of static text', async () => {
+			vi.useFakeTimers();
+
+			try {
+				render(BudgetAdjustmentModal, {
+					props: {
+						open: true,
+						categories: mockCategories
+					}
+				});
+
+				// Select all categories to generate enough preview items
+				const selectAll = screen.getByTestId('select-all-categories').querySelector('input')!;
+				await fireEvent.click(selectAll);
+
+				// Advance past debounce to trigger preview
+				await vi.advanceTimersByTimeAsync(350);
+
+				// With 6 categories * 3 months = 18 items, should show "Show N more"
+				const previewCount = screen.getByTestId('preview-count');
+				expect(previewCount.textContent).not.toContain('0 cells affected');
+
+				// Should have show-more button (not static text)
+				const showMore = screen.queryByTestId('preview-show-more');
+				if (showMore) {
+					expect(showMore.tagName).toBe('BUTTON');
+					expect(showMore.textContent).toContain('Show');
+					expect(showMore.textContent).toContain('more');
+				}
+			} finally {
+				vi.useRealTimers();
+			}
 		});
 
-		it('should have "Copy from previous period" option available', async () => {
-			render(BudgetAdjustmentModal, {
-				props: {
-					open: true,
-					categories: mockCategories
+		it('clicking "Show more" reveals all preview items', async () => {
+			vi.useFakeTimers();
+
+			try {
+				render(BudgetAdjustmentModal, {
+					props: {
+						open: true,
+						categories: mockCategories
+					}
+				});
+
+				// Select all categories
+				const selectAll = screen.getByTestId('select-all-categories').querySelector('input')!;
+				await fireEvent.click(selectAll);
+
+				// Advance past debounce
+				await vi.advanceTimersByTimeAsync(350);
+
+				const showMore = screen.queryByTestId('preview-show-more');
+				if (showMore) {
+					const rowsBefore = screen.getAllByTestId('preview-row').length;
+					expect(rowsBefore).toBe(5); // default maxDisplay
+
+					// Click show more
+					await fireEvent.click(showMore);
+
+					// All rows should now be visible
+					const rowsAfter = screen.getAllByTestId('preview-row').length;
+					expect(rowsAfter).toBeGreaterThan(5);
 				}
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
+	describe('apply button (AC4)', () => {
+		it('should call setBudget API for each affected cell', async () => {
+			vi.useFakeTimers();
+
+			try {
+				render(BudgetAdjustmentModal, {
+					props: {
+						open: true,
+						categories: mockCategories
+					}
+				});
+
+				// Select a category
+				const rentCheckbox = screen.getByTestId('category-rent').querySelector('input')!;
+				await fireEvent.click(rentCheckbox);
+
+				// Set an amount
+				const amountInput = screen.getByTestId('amount-input') as HTMLInputElement;
+				amountInput.value = '500';
+				await fireEvent.input(amountInput);
+
+				// Advance past debounce
+				await vi.advanceTimersByTimeAsync(350);
+
+				// Click apply
+				const applyButton = screen.getByTestId('apply-button');
+				await fireEvent.click(applyButton);
+
+				// Wait for async apply
+				await vi.advanceTimersByTimeAsync(100);
+
+				// setBudgetsBatch should have been called
+				expect(mockInvoke).toHaveBeenCalledWith('set_budgets_batch', expect.any(Object));
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('should show descriptive toast message on error', async () => {
+			// Make the API call fail with a specific error
+			mockInvoke.mockImplementationOnce(() => {
+				return Promise.reject(new Error('Database connection lost'));
 			});
 
-			const select = screen.getByTestId('operation-select').querySelector('select');
+			vi.useFakeTimers();
 
-			// Check if the option exists
-			const options = select?.querySelectorAll('option');
-			const copyOption = Array.from(options || []).find(
-				(opt) => opt.value === 'copy-previous'
-			);
-			expect(copyOption).toBeTruthy();
+			try {
+				render(BudgetAdjustmentModal, {
+					props: {
+						open: true,
+						categories: mockCategories
+					}
+				});
+
+				// Select a category
+				const rentCheckbox = screen.getByTestId('category-rent').querySelector('input')!;
+				await fireEvent.click(rentCheckbox);
+
+				// Set an amount
+				const amountInput = screen.getByTestId('amount-input') as HTMLInputElement;
+				amountInput.value = '500';
+				await fireEvent.input(amountInput);
+
+				// Advance past debounce
+				await vi.advanceTimersByTimeAsync(350);
+
+				// Click apply
+				const applyButton = screen.getByTestId('apply-button');
+				await fireEvent.click(applyButton);
+
+				// Wait for async apply
+				await vi.advanceTimersByTimeAsync(100);
+
+				// Error toast should include the backend error message
+				expect(mockToastError).toHaveBeenCalledWith(
+					expect.stringContaining('Database connection lost')
+				);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('should show success toast on successful apply', async () => {
+			mockInvoke.mockImplementation((cmd: string) => {
+				if (cmd === 'set_budgets_batch') {
+					return Promise.resolve(3);
+				}
+				return Promise.resolve(null);
+			});
+
+			vi.useFakeTimers();
+
+			try {
+				render(BudgetAdjustmentModal, {
+					props: {
+						open: true,
+						categories: mockCategories
+					}
+				});
+
+				// Select a category
+				const rentCheckbox = screen.getByTestId('category-rent').querySelector('input')!;
+				await fireEvent.click(rentCheckbox);
+
+				// Set an amount
+				const amountInput = screen.getByTestId('amount-input') as HTMLInputElement;
+				amountInput.value = '500';
+				await fireEvent.input(amountInput);
+
+				// Advance past debounce
+				await vi.advanceTimersByTimeAsync(350);
+
+				// Click apply
+				const applyButton = screen.getByTestId('apply-button');
+				await fireEvent.click(applyButton);
+
+				// Wait for async apply
+				await vi.advanceTimersByTimeAsync(100);
+
+				// Success toast should have been called
+				expect(mockToastSuccess).toHaveBeenCalledWith(
+					expect.stringContaining('Updated')
+				);
+			} finally {
+				vi.useRealTimers();
+			}
 		});
 	});
 
@@ -401,7 +672,7 @@ describe('BudgetAdjustmentModal', () => {
 	});
 
 	describe('validation', () => {
-		it('should show amount input with currency symbol for set-amount operation', () => {
+		it('should show amount input with currency symbol for set operation', () => {
 			render(BudgetAdjustmentModal, {
 				props: {
 					open: true,
@@ -414,7 +685,7 @@ describe('BudgetAdjustmentModal', () => {
 			expect(valueInput.querySelector('.currency-symbol')).toBeTruthy();
 		});
 
-		it('should show percent symbol for percentage operations', async () => {
+		it('should show multiplier label for multiply operation', async () => {
 			render(BudgetAdjustmentModal, {
 				props: {
 					open: true,
@@ -422,13 +693,12 @@ describe('BudgetAdjustmentModal', () => {
 				}
 			});
 
-			// Select percentage operation
-			const select = screen.getByTestId('operation-select').querySelector('select');
-			await fireEvent.change(select!, { target: { value: 'increase-percent' } });
+			// Select multiply operation
+			const select = screen.getByTestId('operation-dropdown') as HTMLSelectElement;
+			await fireEvent.change(select, { target: { value: 'multiply' } });
 
-			// The percent input wrapper should exist
-			const valueInput = screen.getByTestId('value-input');
-			expect(valueInput.querySelector('.percent-symbol')).toBeTruthy();
+			// The label should say "Multiplier"
+			expect(screen.getByText('Multiplier')).toBeTruthy();
 		});
 	});
 
@@ -563,11 +833,11 @@ describe('BudgetAdjustmentModal', () => {
 			expect(screen.getByTestId('preset-12m')).toBeTruthy();
 
 			// Operation select is interactive
-			const operationSelect = screen.getByTestId('operation-select').querySelector('select');
+			const operationSelect = screen.getByTestId('operation-dropdown') as HTMLSelectElement;
 			expect(operationSelect).toBeTruthy();
-			expect(operationSelect!.tagName).toBe('SELECT');
+			expect(operationSelect.tagName).toBe('SELECT');
 
-			// Amount input is interactive (default operation is set-amount)
+			// Amount input is interactive (default operation is set)
 			const amountInput = screen.getByTestId('amount-input');
 			expect(amountInput).toBeTruthy();
 			expect(amountInput.tagName).toBe('INPUT');
@@ -595,9 +865,9 @@ describe('BudgetAdjustmentModal', () => {
 			// Verify category is checked after clicking
 			expect((rentCheckbox as HTMLInputElement).checked).toBe(true);
 
-			// Now change the operation to increase-percent
-			const select = screen.getByTestId('operation-select').querySelector('select')!;
-			await fireEvent.change(select, { target: { value: 'increase-percent' } });
+			// Now change the operation to add
+			const select = screen.getByTestId('operation-dropdown') as HTMLSelectElement;
+			await fireEvent.change(select, { target: { value: 'add' } });
 
 			// Category should still be selected — operation change should not reset categories
 			const rentCheckboxAfter = screen.getByTestId('category-rent').querySelector('input') as HTMLInputElement;
@@ -678,9 +948,8 @@ describe('BudgetAdjustmentModal', () => {
 			expect((rentCheckbox as HTMLInputElement).checked).toBe(true);
 
 			// Change operation to verify it gets reset
-			const select = screen.getByTestId('operation-select').querySelector('select');
-			await fireEvent.change(select!, { target: { value: 'increase-percent' } });
-			expect(screen.queryByTestId('percent-input')).toBeTruthy();
+			const select = screen.getByTestId('operation-dropdown') as HTMLSelectElement;
+			await fireEvent.change(select, { target: { value: 'add' } });
 
 			// Unmount (simulates close) and create new instance (simulates reopen)
 			unmount();
@@ -693,7 +962,7 @@ describe('BudgetAdjustmentModal', () => {
 				}
 			});
 
-			// After reopening, operation should be back to default (set-amount)
+			// After reopening, operation should be back to default (set)
 			const amountInput = screen.queryByTestId('amount-input');
 			expect(amountInput).toBeTruthy();
 

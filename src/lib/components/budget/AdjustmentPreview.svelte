@@ -8,9 +8,15 @@
 	export let isLoading: boolean = false;
 	export let maxDisplay: number = 5;
 
-	$: displayItems = items.slice(0, maxDisplay);
+	let expanded: boolean = false;
+
+	$: displayItems = expanded ? items : items.slice(0, maxDisplay);
 	$: hasMore = items.length > maxDisplay;
 	$: remainingCount = items.length - maxDisplay;
+
+	function toggleExpanded() {
+		expanded = !expanded;
+	}
 
 	function formatDifference(current: number, newValue: number): string {
 		const diff = newValue - current;
@@ -40,7 +46,7 @@
 			<span class="loading-spinner"></span>
 			<span>Calculating preview...</span>
 		</div>
-	{:else if displayItems.length === 0}
+	{:else if items.length === 0}
 		<div class="preview-empty" data-testid="preview-empty">
 			<p>Select categories and date range to preview changes.</p>
 		</div>
@@ -67,10 +73,24 @@
 				</div>
 			{/each}
 
-			{#if hasMore}
-				<div class="preview-more" data-testid="preview-more">
-					...and {remainingCount} more
-				</div>
+			{#if hasMore && !expanded}
+				<button
+					type="button"
+					class="preview-show-more"
+					data-testid="preview-show-more"
+					on:click={toggleExpanded}
+				>
+					Show {remainingCount} more
+				</button>
+			{:else if hasMore && expanded}
+				<button
+					type="button"
+					class="preview-show-more"
+					data-testid="preview-show-less"
+					on:click={toggleExpanded}
+				>
+					Show less
+				</button>
 			{/if}
 		</div>
 	{/if}
@@ -216,12 +236,19 @@
 		color: var(--text-secondary, #6b7280);
 	}
 
-	.preview-more {
-		font-size: 0.75rem;
-		color: var(--text-secondary, #6b7280);
+	.preview-show-more {
+		font-size: 0.8125rem;
+		color: var(--color-accent, #4f46e5);
 		padding: 8px 0;
 		text-align: center;
-		font-style: italic;
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-weight: 500;
+	}
+
+	.preview-show-more:hover {
+		text-decoration: underline;
 	}
 
 	/* Dark mode */
