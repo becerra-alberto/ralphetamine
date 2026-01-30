@@ -39,7 +39,6 @@
 
 	// State
 	let selectedCategories: Set<string> = new Set();
-	let allCategoriesSelected: boolean = false;
 	let selectedOperation: OperationType = 'set-amount';
 	let amountValue: string = '';
 	let percentValue: string = '';
@@ -99,6 +98,34 @@
 		}
 	}
 
+	// Per-section selection state (all reactive via $:)
+	$: allCategoriesSelected = selectableCategories.length > 0 && selectedCategories.size === selectableCategories.length;
+	$: totalSelectedCount = selectedCategories.size;
+	$: totalSelectableCount = selectableCategories.length;
+
+	// Reactive per-section state map — recomputed when selectedCategories or sections change
+	interface SectionState {
+		selectedCount: number;
+		totalCount: number;
+		allSelected: boolean;
+		indeterminate: boolean;
+	}
+	$: sectionStates = new Map<string, SectionState>(
+		sections.map((section) => {
+			const selectedCount = section.children.filter((c) => selectedCategories.has(c.id)).length;
+			const totalCount = section.children.length;
+			return [
+				section.id,
+				{
+					selectedCount,
+					totalCount,
+					allSelected: totalCount > 0 && selectedCount === totalCount,
+					indeterminate: selectedCount > 0 && selectedCount < totalCount
+				}
+			];
+		})
+	);
+
 	function toggleCategory(categoryId: string) {
 		const newSet = new Set(selectedCategories);
 		if (newSet.has(categoryId)) {
@@ -107,17 +134,38 @@
 			newSet.add(categoryId);
 		}
 		selectedCategories = newSet;
-		allCategoriesSelected = selectedCategories.size === selectableCategories.length;
 	}
 
 	function toggleAllCategories() {
 		if (allCategoriesSelected) {
 			selectedCategories = new Set();
-			allCategoriesSelected = false;
 		} else {
 			selectedCategories = new Set(selectableCategories.map((c) => c.id));
-			allCategoriesSelected = true;
 		}
+	}
+
+	function toggleSection(section: CategorySection) {
+		const newSet = new Set(selectedCategories);
+		const state = sectionStates.get(section.id);
+		const allSelected = state?.allSelected ?? false;
+		for (const child of section.children) {
+			if (allSelected) {
+				newSet.delete(child.id);
+			} else {
+				newSet.add(child.id);
+			}
+		}
+		selectedCategories = newSet;
+	}
+
+	// Svelte action to set the indeterminate DOM property (not settable via attribute)
+	function indeterminate(node: HTMLInputElement, value: boolean) {
+		node.indeterminate = value;
+		return {
+			update(newValue: boolean) {
+				node.indeterminate = newValue;
+			}
+		};
 	}
 
 	function handleStartMonthChange() {
@@ -327,7 +375,6 @@
 
 	function resetModalState() {
 		selectedCategories = new Set();
-		allCategoriesSelected = false;
 		selectedOperation = 'set-amount';
 		amountValue = '';
 		percentValue = '';
@@ -348,25 +395,41 @@
 	<div class="adjustment-form" data-testid="budget-adjustment-modal">
 		<!-- Category Selection -->
 		<section class="form-section">
-			<h3 class="section-title">Categories</h3>
+			<div class="category-header">
+				<h3 class="section-title">Categories</h3>
+				<span class="global-count" data-testid="global-category-count">
+					{totalSelectedCount} of {totalSelectableCount} selected
+				</span>
+			</div>
 
 			<label class="checkbox-row all-categories" data-testid="select-all-categories">
 				<input
 					type="checkbox"
 					checked={allCategoriesSelected}
+					use:indeterminate={totalSelectedCount > 0 && !allCategoriesSelected}
 					on:change={toggleAllCategories}
 				/>
 				<span>All categories</span>
-				<span class="count">({selectableCategories.length})</span>
 			</label>
 
 			<div class="category-list" data-testid="category-list">
 				{#each sections as section}
-					<div class="category-section">
-						<span class="section-name">{section.name}</span>
+					<div class="category-section" data-testid="section-{section.name.toLowerCase()}">
+						<label class="section-header-row" data-testid="section-header-{section.name.toLowerCase()}">
+							<input
+								type="checkbox"
+								checked={sectionStates.get(section.id)?.allSelected ?? false}
+								use:indeterminate={sectionStates.get(section.id)?.indeterminate ?? false}
+								on:change={() => toggleSection(section)}
+							/>
+							<span class="section-name">{section.name}</span>
+							<span class="section-count" data-testid="section-count-{section.name.toLowerCase()}">
+								{sectionStates.get(section.id)?.selectedCount ?? 0} of {sectionStates.get(section.id)?.totalCount ?? 0} selected
+							</span>
+						</label>
 						<div class="section-categories">
 							{#each section.children as category}
-								<label class="checkbox-row" data-testid="category-{category.id}">
+								<label class="category-chip" data-testid="category-{category.id}" class:selected={selectedCategories.has(category.id)}>
 									<input
 										type="checkbox"
 										checked={selectedCategories.has(category.id)}
@@ -539,6 +602,17 @@
 	}
 
 	/* Category Selection */
+	.category-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.global-count {
+		font-size: 0.75rem;
+		color: var(--text-secondary, #6b7280);
+	}
+
 	.checkbox-row {
 		display: flex;
 		align-items: center;
@@ -559,36 +633,85 @@
 		border-bottom: 1px solid var(--border-color, #e5e7eb);
 	}
 
-	.count {
-		color: var(--text-secondary, #6b7280);
-	}
-
 	.category-list {
-		max-height: 200px;
+		max-height: 240px;
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
+		padding-right: 4px;
 	}
 
 	.category-section {
 		display: flex;
 		flex-direction: column;
+		gap: 6px;
+	}
+
+	.section-header-row {
+		display: flex;
+		align-items: center;
 		gap: 8px;
+		cursor: pointer;
+		font-size: 0.8125rem;
+	}
+
+	.section-header-row input[type='checkbox'] {
+		width: 16px;
+		height: 16px;
+		cursor: pointer;
 	}
 
 	.section-name {
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--text-secondary, #6b7280);
+		font-weight: 600;
+		color: var(--text-primary, #111827);
 		text-transform: uppercase;
+		font-size: 0.75rem;
+		letter-spacing: 0.03em;
+	}
+
+	.section-count {
+		font-size: 0.6875rem;
+		color: var(--text-secondary, #6b7280);
+		margin-left: auto;
 	}
 
 	.section-categories {
 		display: flex;
-		flex-direction: column;
+		flex-wrap: wrap;
+		gap: 6px;
+		padding-left: 24px;
+	}
+
+	.category-chip {
+		display: inline-flex;
+		align-items: center;
 		gap: 4px;
-		padding-left: 8px;
+		padding: 3px 8px;
+		font-size: 0.8125rem;
+		color: var(--text-primary, #111827);
+		background: var(--bg-secondary, #f8f9fa);
+		border: 1px solid var(--border-color, #e5e7eb);
+		border-radius: 4px;
+		cursor: pointer;
+		transition:
+			background 100ms ease,
+			border-color 100ms ease;
+	}
+
+	.category-chip:hover {
+		background: var(--bg-hover, #f3f4f6);
+	}
+
+	.category-chip.selected {
+		background: var(--color-accent-light, #eef2ff);
+		border-color: var(--color-accent, #4f46e5);
+	}
+
+	.category-chip input[type='checkbox'] {
+		width: 14px;
+		height: 14px;
+		cursor: pointer;
 	}
 
 	/* Date Range */
@@ -776,5 +899,6 @@
 		--border-color: #2d2d2d;
 		--text-primary: #f9fafb;
 		--text-secondary: #9ca3af;
+		--color-accent-light: #1e1b4b;
 	}
 </style>

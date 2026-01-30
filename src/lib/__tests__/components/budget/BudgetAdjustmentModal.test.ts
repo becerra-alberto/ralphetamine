@@ -432,6 +432,115 @@ describe('BudgetAdjustmentModal', () => {
 		});
 	});
 
+	describe('section header checkboxes (Story 8.5)', () => {
+		it('clicking section header selects all children', async () => {
+			render(BudgetAdjustmentModal, {
+				props: { open: true, categories: mockCategories }
+			});
+
+			// Click the Housing section header checkbox
+			const housingHeader = screen.getByTestId('section-header-housing');
+			const headerCheckbox = housingHeader.querySelector('input[type="checkbox"]')!;
+			await fireEvent.click(headerCheckbox);
+
+			// Both Housing children (Rent + Utilities) should be selected
+			const rentCheckbox = screen.getByTestId('category-rent').querySelector('input') as HTMLInputElement;
+			const utilitiesCheckbox = screen.getByTestId('category-utilities').querySelector('input') as HTMLInputElement;
+			expect(rentCheckbox.checked).toBe(true);
+			expect(utilitiesCheckbox.checked).toBe(true);
+		});
+
+		it('clicking section header deselects all children when all selected', async () => {
+			render(BudgetAdjustmentModal, {
+				props: { open: true, categories: mockCategories }
+			});
+
+			// First select all Housing children
+			const housingHeader = screen.getByTestId('section-header-housing');
+			const headerCheckbox = housingHeader.querySelector('input[type="checkbox"]')!;
+			await fireEvent.click(headerCheckbox);
+
+			// Verify they're selected
+			const rentCheckbox = screen.getByTestId('category-rent').querySelector('input') as HTMLInputElement;
+			const utilitiesCheckbox = screen.getByTestId('category-utilities').querySelector('input') as HTMLInputElement;
+			expect(rentCheckbox.checked).toBe(true);
+			expect(utilitiesCheckbox.checked).toBe(true);
+
+			// Click again to deselect all
+			await fireEvent.click(headerCheckbox);
+
+			expect(rentCheckbox.checked).toBe(false);
+			expect(utilitiesCheckbox.checked).toBe(false);
+		});
+
+		it('unchecking one child shows indeterminate on section header', async () => {
+			render(BudgetAdjustmentModal, {
+				props: { open: true, categories: mockCategories }
+			});
+
+			// Select all Housing children via header
+			const housingHeader = screen.getByTestId('section-header-housing');
+			const headerCheckbox = housingHeader.querySelector('input[type="checkbox"]') as HTMLInputElement;
+			await fireEvent.click(headerCheckbox);
+
+			// Now deselect one child (Utilities)
+			const utilitiesCheckbox = screen.getByTestId('category-utilities').querySelector('input')!;
+			await fireEvent.click(utilitiesCheckbox);
+
+			// Section header should show indeterminate state
+			expect(headerCheckbox.indeterminate).toBe(true);
+		});
+
+		it('selection count displays correct fraction per section', async () => {
+			render(BudgetAdjustmentModal, {
+				props: { open: true, categories: mockCategories }
+			});
+
+			// Initially Housing count should be "0 of 2 selected"
+			expect(screen.getByTestId('section-count-housing').textContent).toContain('0 of 2 selected');
+
+			// Select one child
+			const rentCheckbox = screen.getByTestId('category-rent').querySelector('input')!;
+			await fireEvent.click(rentCheckbox);
+
+			// Housing count should update to "1 of 2 selected"
+			await waitFor(() => {
+				expect(screen.getByTestId('section-count-housing').textContent).toContain('1 of 2 selected');
+			});
+
+			// Select second child
+			const utilitiesCheckbox = screen.getByTestId('category-utilities').querySelector('input')!;
+			await fireEvent.click(utilitiesCheckbox);
+
+			// Housing count should update to "2 of 2 selected"
+			await waitFor(() => {
+				expect(screen.getByTestId('section-count-housing').textContent).toContain('2 of 2 selected');
+			});
+		});
+
+		it('global count displays correct total fraction', async () => {
+			render(BudgetAdjustmentModal, {
+				props: { open: true, categories: mockCategories }
+			});
+
+			// Initially: "0 of 6 selected" (6 selectable children total)
+			const globalCount = screen.getByTestId('global-category-count');
+			expect(globalCount.textContent).toContain('0 of 6 selected');
+
+			// Select Rent
+			const rentCheckbox = screen.getByTestId('category-rent').querySelector('input')!;
+			await fireEvent.click(rentCheckbox);
+
+			expect(globalCount.textContent).toContain('1 of 6 selected');
+
+			// Select all via "All categories"
+			const selectAll = screen.getByTestId('select-all-categories').querySelector('input')!;
+			await fireEvent.click(selectAll);
+
+			expect(globalCount.textContent).toContain('6 of 6 selected');
+		});
+	});
+
 	describe('reactivity fixes', () => {
 		it('should render modal with all form elements interactive', () => {
 			render(BudgetAdjustmentModal, {
