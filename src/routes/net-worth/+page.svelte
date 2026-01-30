@@ -10,7 +10,9 @@
 		saveNetWorthSnapshot,
 		getMomChange,
 		updateAccountBalance,
-		createAccount
+		createAccount,
+		updateAccount,
+		deleteAccount
 	} from '$lib/api/netWorth';
 
 	let isLoading = true;
@@ -62,6 +64,29 @@
 		}
 	}
 
+	async function handleAccountEdit(event: CustomEvent<{ accountId: string; update: { name?: string; institution?: string; accountType?: string } }>) {
+		try {
+			await updateAccount(event.detail.accountId, event.detail.update);
+			await refreshData();
+		} catch (e) {
+			const message = e instanceof Error ? e.message : String(e);
+			error = message;
+		}
+	}
+
+	async function handleAccountDelete(event: CustomEvent<{ accountId: string }>) {
+		try {
+			const txCount = await deleteAccount(event.detail.accountId);
+			if (txCount > 0) {
+				// Account had transactions, but was soft-deleted
+			}
+			await refreshData();
+		} catch (e) {
+			const message = e instanceof Error ? e.message : String(e);
+			error = message;
+		}
+	}
+
 	function handleAddAccount(event: CustomEvent<{ defaultType: string }>) {
 		addAccountDefaultType = event.detail.defaultType;
 		showAddAccountModal = true;
@@ -73,10 +98,12 @@
 		institution: string;
 		currency: string;
 		startingBalanceCents: number;
+		bankNumber: string;
+		country: string;
 	}>) {
 		try {
-			const { name, accountType, institution, currency, startingBalanceCents } = event.detail;
-			await createAccount(name, accountType, institution, currency, startingBalanceCents);
+			const { name, accountType, institution, currency, startingBalanceCents, bankNumber, country } = event.detail;
+			await createAccount(name, accountType, institution, currency, startingBalanceCents, bankNumber || null, country || null);
 			showAddAccountModal = false;
 			await refreshData();
 		} catch (e) {
@@ -115,6 +142,8 @@
 				editable={true}
 				on:balanceSave={handleBalanceSave}
 				on:addAccount={handleAddAccount}
+				on:edit={handleAccountEdit}
+				on:delete={handleAccountDelete}
 			/>
 			<LiabilitiesSection
 				accounts={$netWorthStore.accounts}
@@ -122,6 +151,8 @@
 				editable={true}
 				on:balanceSave={handleBalanceSave}
 				on:addAccount={handleAddAccount}
+				on:edit={handleAccountEdit}
+				on:delete={handleAccountDelete}
 			/>
 		{/if}
 	{/if}

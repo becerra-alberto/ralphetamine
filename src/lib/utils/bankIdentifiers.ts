@@ -87,3 +87,27 @@ export function detectBankNumberFormat(value: string): BankNumberFormat {
 
 	return 'generic';
 }
+
+/**
+ * Mask a bank number for display: first 4 + "..." + last 4 chars.
+ * Short values (< 8 chars) are returned as-is. Null/empty returns empty string.
+ */
+export function maskBankNumber(value: string | null | undefined): string {
+	if (!value || value.trim().length === 0) {
+		return '';
+	}
+	const trimmed = value.trim();
+	if (trimmed.length < 8) {
+		return trimmed;
+	}
+	return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+}
+
+/** Common country codes for account identification */
+export const COUNTRY_CODES = [
+	'AD', 'AT', 'BE', 'CA', 'CH', 'CZ', 'DE', 'DK', 'ES', 'FI',
+	'FR', 'GB', 'GR', 'HU', 'IE', 'IT', 'LU', 'MX', 'NL', 'NO',
+	'PL', 'PT', 'RO', 'SE', 'US'
+] as const;
+
+export type CountryCode = (typeof COUNTRY_CODES)[number];

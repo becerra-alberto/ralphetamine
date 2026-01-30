@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import { parseDisplayToCents } from '$lib/utils/currency';
+	import { validateBankNumber, COUNTRY_CODES } from '$lib/utils/bankIdentifiers';
 
 	export let isOpen = false;
 	export let defaultType = 'checking';
@@ -13,6 +14,8 @@
 			institution: string;
 			currency: string;
 			startingBalanceCents: number;
+			bankNumber: string;
+			country: string;
 		};
 		close: void;
 	}>();
@@ -22,6 +25,8 @@
 	let institution = '';
 	let currency = 'EUR';
 	let startingBalance = '';
+	let bankNumber = '';
+	let country = '';
 	let errors: Record<string, string> = {};
 
 	const ACCOUNT_TYPES = [
@@ -35,7 +40,8 @@
 	const CURRENCIES = [
 		{ value: 'EUR', label: 'EUR (€)' },
 		{ value: 'USD', label: 'USD ($)' },
-		{ value: 'CAD', label: 'CAD ($)' }
+		{ value: 'CAD', label: 'CAD ($)' },
+		{ value: 'MXN', label: 'MXN ($)' }
 	];
 
 	function validate(): boolean {
@@ -45,6 +51,12 @@
 		else {
 			const parsed = parseFloat(startingBalance.replace(/[^0-9.-]/g, ''));
 			if (isNaN(parsed)) errors.balance = 'Enter a valid amount';
+		}
+		if (bankNumber.trim()) {
+			const validation = validateBankNumber(bankNumber.trim());
+			if (!validation.valid) {
+				errors.bankNumber = validation.error || 'Invalid bank number';
+			}
 		}
 		return Object.keys(errors).length === 0;
 	}
@@ -61,7 +73,9 @@
 			accountType,
 			institution: institution.trim(),
 			currency,
-			startingBalanceCents: balanceCents
+			startingBalanceCents: balanceCents,
+			bankNumber: bankNumber.trim(),
+			country
 		});
 
 		resetForm();
@@ -78,6 +92,8 @@
 		institution = '';
 		currency = 'EUR';
 		startingBalance = '';
+		bankNumber = '';
+		country = '';
 		errors = {};
 	}
 
@@ -137,6 +153,30 @@
 					<select id="account-currency" bind:value={currency} data-testid="{testId}-currency-select">
 						{#each CURRENCIES as curr}
 							<option value={curr.value}>{curr.label}</option>
+						{/each}
+					</select>
+				</div>
+
+				<div class="form-field">
+					<label for="account-bank-number">Bank Number (IBAN/CLABE)</label>
+					<input
+						id="account-bank-number"
+						type="text"
+						bind:value={bankNumber}
+						placeholder="e.g., NL82BUNQ2071504690"
+						data-testid="{testId}-bank-number-input"
+					/>
+					{#if errors.bankNumber}
+						<span class="error" data-testid="{testId}-bank-number-error">{errors.bankNumber}</span>
+					{/if}
+				</div>
+
+				<div class="form-field">
+					<label for="account-country">Country</label>
+					<select id="account-country" bind:value={country} data-testid="{testId}-country-select">
+						<option value="">-- Select --</option>
+						{#each COUNTRY_CODES as code}
+							<option value={code}>{code}</option>
 						{/each}
 					</select>
 				</div>

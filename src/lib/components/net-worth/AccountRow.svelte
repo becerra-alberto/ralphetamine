@@ -4,6 +4,7 @@
 	import type { CurrencyCode } from '$lib/utils/currency';
 	import type { AccountWithBalance } from '$lib/api/netWorth';
 	import BalanceEdit from './BalanceEdit.svelte';
+	import { maskBankNumber, validateBankNumber, COUNTRY_CODES } from '$lib/utils/bankIdentifiers';
 
 	export let account: AccountWithBalance;
 	export let showAbsoluteBalance = false;
@@ -12,7 +13,79 @@
 
 	const dispatch = createEventDispatcher<{
 		balanceSave: { accountId: string; newBalanceCents: number };
+		edit: { accountId: string; update: { name?: string; institution?: string; accountType?: string; bankNumber?: string; country?: string } };
+		delete: { accountId: string };
 	}>();
+
+	let showMenu = false;
+	let isEditing = false;
+	let editName = '';
+	let editInstitution = '';
+	let editBankNumber = '';
+	let editCountry = '';
+	let bankNumberError = '';
+
+	function openMenu() {
+		showMenu = !showMenu;
+	}
+
+	function startEdit() {
+		editName = account.name;
+		editInstitution = account.institution || '';
+		editBankNumber = account.bankNumber || '';
+		editCountry = account.country || '';
+		bankNumberError = '';
+		isEditing = true;
+		showMenu = false;
+	}
+
+	function cancelEdit() {
+		isEditing = false;
+	}
+
+	function saveEdit() {
+		if (!editName.trim()) return;
+		const bankVal = editBankNumber.trim();
+		if (bankVal) {
+			const validation = validateBankNumber(bankVal);
+			if (!validation.valid) {
+				bankNumberError = validation.error || 'Invalid bank number';
+				return;
+			}
+		}
+		bankNumberError = '';
+		dispatch('edit', {
+			accountId: account.id,
+			update: {
+				name: editName.trim(),
+				institution: editInstitution.trim(),
+				bankNumber: bankVal,
+				country: editCountry
+			}
+		});
+		isEditing = false;
+	}
+
+	function handleDelete() {
+		showMenu = false;
+		dispatch('delete', { accountId: account.id });
+	}
+
+	function handleEditKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			saveEdit();
+		} else if (event.key === 'Escape') {
+			cancelEdit();
+		}
+	}
+
+	function handleClickOutsideMenu(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+		if (!target.closest('.kebab-menu-container')) {
+			showMenu = false;
+		}
+	}
 
 	$: currency = (account.currency || 'EUR') as CurrencyCode;
 	$: isNonEur = currency !== 'EUR';
@@ -34,6 +107,7 @@
 	}
 
 	$: lastUpdatedText = formatLastUpdated(account.lastBalanceUpdate);
+	$: maskedBank = maskBankNumber(account.bankNumber);
 
 	function handleBalanceSave(event: CustomEvent<{ newBalanceCents: number }>) {
 		dispatch('balanceSave', {
@@ -43,35 +117,115 @@
 	}
 </script>
 
-<div class="account-row" data-testid={testId}>
-	<div class="account-info">
-		<span class="account-name" data-testid="{testId}-name">{account.name}</span>
-		{#if account.institution}
-			<span class="account-institution" data-testid="{testId}-institution">{account.institution}</span>
+<svelte:window on:click={handleClickOutsideMenu} />
+
+{#if isEditing}
+	<div class="account-row account-row--editing" data-testid="{testId}-editing">
+		<div class="edit-fields">
+			<input
+				class="edit-input"
+				type="text"
+				bind:value={editName}
+				placeholder="Account name"
+				on:keydown={handleEditKeydown}
+				data-testid="{testId}-edit-name"
+			/>
+			<input
+				class="edit-input edit-input--small"
+				type="text"
+				bind:value={editInstitution}
+				placeholder="Institution"
+				on:keydown={handleEditKeydown}
+				data-testid="{testId}-edit-institution"
+			/>
+			<input
+				class="edit-input edit-input--small"
+				type="text"
+				bind:value={editBankNumber}
+				placeholder="IBAN / CLABE"
+				on:keydown={handleEditKeydown}
+				data-testid="{testId}-edit-bank-number"
+			/>
+			<select
+				class="edit-input edit-input--tiny"
+				bind:value={editCountry}
+				data-testid="{testId}-edit-country"
+			>
+				<option value="">--</option>
+				{#each COUNTRY_CODES as code}
+					<option value={code}>{code}</option>
+				{/each}
+			</select>
+		</div>
+		{#if bankNumberError}
+			<span class="edit-error" data-testid="{testId}-bank-number-error">{bankNumberError}</span>
 		{/if}
+		<div class="edit-actions">
+			<button class="edit-btn edit-btn--save" on:click={saveEdit} data-testid="{testId}-edit-save">Save</button>
+			<button class="edit-btn edit-btn--cancel" on:click={cancelEdit} data-testid="{testId}-edit-cancel">Cancel</button>
+		</div>
 	</div>
-	<div class="account-balance-col">
-		<div class="account-balance">
-			{#if editable}
-				<BalanceEdit
-					balanceCents={account.balanceCents}
-					testId="{testId}-edit"
-					on:save={handleBalanceSave}
-				>
-					<span class="balance-amount" data-testid="{testId}-balance">{formattedBalance}</span>
-				</BalanceEdit>
-			{:else}
-				<span class="balance-amount" data-testid="{testId}-balance">{formattedBalance}</span>
+{:else}
+	<div class="account-row" data-testid={testId}>
+		<div class="account-info">
+			<div class="account-name-row">
+				<span class="account-name" data-testid="{testId}-name">{account.name}</span>
+				{#if account.country}
+					<span class="country-badge" data-testid="{testId}-country">{account.country}</span>
+				{/if}
+			</div>
+			{#if account.institution}
+				<span class="account-institution" data-testid="{testId}-institution">{account.institution}</span>
 			{/if}
-			{#if isNonEur}
-				<span class="currency-badge" data-testid="{testId}-currency">{currency}</span>
+			{#if maskedBank}
+				<span class="account-bank-number" data-testid="{testId}-bank-number">{maskedBank}</span>
 			{/if}
 		</div>
-		{#if lastUpdatedText}
-			<span class="last-updated" data-testid="{testId}-updated">{lastUpdatedText}</span>
+		<div class="account-balance-col">
+			<div class="account-balance">
+				{#if editable}
+					<BalanceEdit
+						balanceCents={account.balanceCents}
+						testId="{testId}-edit"
+						on:save={handleBalanceSave}
+					>
+						<span class="balance-amount" data-testid="{testId}-balance">{formattedBalance}</span>
+					</BalanceEdit>
+				{:else}
+					<span class="balance-amount" data-testid="{testId}-balance">{formattedBalance}</span>
+				{/if}
+				{#if isNonEur}
+					<span class="currency-badge" data-testid="{testId}-currency">{currency}</span>
+				{/if}
+			</div>
+			{#if lastUpdatedText}
+				<span class="last-updated" data-testid="{testId}-updated">{lastUpdatedText}</span>
+			{/if}
+		</div>
+		{#if editable}
+			<div class="kebab-menu-container">
+				<button
+					class="kebab-btn"
+					on:click|stopPropagation={openMenu}
+					aria-label="Account actions"
+					data-testid="{testId}-menu-btn"
+				>
+					&#8942;
+				</button>
+				{#if showMenu}
+					<div class="kebab-dropdown" data-testid="{testId}-menu">
+						<button class="kebab-option" on:click|stopPropagation={startEdit} data-testid="{testId}-menu-edit">
+							Edit
+						</button>
+						<button class="kebab-option kebab-option--danger" on:click|stopPropagation={handleDelete} data-testid="{testId}-menu-delete">
+							Delete
+						</button>
+					</div>
+				{/if}
+			</div>
 		{/if}
 	</div>
-</div>
+{/if}
 
 <style>
 	.account-row {
@@ -98,9 +252,31 @@
 		color: var(--text-primary, #111827);
 	}
 
+	.account-name-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
 	.account-institution {
 		font-size: 0.75rem;
 		color: var(--text-secondary, #6b7280);
+	}
+
+	.account-bank-number {
+		font-size: 0.6875rem;
+		color: var(--text-secondary, #9ca3af);
+		font-family: monospace;
+	}
+
+	.country-badge {
+		font-size: 0.625rem;
+		font-weight: 600;
+		color: var(--text-secondary, #6b7280);
+		background: var(--bg-tertiary, #f3f4f6);
+		padding: 1px 4px;
+		border-radius: 3px;
+		text-transform: uppercase;
 	}
 
 	.account-balance-col {
@@ -156,7 +332,183 @@
 		color: #9ca3af;
 	}
 
+	:global(.dark) .country-badge {
+		background: #2d2d2d;
+		color: #9ca3af;
+	}
+
+	:global(.dark) .account-bank-number {
+		color: #6b7280;
+	}
+
 	:global(.dark) .last-updated {
 		color: #6b7280;
+	}
+
+	/* Kebab menu */
+	.kebab-menu-container {
+		position: relative;
+		margin-left: 8px;
+	}
+
+	.kebab-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		background: transparent;
+		color: var(--text-secondary, #9ca3af);
+		font-size: 1.125rem;
+		cursor: pointer;
+		border-radius: 4px;
+		line-height: 1;
+	}
+
+	.kebab-btn:hover {
+		background: var(--bg-hover, #f3f4f6);
+		color: var(--text-primary, #111827);
+	}
+
+	.kebab-dropdown {
+		position: absolute;
+		right: 0;
+		top: 100%;
+		z-index: 20;
+		min-width: 100px;
+		background: var(--bg-primary, #ffffff);
+		border: 1px solid var(--border-color, #e5e7eb);
+		border-radius: 6px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+		padding: 4px;
+	}
+
+	.kebab-option {
+		display: block;
+		width: 100%;
+		padding: 6px 12px;
+		border: none;
+		background: transparent;
+		color: var(--text-primary, #111827);
+		font-size: 0.8125rem;
+		text-align: left;
+		cursor: pointer;
+		border-radius: 4px;
+	}
+
+	.kebab-option:hover {
+		background: var(--bg-hover, #f3f4f6);
+	}
+
+	.kebab-option--danger {
+		color: var(--danger, #ef4444);
+	}
+
+	.kebab-option--danger:hover {
+		background: rgba(239, 68, 68, 0.08);
+	}
+
+	/* Inline edit */
+	.account-row--editing {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		border-bottom: 1px solid var(--border-color, #f3f4f6);
+	}
+
+	.edit-fields {
+		display: flex;
+		gap: 8px;
+		flex: 1;
+	}
+
+	.edit-input {
+		height: 30px;
+		padding: 0 8px;
+		border: 1px solid var(--border-color, #d1d5db);
+		border-radius: 4px;
+		background: var(--bg-primary, #ffffff);
+		color: var(--text-primary, #111827);
+		font-size: 0.8125rem;
+		font-family: inherit;
+		outline: none;
+		flex: 1;
+	}
+
+	.edit-input:focus {
+		border-color: var(--accent, #4f46e5);
+		box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+	}
+
+	.edit-input--small {
+		max-width: 140px;
+	}
+
+	.edit-input--tiny {
+		max-width: 80px;
+	}
+
+	.edit-error {
+		color: var(--danger, #ef4444);
+		font-size: 0.75rem;
+	}
+
+	.edit-actions {
+		display: flex;
+		gap: 4px;
+	}
+
+	.edit-btn {
+		padding: 4px 10px;
+		border-radius: 4px;
+		font-size: 0.75rem;
+		font-weight: 500;
+		cursor: pointer;
+		border: none;
+	}
+
+	.edit-btn--save {
+		background: var(--accent, #4f46e5);
+		color: white;
+	}
+
+	.edit-btn--save:hover {
+		opacity: 0.9;
+	}
+
+	.edit-btn--cancel {
+		background: var(--bg-secondary, #f3f4f6);
+		color: var(--text-primary, #111827);
+		border: 1px solid var(--border-color, #d1d5db);
+	}
+
+	.edit-btn--cancel:hover {
+		background: var(--bg-hover, #e5e7eb);
+	}
+
+	:global(.dark) .kebab-btn:hover {
+		background: #2d2d2d;
+		color: #f9fafb;
+	}
+
+	:global(.dark) .kebab-dropdown {
+		background: #1a1a1a;
+		border-color: #374151;
+	}
+
+	:global(.dark) .kebab-option {
+		color: #f9fafb;
+	}
+
+	:global(.dark) .kebab-option:hover {
+		background: #2d2d2d;
+	}
+
+	:global(.dark) .edit-input {
+		background: #1a1a1a;
+		border-color: #374151;
+		color: #f9fafb;
 	}
 </style>
