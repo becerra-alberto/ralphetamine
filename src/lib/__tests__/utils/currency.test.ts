@@ -264,7 +264,7 @@ describe('Currency Utilities', () => {
 		});
 
 		it('should use custom exchange rates when provided', () => {
-			const customRates = { EUR: 1.0, USD: 0.85, CAD: 0.65 };
+			const customRates = { EUR: 1.0, USD: 0.85, CAD: 0.65, MXN: 0.05 };
 			const result = convertCentsToBase(100000, 'USD', customRates);
 			expect(result).toBe(Math.round(100000 * 0.85));
 		});

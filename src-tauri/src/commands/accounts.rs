@@ -23,6 +23,7 @@ pub enum Currency {
     EUR,
     USD,
     CAD,
+    MXN,
 }
 
 /// Represents an account in the database
@@ -39,6 +40,8 @@ pub struct Account {
     pub include_in_net_worth: bool,
     pub created_at: String,
     pub updated_at: String,
+    pub bank_number: Option<String>,
+    pub country: Option<String>,
 }
 
 /// Get all accounts
@@ -48,7 +51,7 @@ pub fn get_accounts() -> Result<Vec<Account>, String> {
 
     let accounts: Vec<Account> = db
         .query_map(
-            "SELECT id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at
+            "SELECT id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at, bank_number, country
              FROM accounts
              ORDER BY name",
             &[],
@@ -63,6 +66,8 @@ pub fn get_accounts() -> Result<Vec<Account>, String> {
                     include_in_net_worth: row.get::<_, i32>(6)? == 1,
                     created_at: row.get(7)?,
                     updated_at: row.get(8)?,
+                    bank_number: row.get(9)?,
+                    country: row.get(10)?,
                 })
             },
         )
@@ -85,6 +90,8 @@ pub struct AccountWithBalance {
     pub include_in_net_worth: bool,
     pub balance_cents: i64,
     pub last_balance_update: Option<String>,
+    pub bank_number: Option<String>,
+    pub country: Option<String>,
 }
 
 /// Net worth summary data
@@ -106,7 +113,7 @@ pub fn get_net_worth_summary() -> Result<NetWorthSummary, String> {
     let accounts: Vec<AccountWithBalance> = db
         .query_map(
             "SELECT a.id, a.name, a.type, a.institution, a.currency, a.is_active, a.include_in_net_worth,
-                    COALESCE(SUM(t.amount_cents), 0) as balance_cents, a.last_balance_update
+                    COALESCE(SUM(t.amount_cents), 0) as balance_cents, a.last_balance_update, a.bank_number, a.country
              FROM accounts a
              LEFT JOIN transactions t ON t.account_id = a.id
              WHERE a.is_active = 1 AND a.include_in_net_worth = 1
@@ -124,6 +131,8 @@ pub fn get_net_worth_summary() -> Result<NetWorthSummary, String> {
                     include_in_net_worth: row.get::<_, i32>(6)? == 1,
                     balance_cents: row.get(7)?,
                     last_balance_update: row.get(8)?,
+                    bank_number: row.get(9)?,
+                    country: row.get(10)?,
                 })
             },
         )
@@ -271,20 +280,24 @@ pub fn create_account(
     institution: String,
     currency: String,
     starting_balance_cents: i64,
+    bank_number: Option<String>,
+    country: Option<String>,
 ) -> Result<String, String> {
     let db = get_database().map_err(|e| e.to_string())?;
 
     let id = format!("acc-{}", uuid::Uuid::new_v4());
 
     db.execute(
-        "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth, last_balance_update)
-         VALUES (?, ?, ?, ?, ?, 1, 1, datetime('now'))",
+        "INSERT INTO accounts (id, name, type, institution, currency, is_active, include_in_net_worth, last_balance_update, bank_number, country)
+         VALUES (?, ?, ?, ?, ?, 1, 1, datetime('now'), ?, ?)",
         &[
             &id as &dyn rusqlite::ToSql,
             &name as &dyn rusqlite::ToSql,
             &account_type as &dyn rusqlite::ToSql,
             &institution as &dyn rusqlite::ToSql,
             &currency as &dyn rusqlite::ToSql,
+            &bank_number as &dyn rusqlite::ToSql,
+            &country as &dyn rusqlite::ToSql,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -372,6 +385,130 @@ pub fn update_account_balance(
     Ok(())
 }
 
+/// Input for updating an existing account
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountUpdate {
+    pub name: Option<String>,
+    pub account_type: Option<String>,
+    pub institution: Option<String>,
+    pub currency: Option<String>,
+    pub is_active: Option<bool>,
+    pub include_in_net_worth: Option<bool>,
+    pub bank_number: Option<String>,
+    pub country: Option<String>,
+}
+
+/// Update an existing account's details
+#[tauri::command]
+pub fn update_account(id: String, update: AccountUpdate) -> Result<Account, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    // Build dynamic SET clause
+    let mut sets: Vec<String> = Vec::new();
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+    if let Some(ref name) = update.name {
+        sets.push("name = ?".to_string());
+        params.push(Box::new(name.clone()));
+    }
+    if let Some(ref account_type) = update.account_type {
+        sets.push("type = ?".to_string());
+        params.push(Box::new(account_type.clone()));
+    }
+    if let Some(ref institution) = update.institution {
+        sets.push("institution = ?".to_string());
+        params.push(Box::new(institution.clone()));
+    }
+    if let Some(ref currency) = update.currency {
+        sets.push("currency = ?".to_string());
+        params.push(Box::new(currency.clone()));
+    }
+    if let Some(is_active) = update.is_active {
+        sets.push("is_active = ?".to_string());
+        params.push(Box::new(is_active as i32));
+    }
+    if let Some(include_in_net_worth) = update.include_in_net_worth {
+        sets.push("include_in_net_worth = ?".to_string());
+        params.push(Box::new(include_in_net_worth as i32));
+    }
+    if let Some(ref bank_number) = update.bank_number {
+        sets.push("bank_number = ?".to_string());
+        params.push(Box::new(bank_number.clone()));
+    }
+    if let Some(ref country) = update.country {
+        sets.push("country = ?".to_string());
+        params.push(Box::new(country.clone()));
+    }
+
+    if sets.is_empty() {
+        return Err("No fields to update".to_string());
+    }
+
+    sets.push("updated_at = datetime('now')".to_string());
+    params.push(Box::new(id.clone()));
+
+    let sql = format!(
+        "UPDATE accounts SET {} WHERE id = ?",
+        sets.join(", ")
+    );
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    db.execute(&sql, param_refs.as_slice())
+        .map_err(|e| e.to_string())?;
+
+    // Return the updated account
+    let account: Account = db
+        .query_row(
+            "SELECT id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at, bank_number, country
+             FROM accounts WHERE id = ?",
+            &[&id as &dyn rusqlite::ToSql],
+            |row| {
+                Ok(Account {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    account_type: row.get(2)?,
+                    institution: row.get(3)?,
+                    currency: row.get(4)?,
+                    is_active: row.get::<_, i32>(5)? == 1,
+                    include_in_net_worth: row.get::<_, i32>(6)? == 1,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                    bank_number: row.get(9)?,
+                    country: row.get(10)?,
+                })
+            },
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(account)
+}
+
+/// Soft-delete an account by setting is_active = false.
+/// Returns the number of linked transactions as a warning.
+#[tauri::command]
+pub fn delete_account(id: String) -> Result<i64, String> {
+    let db = get_database().map_err(|e| e.to_string())?;
+
+    // Count linked transactions for the warning
+    let tx_count: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM transactions WHERE account_id = ?",
+            &[&id as &dyn rusqlite::ToSql],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    // Soft-delete: set is_active = false
+    db.execute(
+        "UPDATE accounts SET is_active = 0, updated_at = datetime('now') WHERE id = ?",
+        &[&id as &dyn rusqlite::ToSql],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(tx_count)
+}
+
 /// Get balance history for an account
 #[tauri::command]
 pub fn get_balance_history(account_id: String) -> Result<Vec<(i64, String)>, String> {
@@ -410,7 +547,7 @@ mod tests {
 
         let accounts: Vec<Account> = db
             .query_map(
-                "SELECT id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at
+                "SELECT id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at, bank_number, country
                  FROM accounts ORDER BY name",
                 &[],
                 |row| {
@@ -424,6 +561,8 @@ mod tests {
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         created_at: row.get(7)?,
                         updated_at: row.get(8)?,
+                        bank_number: row.get(9)?,
+                        country: row.get(10)?,
                     })
                 },
             )
@@ -443,7 +582,7 @@ mod tests {
 
         let _accounts: Vec<Account> = db
             .query_map(
-                "SELECT id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at
+                "SELECT id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at, bank_number, country
                  FROM accounts ORDER BY name",
                 &[],
                 |row| {
@@ -457,6 +596,8 @@ mod tests {
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         created_at: row.get(7)?,
                         updated_at: row.get(8)?,
+                        bank_number: row.get(9)?,
+                        country: row.get(10)?,
                     })
                 },
             )
@@ -570,6 +711,8 @@ mod tests {
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
                         last_balance_update: None,
+                        bank_number: None,
+                        country: None,
                     })
                 },
             )
@@ -672,6 +815,8 @@ mod tests {
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
                         last_balance_update: None,
+                        bank_number: None,
+                        country: None,
                     })
                 },
             )
@@ -873,6 +1018,8 @@ mod tests {
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
                         last_balance_update: None,
+                        bank_number: None,
+                        country: None,
                     })
                 },
             )
@@ -924,6 +1071,8 @@ mod tests {
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
                         last_balance_update: None,
+                        bank_number: None,
+                        country: None,
                     })
                 },
             )
@@ -971,6 +1120,8 @@ mod tests {
                         include_in_net_worth: row.get::<_, i32>(6)? == 1,
                         balance_cents: row.get(7)?,
                         last_balance_update: None,
+                        bank_number: None,
+                        country: None,
                     })
                 },
             )

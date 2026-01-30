@@ -5,7 +5,7 @@
  * Amounts are stored as cents (integer) to avoid floating point issues.
  */
 
-export type CurrencyCode = 'EUR' | 'USD' | 'CAD';
+export type CurrencyCode = 'EUR' | 'USD' | 'CAD' | 'MXN';
 
 /**
  * Currency configuration
@@ -23,7 +23,8 @@ export interface CurrencyConfig {
 export const CURRENCIES: Record<CurrencyCode, CurrencyConfig> = {
 	EUR: { code: 'EUR', symbol: '€', locale: 'en-US' },
 	USD: { code: 'USD', symbol: '$', locale: 'en-US' },
-	CAD: { code: 'CAD', symbol: '$', locale: 'en-US' }
+	CAD: { code: 'CAD', symbol: '$', locale: 'en-US' },
+	MXN: { code: 'MXN', symbol: '$', locale: 'en-US' }
 };
 
 /**
@@ -145,7 +146,8 @@ export function isValidCentsAmount(value: unknown): value is number {
 export const DEFAULT_EXCHANGE_RATES: Record<CurrencyCode, number> = {
 	EUR: 1.0,
 	USD: 0.92,
-	CAD: 0.68
+	CAD: 0.68,
+	MXN: 0.054
 };
 
 /**

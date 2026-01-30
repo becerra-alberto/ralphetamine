@@ -254,6 +254,51 @@ BEGIN
 END;
 "#,
     },
+    Migration {
+        version: "007",
+        description: "Add bank_number and country to accounts, expand currency to include MXN",
+        up: r#"
+-- Add bank_number column (nullable) for IBAN, CLABE, or generic bank identifiers
+ALTER TABLE accounts ADD COLUMN bank_number TEXT;
+
+-- Add country column (nullable) for account country
+ALTER TABLE accounts ADD COLUMN country TEXT;
+
+-- Create unique index on bank_number where not null
+CREATE UNIQUE INDEX idx_accounts_bank_number ON accounts(bank_number) WHERE bank_number IS NOT NULL;
+
+-- Recreate accounts table to expand currency CHECK constraint to include MXN
+-- SQLite does not support ALTER COLUMN, so we recreate the table
+CREATE TABLE accounts_new (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('checking', 'savings', 'credit', 'investment', 'cash')),
+    institution TEXT NOT NULL,
+    currency TEXT NOT NULL CHECK (currency IN ('EUR', 'USD', 'CAD', 'MXN')) DEFAULT 'EUR',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    include_in_net_worth INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_balance_update TEXT,
+    bank_number TEXT,
+    country TEXT
+);
+
+-- Copy data from old table
+INSERT INTO accounts_new (id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at, last_balance_update, bank_number, country)
+SELECT id, name, type, institution, currency, is_active, include_in_net_worth, created_at, updated_at, last_balance_update, bank_number, country
+FROM accounts;
+
+-- Drop old table and rename new
+DROP TABLE accounts;
+ALTER TABLE accounts_new RENAME TO accounts;
+
+-- Recreate indexes
+CREATE INDEX idx_accounts_type ON accounts(type);
+CREATE INDEX idx_accounts_active ON accounts(is_active);
+CREATE UNIQUE INDEX idx_accounts_bank_number ON accounts(bank_number) WHERE bank_number IS NOT NULL;
+"#,
+    },
 ];
 
 /// Run all pending migrations
@@ -436,8 +481,8 @@ mod tests {
         let db = Database::new_in_memory().unwrap();
         run_migrations(&db).unwrap();
 
-        // After running all migrations, current version should be "006"
-        assert_eq!(get_current_version(&db).unwrap(), Some("006".to_string()));
+        // After running all migrations, current version should be "007"
+        assert_eq!(get_current_version(&db).unwrap(), Some("007".to_string()));
     }
 
     #[test]
@@ -528,6 +573,8 @@ mod tests {
         assert!(columns.contains(&"include_in_net_worth".to_string()));
         assert!(columns.contains(&"created_at".to_string()));
         assert!(columns.contains(&"updated_at".to_string()));
+        assert!(columns.contains(&"bank_number".to_string()));
+        assert!(columns.contains(&"country".to_string()));
     }
 
     #[test]
@@ -573,6 +620,7 @@ mod tests {
         assert!(indexes.contains(&"idx_categories_type".to_string()));
         assert!(indexes.contains(&"idx_accounts_type".to_string()));
         assert!(indexes.contains(&"idx_accounts_active".to_string()));
+        assert!(indexes.contains(&"idx_accounts_bank_number".to_string()));
         // Indexes from migration 002
         assert!(indexes.contains(&"idx_budgets_month".to_string()));
         assert!(indexes.contains(&"idx_transactions_date".to_string()));

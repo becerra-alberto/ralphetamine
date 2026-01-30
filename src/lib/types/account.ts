@@ -15,10 +15,10 @@ export const ACCOUNT_TYPES: readonly AccountType[] = [
 ] as const;
 
 /** Valid currency codes */
-export type Currency = 'EUR' | 'USD' | 'CAD';
+export type Currency = 'EUR' | 'USD' | 'CAD' | 'MXN';
 
 /** All valid currency codes */
-export const CURRENCIES: readonly Currency[] = ['EUR', 'USD', 'CAD'] as const;
+export const CURRENCIES: readonly Currency[] = ['EUR', 'USD', 'CAD', 'MXN'] as const;
 
 /**
  * Represents a financial account
@@ -42,6 +42,10 @@ export interface Account {
   createdAt: string;
   /** ISO 8601 last update timestamp */
   updatedAt: string;
+  /** Bank account identifier (IBAN, CLABE, or generic) */
+  bankNumber?: string | null;
+  /** Country code for the account */
+  country?: string | null;
 }
 
 /**

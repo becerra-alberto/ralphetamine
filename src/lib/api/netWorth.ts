@@ -16,6 +16,8 @@ export interface AccountWithBalance {
 	includeInNetWorth: boolean;
 	balanceCents: number;
 	lastBalanceUpdate: string | null;
+	bankNumber?: string | null;
+	country?: string | null;
 }
 
 /** Net worth summary from backend */
@@ -85,14 +87,18 @@ export async function createAccount(
 	accountType: string,
 	institution: string,
 	currency: string,
-	startingBalanceCents: number
+	startingBalanceCents: number,
+	bankNumber?: string | null,
+	country?: string | null
 ): Promise<string> {
 	return invoke('create_account', {
 		name,
 		accountType,
 		institution,
 		currency,
-		startingBalanceCents
+		startingBalanceCents,
+		bankNumber: bankNumber ?? null,
+		country: country ?? null
 	});
 }
 
@@ -104,6 +110,35 @@ export async function updateAccountBalance(
 	newBalanceCents: number
 ): Promise<void> {
 	return invoke('update_account_balance', { accountId, newBalanceCents });
+}
+
+/**
+ * Update an account's details (name, type, institution, etc.)
+ */
+export interface AccountUpdateInput {
+	name?: string;
+	accountType?: string;
+	institution?: string;
+	currency?: string;
+	isActive?: boolean;
+	includeInNetWorth?: boolean;
+	bankNumber?: string;
+	country?: string;
+}
+
+export async function updateAccount(
+	id: string,
+	update: AccountUpdateInput
+): Promise<Account> {
+	return invoke('update_account', { id, update });
+}
+
+/**
+ * Soft-delete an account (sets is_active = false).
+ * Returns the number of linked transactions.
+ */
+export async function deleteAccount(id: string): Promise<number> {
+	return invoke('delete_account', { id });
 }
 
 /**

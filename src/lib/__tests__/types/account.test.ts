@@ -38,9 +38,9 @@ describe('Account Types', () => {
   });
 
   describe('Currency', () => {
-    it('should contain only EUR, USD, CAD', () => {
-      expect(CURRENCIES).toEqual(['EUR', 'USD', 'CAD']);
-      expect(CURRENCIES).toHaveLength(3);
+    it('should contain EUR, USD, CAD, MXN', () => {
+      expect(CURRENCIES).toEqual(['EUR', 'USD', 'CAD', 'MXN']);
+      expect(CURRENCIES).toHaveLength(4);
     });
 
     it('should include EUR', () => {
@@ -53,6 +53,10 @@ describe('Account Types', () => {
 
     it('should include CAD', () => {
       expect(CURRENCIES).toContain('CAD');
+    });
+
+    it('should include MXN', () => {
+      expect(CURRENCIES).toContain('MXN');
     });
   });
 
@@ -78,13 +82,13 @@ describe('Account Types', () => {
       expect(isCurrency('EUR')).toBe(true);
       expect(isCurrency('USD')).toBe(true);
       expect(isCurrency('CAD')).toBe(true);
+      expect(isCurrency('MXN')).toBe(true);
     });
 
     it('should return false for invalid currencies', () => {
       expect(isCurrency('GBP')).toBe(false);
       expect(isCurrency('eur')).toBe(false);
       expect(isCurrency('')).toBe(false);
-      expect(isCurrency('MXN')).toBe(false);
     });
   });
 
@@ -151,7 +155,7 @@ describe('Account Types', () => {
     });
 
     it('should support all currencies', () => {
-      const currencies: Currency[] = ['EUR', 'USD', 'CAD'];
+      const currencies: Currency[] = ['EUR', 'USD', 'CAD', 'MXN'];
 
       currencies.forEach((currency) => {
         const account: Account = {
