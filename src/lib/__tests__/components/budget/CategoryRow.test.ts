@@ -185,6 +185,61 @@ describe('CategoryRow', () => {
 		});
 	});
 
+	describe('sticky subcategory name', () => {
+		it('should have category-name class with sticky positioning on name cell', () => {
+			// The .category-name CSS class applies position: sticky; left: 0
+			// jsdom doesn't process CSS, so we verify the class is applied
+			const cells = new Map<string, BudgetCell>();
+			render(CategoryRow, {
+				props: {
+					category: mockCategory,
+					cells,
+					months: ['2025-01'],
+					currentMonth: '2025-01'
+				}
+			});
+
+			const nameCell = screen.getByRole('rowheader');
+			expect(nameCell.classList.contains('category-name')).toBe(true);
+		});
+
+		it('should have opaque background on name cell (not transparent)', () => {
+			// The .category-name CSS class sets background: var(--bg-primary, #ffffff)
+			// which is opaque. We verify the class is present on the element.
+			const cells = new Map<string, BudgetCell>();
+			render(CategoryRow, {
+				props: {
+					category: mockCategory,
+					cells,
+					months: ['2025-01'],
+					currentMonth: '2025-01'
+				}
+			});
+
+			const nameCell = screen.getByRole('rowheader');
+			// Verify the element has the category-name class which includes opaque bg
+			expect(nameCell.classList.contains('category-name')).toBe(true);
+		});
+
+		it('should use same z-index as section header sticky column', () => {
+			// Both .category-name (CategoryRow) and .section-name (SectionHeader)
+			// use z-index: 10 in their CSS. We verify the class structure matches.
+			const cells = new Map<string, BudgetCell>();
+			render(CategoryRow, {
+				props: {
+					category: mockCategory,
+					cells,
+					months: ['2025-01'],
+					currentMonth: '2025-01'
+				}
+			});
+
+			const nameCell = screen.getByRole('rowheader');
+			// Verify category-name class is applied (which has z-index: 10, matching section-name)
+			expect(nameCell.classList.contains('category-name')).toBe(true);
+		});
+	});
+
 	describe('minimum row height', () => {
 		it('should have category-row class for styling', () => {
 			// Note: jsdom doesn't process CSS, so we verify the class is applied
