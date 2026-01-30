@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { goto, afterNavigate } from '$app/navigation';
+	import { onMount, onDestroy } from 'svelte';
 	import BudgetGrid from '$lib/components/budget/BudgetGrid.svelte';
 	import DateRangeSelector from '$lib/components/budget/DateRangeSelector.svelte';
 	import BudgetAdjustmentModal from '$lib/components/budget/BudgetAdjustmentModal.svelte';
@@ -93,9 +93,14 @@
 		}
 	}
 
+	// Track whether initial mount load has happened
+	let hasInitialLoad = false;
+
 	// Initialize from URL params on mount
 	onMount(() => {
 		document.addEventListener('keydown', handleKeydown);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
 		const params = $page.url.searchParams;
 		const urlStart = params.get('start');
 		const urlEnd = params.get('end');
@@ -113,11 +118,28 @@
 		const months = getMonthRange(startMonth, endMonth);
 		budgetStore.setDateRange(months);
 		loadBudgetData(months);
-
-		return () => {
-			document.removeEventListener('keydown', handleKeydown);
-		};
+		hasInitialLoad = true;
 	});
+
+	onDestroy(() => {
+		document.removeEventListener('keydown', handleKeydown);
+		document.removeEventListener('visibilitychange', handleVisibilityChange);
+	});
+
+	// Re-fetch budget data when navigating to this page (e.g. from Transactions)
+	afterNavigate(() => {
+		if (!hasInitialLoad) return;
+		const months = getMonthRange(startMonth, endMonth);
+		loadBudgetData(months);
+	});
+
+	// Re-fetch when tab becomes visible again
+	function handleVisibilityChange() {
+		if (document.visibilityState === 'visible' && hasInitialLoad) {
+			const months = getMonthRange(startMonth, endMonth);
+			loadBudgetData(months);
+		}
+	}
 
 	// Subscribe to get categories from store
 	$: categories = $budgetStore.categories;

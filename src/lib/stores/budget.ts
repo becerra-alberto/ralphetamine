@@ -48,6 +48,8 @@ export interface BudgetGridState {
 	uncategorized: Map<MonthString, UncategorizedData>;
 	isLoading: boolean;
 	error: string | null;
+	/** Incremented when data should be considered stale and re-fetched */
+	invalidationCounter: number;
 }
 
 /**
@@ -73,7 +75,8 @@ const initialState: BudgetGridState = {
 	actuals: new Map(),
 	uncategorized: new Map(),
 	isLoading: false,
-	error: null
+	error: null,
+	invalidationCounter: 0
 };
 
 /**
@@ -169,6 +172,13 @@ function createBudgetStore() {
 		 */
 		setError: (error: string | null) => {
 			update((state) => ({ ...state, error }));
+		},
+
+		/**
+		 * Mark data as stale so next navigation triggers a refresh
+		 */
+		invalidate: () => {
+			update((state) => ({ ...state, invalidationCounter: state.invalidationCounter + 1 }));
 		},
 
 		/**

@@ -195,6 +195,58 @@ describe('Budget Store', () => {
 	});
 });
 
+describe('Invalidation Signal', () => {
+	beforeEach(() => {
+		budgetStore.reset();
+	});
+
+	describe('invalidate', () => {
+		it('should increment invalidationCounter on invalidate()', () => {
+			const stateBefore = get(budgetStore);
+			expect(stateBefore.invalidationCounter).toBe(0);
+
+			budgetStore.invalidate();
+
+			const stateAfter = get(budgetStore);
+			expect(stateAfter.invalidationCounter).toBe(1);
+		});
+
+		it('should increment counter on each invalidate call', () => {
+			budgetStore.invalidate();
+			budgetStore.invalidate();
+			budgetStore.invalidate();
+
+			const state = get(budgetStore);
+			expect(state.invalidationCounter).toBe(3);
+		});
+
+		it('should reset invalidationCounter on reset()', () => {
+			budgetStore.invalidate();
+			budgetStore.invalidate();
+			expect(get(budgetStore).invalidationCounter).toBe(2);
+
+			budgetStore.reset();
+			expect(get(budgetStore).invalidationCounter).toBe(0);
+		});
+
+		it('should trigger store subscribers when invalidated', () => {
+			const callback = vi.fn();
+			const unsubscribe = budgetStore.subscribe(callback);
+
+			// Clear the initial call from subscribe
+			callback.mockClear();
+
+			budgetStore.invalidate();
+
+			expect(callback).toHaveBeenCalledTimes(1);
+			const state = callback.mock.calls[0][0];
+			expect(state.invalidationCounter).toBe(1);
+
+			unsubscribe();
+		});
+	});
+});
+
 describe('Derived Stores', () => {
 	beforeEach(() => {
 		budgetStore.reset();
