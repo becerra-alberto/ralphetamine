@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { shortcuts, globalShortcuts, type ShortcutConfig, type GlobalShortcutCallbacks } from '../../actions/shortcuts';
+import { shortcuts, globalShortcuts, getPreviousView, getNextView, VIEW_ORDER, type ShortcutConfig, type GlobalShortcutCallbacks } from '../../actions/shortcuts';
 import { goto } from '$app/navigation';
 import { openModals } from '../../stores/modals';
 
@@ -218,7 +218,9 @@ describe('Global Shortcuts Action', () => {
 			onNewTransaction: vi.fn(),
 			onSearch: vi.fn(),
 			onSave: vi.fn(),
-			onAdjustBudgets: vi.fn()
+			onAdjustBudgets: vi.fn(),
+			onNavigatePrevious: vi.fn(),
+			onNavigateNext: vi.fn()
 		};
 	});
 
@@ -420,11 +422,141 @@ describe('Global Shortcuts Action', () => {
 		});
 	});
 
+	describe('Cmd+[ - navigate previous view', () => {
+		it('should trigger navigate previous on Cmd+[', () => {
+			const action = globalShortcuts(mockElement, callbacks);
+			const handler = getHandler(addEventListenerSpy);
+			const event = createKeyEvent('[', { metaKey: true });
+			handler(event);
+			expect(callbacks.onNavigatePrevious).toHaveBeenCalled();
+			expect(event.preventDefault).toHaveBeenCalled();
+			action.destroy();
+		});
+
+		it('should NOT trigger navigate previous when modal is open', () => {
+			openModals.open('test-modal');
+			const action = globalShortcuts(mockElement, callbacks);
+			const handler = getHandler(addEventListenerSpy);
+			const event = createKeyEvent('[', { metaKey: true });
+			handler(event);
+			expect(callbacks.onNavigatePrevious).not.toHaveBeenCalled();
+			action.destroy();
+		});
+	});
+
+	describe('Cmd+] - navigate next view', () => {
+		it('should trigger navigate next on Cmd+]', () => {
+			const action = globalShortcuts(mockElement, callbacks);
+			const handler = getHandler(addEventListenerSpy);
+			const event = createKeyEvent(']', { metaKey: true });
+			handler(event);
+			expect(callbacks.onNavigateNext).toHaveBeenCalled();
+			expect(event.preventDefault).toHaveBeenCalled();
+			action.destroy();
+		});
+
+		it('should NOT trigger navigate next when modal is open', () => {
+			openModals.open('test-modal');
+			const action = globalShortcuts(mockElement, callbacks);
+			const handler = getHandler(addEventListenerSpy);
+			const event = createKeyEvent(']', { metaKey: true });
+			handler(event);
+			expect(callbacks.onNavigateNext).not.toHaveBeenCalled();
+			action.destroy();
+		});
+	});
+
+	describe('Cmd+F - not blocked on budget page', () => {
+		it('should call onSearch callback on Cmd+F (budget page delegates to layout)', () => {
+			const action = globalShortcuts(mockElement, callbacks);
+			const handler = getHandler(addEventListenerSpy);
+			const event = createKeyEvent('f', { metaKey: true });
+			handler(event);
+			expect(callbacks.onSearch).toHaveBeenCalled();
+			expect(event.preventDefault).toHaveBeenCalled();
+			action.destroy();
+		});
+	});
+
+	describe('Cmd+F - not blocked on transactions page', () => {
+		it('should call onSearch callback on Cmd+F (transactions SearchBar handles focus separately)', () => {
+			const action = globalShortcuts(mockElement, callbacks);
+			const handler = getHandler(addEventListenerSpy);
+			const event = createKeyEvent('f', { metaKey: true });
+			handler(event);
+			expect(callbacks.onSearch).toHaveBeenCalled();
+			expect(event.preventDefault).toHaveBeenCalled();
+			action.destroy();
+		});
+	});
+
 	describe('cleanup', () => {
 		it('should remove event listener on destroy', () => {
 			const action = globalShortcuts(mockElement, callbacks);
 			action.destroy();
 			expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
+		});
+	});
+});
+
+describe('View Navigation Helpers', () => {
+	describe('VIEW_ORDER', () => {
+		it('should have correct view order: Home → Budget → Transactions → Net Worth', () => {
+			expect(VIEW_ORDER).toEqual(['/', '/budget', '/transactions', '/net-worth']);
+		});
+	});
+
+	describe('getPreviousView', () => {
+		it('should return Net Worth when on Home (wraps around)', () => {
+			expect(getPreviousView('/')).toBe('/net-worth');
+		});
+
+		it('should return Home when on Budget', () => {
+			expect(getPreviousView('/budget')).toBe('/');
+		});
+
+		it('should return Budget when on Transactions', () => {
+			expect(getPreviousView('/transactions')).toBe('/budget');
+		});
+
+		it('should return Transactions when on Net Worth', () => {
+			expect(getPreviousView('/net-worth')).toBe('/transactions');
+		});
+
+		it('should return last view for unknown paths', () => {
+			expect(getPreviousView('/unknown')).toBe('/net-worth');
+		});
+	});
+
+	describe('getNextView', () => {
+		it('should return Budget when on Home', () => {
+			expect(getNextView('/')).toBe('/budget');
+		});
+
+		it('should return Transactions when on Budget', () => {
+			expect(getNextView('/budget')).toBe('/transactions');
+		});
+
+		it('should return Net Worth when on Transactions', () => {
+			expect(getNextView('/transactions')).toBe('/net-worth');
+		});
+
+		it('should return Home when on Net Worth (wraps around)', () => {
+			expect(getNextView('/net-worth')).toBe('/');
+		});
+
+		it('should return first view for unknown paths', () => {
+			expect(getNextView('/unknown')).toBe('/');
+		});
+	});
+
+	describe('navigation wraps around', () => {
+		it('should wrap from last view to first on next', () => {
+			expect(getNextView('/net-worth')).toBe('/');
+		});
+
+		it('should wrap from first view to last on previous', () => {
+			expect(getPreviousView('/')).toBe('/net-worth');
 		});
 	});
 });

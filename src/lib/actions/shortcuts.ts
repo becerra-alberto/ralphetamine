@@ -17,6 +17,29 @@ export interface GlobalShortcutCallbacks {
 	onSearch?: () => void;
 	onSave?: () => void;
 	onAdjustBudgets?: () => void;
+	onNavigatePrevious?: () => void;
+	onNavigateNext?: () => void;
+}
+
+/** Ordered list of views for Cmd+[/] navigation */
+export const VIEW_ORDER: NavRoute[] = ['/', '/budget', '/transactions', '/net-worth'];
+
+/**
+ * Get the previous view in the cycle, wrapping around.
+ */
+export function getPreviousView(currentPath: string): NavRoute {
+	const index = VIEW_ORDER.indexOf(currentPath as NavRoute);
+	if (index === -1) return VIEW_ORDER[VIEW_ORDER.length - 1];
+	return VIEW_ORDER[(index - 1 + VIEW_ORDER.length) % VIEW_ORDER.length];
+}
+
+/**
+ * Get the next view in the cycle, wrapping around.
+ */
+export function getNextView(currentPath: string): NavRoute {
+	const index = VIEW_ORDER.indexOf(currentPath as NavRoute);
+	if (index === -1) return VIEW_ORDER[0];
+	return VIEW_ORDER[(index + 1) % VIEW_ORDER.length];
 }
 
 const defaultShortcuts: ShortcutConfig[] = [
@@ -131,6 +154,20 @@ export function globalShortcuts(node: HTMLElement, callbacks: GlobalShortcutCall
 		if (isMeta && event.key.toLowerCase() === 'b' && event.shiftKey) {
 			event.preventDefault();
 			currentCallbacks.onAdjustBudgets?.();
+			return;
+		}
+
+		// Cmd+[: Navigate to previous view
+		if (isMeta && event.key === '[' && !event.shiftKey) {
+			event.preventDefault();
+			currentCallbacks.onNavigatePrevious?.();
+			return;
+		}
+
+		// Cmd+]: Navigate to next view
+		if (isMeta && event.key === ']' && !event.shiftKey) {
+			event.preventDefault();
+			currentCallbacks.onNavigateNext?.();
 			return;
 		}
 	}

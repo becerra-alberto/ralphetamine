@@ -7,7 +7,7 @@
 	import CommandPalette from '$lib/components/shared/CommandPalette.svelte';
 	import ShortcutsHelp from '$lib/components/shared/ShortcutsHelp.svelte';
 	import { createCommandRegistry } from '$lib/stores/commands';
-	import { globalShortcuts } from '$lib/actions/shortcuts';
+	import { globalShortcuts, getPreviousView, getNextView } from '$lib/actions/shortcuts';
 	import { openModals } from '$lib/stores/modals';
 
 	let { children } = $props();
@@ -44,14 +44,11 @@
 			goto('/transactions?action=new');
 		},
 		onSearch: () => {
-			// Context-aware: route to the current view's search
+			// On pages with a SearchBar (transactions), the SearchBar component
+			// handles Cmd+F focus directly via its own keydown listener.
+			// On all other pages, open the command palette as a search fallback.
 			const route = $page?.url?.pathname ?? '/';
-			if (route === '/transactions') {
-				goto('/transactions?action=search');
-			} else if (route === '/budget') {
-				goto('/budget?action=search');
-			} else {
-				// Default: open command palette as search fallback
+			if (route !== '/transactions') {
 				paletteOpen = true;
 			}
 		},
@@ -60,6 +57,14 @@
 		},
 		onAdjustBudgets: () => {
 			goto('/budget?action=adjust');
+		},
+		onNavigatePrevious: () => {
+			const currentPath = $page?.url?.pathname ?? '/';
+			goto(getPreviousView(currentPath));
+		},
+		onNavigateNext: () => {
+			const currentPath = $page?.url?.pathname ?? '/';
+			goto(getNextView(currentPath));
 		}
 	};
 
