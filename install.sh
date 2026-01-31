@@ -18,8 +18,8 @@ chmod +x "$RALPH_BIN"
 # Create install directory
 mkdir -p "$INSTALL_DIR"
 
-# Create symlink
-if [[ -L "${INSTALL_DIR}/ralph" ]]; then
+# Create symlink (remove existing file or symlink first)
+if [[ -e "${INSTALL_DIR}/ralph" || -L "${INSTALL_DIR}/ralph" ]]; then
     rm "${INSTALL_DIR}/ralph"
 fi
 
