@@ -1,0 +1,3 @@
+Failed to complete the story.
+
+[FAIL] Story 1.1 - build error in component

@@ -12,9 +12,11 @@ ralph_on_exit() {
 }
 
 _ralph_run_exit_handlers() {
-    for handler in "${_RALPH_EXIT_HANDLERS[@]}"; do
-        eval "$handler" || true
-    done
+    if [[ ${#_RALPH_EXIT_HANDLERS[@]} -gt 0 ]]; then
+        for handler in "${_RALPH_EXIT_HANDLERS[@]}"; do
+            eval "$handler" || true
+        done
+    fi
 }
 trap _ralph_run_exit_handlers EXIT
 

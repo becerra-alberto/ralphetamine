@@ -1,0 +1,3 @@
+Unable to resolve merge conflicts automatically.
+
+<ralph>MERGE_FAIL: conflicting changes in shared module cannot be reconciled</ralph>

@@ -1,0 +1,3 @@
+Merge conflicts resolved successfully.
+
+<ralph>MERGE_DONE: resolved 3 conflicts in 2 files</ralph>

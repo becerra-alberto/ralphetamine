@@ -31,9 +31,11 @@ prereqs_check() {
     fi
 
     # Show warnings
-    for warn in "${warnings[@]}"; do
-        log_warn "$warn"
-    done
+    if [[ ${#warnings[@]} -gt 0 ]]; then
+        for warn in "${warnings[@]}"; do
+            log_warn "$warn"
+        done
+    fi
 
     log_debug "All prerequisites satisfied"
     return 0

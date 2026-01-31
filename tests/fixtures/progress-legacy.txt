@@ -1,0 +1,7 @@
+[DONE] Story 1.1 - Initialize Project - Mon 01 Jan 2025 10:00:00 UTC
+[DONE] Story 1.2 - Setup Database - Mon 01 Jan 2025 11:00:00 UTC
+[FAIL] Story 2.1 - npm test failed - Mon 01 Jan 2025 12:00:00 UTC (attempt 1/3)
+[DONE] Story 2.1 - First Parallel Story - Mon 01 Jan 2025 13:00:00 UTC
+[LEARN] vitest describe blocks should use consistent naming
+[LEARN] SQLite migration columns need explicit types
+[LEARN] careful with Svelte 5 runes reactivity gotcha

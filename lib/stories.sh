@@ -61,7 +61,7 @@ stories_get_title() {
 
 # Find the next uncompleted story
 stories_find_next() {
-    local resume_from="$1"
+    local resume_from="${1:-}"
     local found_resume=false
 
     # If no resume point, start from beginning

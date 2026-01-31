@@ -1,0 +1,5 @@
+I attempted to implement the story but encountered issues.
+
+The npm test suite is failing with 3 errors.
+
+<ralph>FAIL 1.1: npm test failed with 3 errors</ralph>

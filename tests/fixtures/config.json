@@ -1,0 +1,53 @@
+{
+    "version": "2.0.0",
+    "project": {
+        "name": "test-project"
+    },
+    "specs": {
+        "pattern": "specs/epic-{{epic}}/story-{{id}}-*.md",
+        "id_format": "epic.story",
+        "frontmatter_status_field": "status"
+    },
+    "loop": {
+        "max_iterations": 0,
+        "timeout_seconds": 1800,
+        "max_retries": 3
+    },
+    "validation": {
+        "commands": [
+            {"name": "tests", "cmd": "npm test", "required": true},
+            {"name": "lint", "cmd": "npm run lint", "required": false}
+        ],
+        "blocked_commands": ["rm -rf /", "git push --force"]
+    },
+    "claude": {
+        "flags": ["--print", "--dangerously-skip-permissions"]
+    },
+    "commit": {
+        "format": "feat(story-{{id}}): {{title}}",
+        "auto_commit": true
+    },
+    "testing_phase": {
+        "enabled": false,
+        "timeout_seconds": 600
+    },
+    "learnings": {
+        "enabled": true,
+        "max_inject_count": 5
+    },
+    "parallel": {
+        "enabled": false,
+        "max_concurrent": 8,
+        "strategy": "worktree",
+        "auto_merge": true,
+        "merge_review_timeout": 900,
+        "stagger_seconds": 3
+    },
+    "caffeine": false,
+    "hooks": {
+        "pre_iteration": "",
+        "post_iteration": "",
+        "pre_story": "echo \"hook\"",
+        "post_story": ""
+    }
+}

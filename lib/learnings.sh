@@ -8,7 +8,7 @@ RALPH_LEARNINGS_INDEX="$RALPH_LEARNINGS_DIR/_index.json"
 # (replaces declare -A associative array which requires Bash 4.0+)
 _CATEGORY_NAMES=("testing" "framework" "data-model" "tooling" "patterns" "gotchas")
 _CATEGORY_PATTERNS=(
-    "test|mock|assert|vitest|jest|playwright|expect|describe|it("
+    "test|mock|assert|vitest|jest|playwright|expect|describe|it\\("
     "svelte|react|component|render|template|store|reactive|rune"
     "sql|migration|schema|table|column|sqlite|database|query"
     "build|compile|bundle|config|webpack|vite|tauri|cargo"
