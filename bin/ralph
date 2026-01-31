@@ -110,6 +110,9 @@ cmd_run() {
     # Load config
     config_load || exit 1
 
+    # Save original args before parsing consumes them (needed for tmux re-exec)
+    local original_args=("$@")
+
     # Parse run-specific flags
     local iterations verbose dry_run specific_story resume_from timeout_secs
     local use_parallel=false no_tmux=false no_interactive=false no_dashboard=false
@@ -139,6 +142,11 @@ cmd_run() {
 
     export RALPH_VERBOSE="$verbose"
 
+    # Auto tmux — must happen before interactive prompt so user is only prompted once
+    if [[ "$no_tmux" == false ]]; then
+        tmux_ensure run "${original_args[@]}"
+    fi
+
     # Interactive startup (if no flags override and not disabled)
     if [[ "$no_interactive" == false && -z "$specific_story" && "$dry_run" == false ]]; then
         if type interactive_run_prompt &>/dev/null; then
@@ -160,11 +168,6 @@ cmd_run() {
     # Dashboard control
     if [[ "$no_dashboard" == true ]]; then
         export RALPH_DASHBOARD="false"
-    fi
-
-    # Auto tmux
-    if [[ "$no_tmux" == false ]]; then
-        tmux_ensure
     fi
 
     # Caffeine (uses centralized trap registry from ui.sh)
