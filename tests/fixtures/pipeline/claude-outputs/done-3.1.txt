@@ -1,0 +1,5 @@
+Markdown import pipeline complete with directory support and dedup.
+
+Search engine properly indexes imported notes.
+
+<ralph>DONE 3.1</ralph>

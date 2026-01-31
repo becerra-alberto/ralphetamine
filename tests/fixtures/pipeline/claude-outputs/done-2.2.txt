@@ -1,0 +1,5 @@
+Tag management system is complete with frontmatter storage.
+
+All CRUD operations for tags work correctly.
+
+<ralph>DONE 2.2</ralph>

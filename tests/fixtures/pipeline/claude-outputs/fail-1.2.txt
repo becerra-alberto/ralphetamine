@@ -1,0 +1,5 @@
+I attempted to implement the CRUD commands but the input validation is incomplete.
+
+The delete command doesn't check if the note exists before removing.
+
+<ralph>FAIL 1.2: missing validation on delete command</ralph>

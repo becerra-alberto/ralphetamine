@@ -1,0 +1,5 @@
+Keyboard shortcuts registered and working in interactive mode.
+
+Help output updated with shortcut documentation.
+
+<ralph>DONE 4.1</ralph>

@@ -1,0 +1,52 @@
+{
+    "version": "2.0.0",
+    "project": {
+        "name": "notely"
+    },
+    "specs": {
+        "pattern": "specs/epic-{{epic}}/story-{{id}}-*.md",
+        "id_format": "epic.story",
+        "frontmatter_status_field": "status"
+    },
+    "loop": {
+        "max_iterations": 0,
+        "timeout_seconds": 300,
+        "max_retries": 2
+    },
+    "validation": {
+        "commands": [
+            {"name": "tests", "cmd": "npm test", "required": true}
+        ],
+        "blocked_commands": []
+    },
+    "claude": {
+        "flags": ["--print", "--dangerously-skip-permissions"]
+    },
+    "commit": {
+        "format": "feat(story-{{id}}): {{title}}",
+        "auto_commit": true
+    },
+    "testing_phase": {
+        "enabled": true,
+        "timeout_seconds": 120
+    },
+    "learnings": {
+        "enabled": true,
+        "max_inject_count": 5
+    },
+    "parallel": {
+        "enabled": true,
+        "max_concurrent": 2,
+        "strategy": "worktree",
+        "auto_merge": true,
+        "merge_review_timeout": 900,
+        "stagger_seconds": 3
+    },
+    "caffeine": false,
+    "hooks": {
+        "pre_iteration": "",
+        "post_iteration": "",
+        "pre_story": "",
+        "post_story": "echo \"HOOK:${RALPH_STORY}:${RALPH_RESULT}\" >> hooks-log.txt"
+    }
+}

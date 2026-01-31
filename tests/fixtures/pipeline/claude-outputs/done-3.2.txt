@@ -1,0 +1,5 @@
+JSON and CSV export implemented with tag-filtered collections.
+
+Export includes all metadata from search and tag systems.
+
+<ralph>DONE 3.2</ralph>

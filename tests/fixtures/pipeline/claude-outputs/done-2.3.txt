@@ -1,0 +1,5 @@
+Search filters and boolean operators implemented.
+
+All filter combinations tested and working.
+
+<ralph>DONE 2.3</ralph>

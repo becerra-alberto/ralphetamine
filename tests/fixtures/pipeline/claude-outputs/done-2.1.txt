@@ -1,0 +1,5 @@
+Implemented the full-text search engine with inverted index.
+
+Performance is well under the 100ms target.
+
+<ralph>DONE 2.1</ralph>

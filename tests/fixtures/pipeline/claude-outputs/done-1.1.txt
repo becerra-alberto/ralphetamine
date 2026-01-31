@@ -1,0 +1,5 @@
+I've set up the Notely project structure with all required directories and entry point.
+
+All tests pass, code committed.
+
+<ralph>DONE 1.1</ralph>

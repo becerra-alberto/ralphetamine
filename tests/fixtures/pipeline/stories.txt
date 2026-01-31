@@ -1,0 +1,18 @@
+# Notely — CLI Note Manager
+# Epic 1 — Core CLI (sequential, no batch annotation)
+1.1 | Initialize Notely project structure
+1.2 | Add note CRUD commands
+x 1.3 | Add color themes
+# Epic 2 — Search & Tags
+# [batch:1]
+2.1 | Full-text search engine
+2.2 | Tag management system
+2.3 | Search filters and operators
+# Epic 3 — Import/Export (sequential, depends_on)
+# [batch:0]
+3.1 | Markdown import pipeline
+3.2 | JSON/CSV export
+# Epic 4 — Polish
+# [batch:2]
+4.1 | Keyboard shortcuts
+4.2 | Performance optimizations

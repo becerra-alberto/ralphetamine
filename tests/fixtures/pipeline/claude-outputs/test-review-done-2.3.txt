@@ -1,0 +1,5 @@
+Reviewed tests for story 2.3 search filters.
+
+All 12 test cases pass. Coverage is at 94%.
+
+<ralph>TEST_REVIEW_DONE 2.3: all 12 tests pass, 94% coverage</ralph>
