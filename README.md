@@ -16,7 +16,7 @@ Autonomous implementation loop for Claude Code. Ralph reads story specs, sends t
 
 ```bash
 cd ~/Desktop/Tools  # or wherever you keep tools
-git clone <ralph-v2-repo-url> ralph-v2
+git clone git@github.com:bettos12/ralph-v2.git ralph-v2
 ```
 
 ### 2. Install to PATH
