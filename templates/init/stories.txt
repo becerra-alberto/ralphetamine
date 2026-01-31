@@ -1,0 +1,16 @@
+# Ralph Story Queue
+# Format: ID | Title
+# Prefix with 'x' to skip a story
+# Use # [batch:N] annotations for parallel execution groups
+#
+# Examples:
+#   1.1 | Setup Project Structure
+#   1.2 | Create Database Schema
+#   x 1.3 | Deferred Feature
+#
+#   # [batch:1] — independent stories
+#   2.1 | Feature A
+#   2.2 | Feature B
+#
+#   # [batch:2] — depends on batch 1
+#   2.3 | Feature C (uses A + B)
