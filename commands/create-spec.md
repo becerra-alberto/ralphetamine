@@ -23,27 +23,41 @@ id: X.X
 title: "Short Descriptive Title"
 epic: X
 status: pending
-priority: medium
+priority: critical|high|medium|low
+estimation: small|medium|large
 depends_on: []
-estimated_complexity: S|M|L
 ---
 
 # Story X.X — Short Descriptive Title
 
-## Description
-[2-3 sentences describing what this story implements and why]
+## User Story
+As a [role], I want [capability] so that [benefit].
+
+[1-2 sentences of additional context if needed.]
+
+## Technical Context
+[Brief description of the implementation approach, relevant architecture, or key technical decisions.]
 
 ## Acceptance Criteria
-- [ ] [Specific, testable criterion]
-- [ ] [Another criterion]
-- [ ] [Keep these concrete and verifiable]
 
-## Technical Approach
-[Brief description of the implementation approach]
+### AC1: [Criterion Name]
+- **Given** [precondition]
+- **When** [action]
+- **Then** [expected result]
+
+### AC2: [Criterion Name]
+- **Given** [precondition]
+- **When** [action]
+- **Then** [expected result]
+
+### AC3: [Criterion Name]
+- **Given** [precondition]
+- **When** [action]
+- **Then** [expected result]
 
 ### Files to Create/Modify
-- `path/to/file.ts` — [what changes]
-- `path/to/another.ts` — [what changes]
+- `path/to/file.ts` — [what changes] (create|modify)
+- `path/to/another.ts` — [what changes] (create|modify)
 
 ## Test Definition
 
@@ -75,6 +89,6 @@ File: `src/lib/__tests__/path/to/test.test.ts`
 - Story IDs follow the `epic.story` format (e.g., 10.5)
 - Slugs use lowercase-hyphenated format (e.g., smart-number-formatting)
 - Keep specs focused — one story = one deployable unit of work
-- Acceptance criteria must be specific enough for automated verification
+- Acceptance criteria must use Given-When-Then format
 - Include test definitions that cover all acceptance criteria
 - Set `status: pending` for new specs

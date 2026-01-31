@@ -69,46 +69,19 @@ Use Claude Code to generate a PRD for your project:
 
 This creates a structured PRD in `tasks/prd-<name>.md`.
 
-### Step 4: Convert PRD to Ralph format
+### Step 4: Generate specs and story queue
 
-Use Claude Code to convert the PRD into epics and stories:
+Use Claude Code to convert the PRD into epics, story specs, and a story queue:
 
 ```
 /ralph
 ```
 
-This produces `prd.json` with structured epics and stories.
+This reads your PRD and generates:
+- `specs/epic-{N}/story-{N.M}-{slug}.md` — one spec file per story
+- `.ralph/stories.txt` — ordered execution queue with batch annotations
 
-### Step 5: Generate specs and story queue
-
-Ask Claude Code to read `prd.json` and generate the Ralph artifacts:
-
-```
-Read prd.json and create Ralph story specs and queue:
-
-1. For each epic/story in prd.json, create a spec file at:
-   specs/epic-{N}/story-{N.M}-{slug}.md
-
-   Use this YAML frontmatter format:
-   ---
-   id: "N.M"
-   epic: N
-   title: "Story Title"
-   status: pending
-   priority: critical|high|medium|low
-   estimation: small|medium|large
-   ---
-
-   Include: User Story, Technical Context, Acceptance Criteria,
-   Test Definition, and Files to Create/Modify sections.
-
-2. Populate .ralph/stories.txt with all story IDs and titles:
-   1.1 | Initialize Project
-   1.2 | Setup Database
-   ...
-```
-
-### Step 6: Run Ralph
+### Step 5: Run Ralph
 
 ```bash
 ralph run

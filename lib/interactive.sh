@@ -107,11 +107,18 @@ interactive_init() {
     # Create empty progress.txt if it doesn't exist
     [[ -f "progress.txt" ]] || touch "progress.txt"
 
+    # Install Claude Code commands
+    mkdir -p ".claude/commands"
+    cp "${RALPH_DIR}/commands/create-spec.md" ".claude/commands/create-spec.md"
+
     echo ""
     log_success "Created .ralph/config.json"
     log_success "Created .ralph/stories.txt"
     log_success "Created .ralph/templates/"
     log_success "Created .ralph/learnings/"
+    log_success "Installed .claude/commands/create-spec.md"
+    echo ""
+    echo "Commands installed. After creating a PRD with /prd, run /ralph to generate specs."
 }
 
 # ── Run startup prompts ────────────────────────────────────────────────────
