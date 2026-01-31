@@ -29,6 +29,14 @@ _run_sequential() {
     local max_retries
     max_retries=$(config_get '.loop.max_retries' '3')
 
+    # Initialize dashboard
+    if type display_init &>/dev/null; then
+        display_init
+        display_update_stories "$total_stories" "$done_count"
+        display_update_retry 0 "$max_retries"
+        display_refresh
+    fi
+
     local timeout_cmd
     timeout_cmd=$(prereqs_timeout_cmd)
 
@@ -69,6 +77,13 @@ _run_sequential() {
         log "Starting story $next_story: $title"
         echo "  Story:  $next_story — $title"
         echo "  Spec:   $spec_path"
+
+        # Dashboard: update current story and iteration
+        if type display_update_current &>/dev/null; then
+            display_update_current "$next_story" "$title"
+            display_update_iteration "$iteration"
+            display_refresh
+        fi
 
         # Build prompt
         local prompt
@@ -135,6 +150,16 @@ _run_sequential() {
                 state_mark_done "$next_story"
                 spec_update_status "$spec_path" "done"
 
+                # Dashboard: update completion
+                if type display_update_stories &>/dev/null; then
+                    done_count=$((done_count + 1))
+                    display_update_stories "$total_stories" "$done_count"
+                    display_update_last_done "$next_story"
+                    display_update_retry 0 "$max_retries"
+                    display_update_learnings "$(_display_count_learnings 2>/dev/null || echo 0)"
+                    display_refresh
+                fi
+
                 # Append to progress.txt
                 local timestamp
                 timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
@@ -185,6 +210,12 @@ _handle_failure() {
     echo "[FAIL] Story $story - $reason - $timestamp (attempt $retry_count/$max_retries)" >> progress.txt
 
     log "Story $story failed (attempt $retry_count/$max_retries): $reason"
+
+    # Dashboard: update retry count
+    if type display_update_retry &>/dev/null; then
+        display_update_retry "$retry_count" "$max_retries"
+        display_refresh
+    fi
 
     if [[ $retry_count -ge $max_retries ]]; then
         box_header "MAX RETRIES EXCEEDED"

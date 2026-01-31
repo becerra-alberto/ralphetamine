@@ -48,6 +48,7 @@ usage() {
     echo "  -d, --dry-run         Preview prompt without executing"
     echo "  -t, --timeout SECS    Timeout per iteration (default: 1800)"
     echo "  --parallel            Enable parallel execution"
+    echo "  --no-dashboard        Disable live dashboard panel"
     echo "  --no-tmux             Don't auto-wrap in tmux"
     echo "  --no-interactive      Skip interactive startup prompts"
     echo ""
@@ -100,6 +101,7 @@ cmd_run() {
     [[ -f "${RALPH_DIR}/lib/testing.sh" ]] && source "${RALPH_DIR}/lib/testing.sh"
     [[ -f "${RALPH_DIR}/lib/parallel.sh" ]] && source "${RALPH_DIR}/lib/parallel.sh"
     [[ -f "${RALPH_DIR}/lib/interactive.sh" ]] && source "${RALPH_DIR}/lib/interactive.sh"
+    [[ -f "${RALPH_DIR}/lib/display.sh" ]] && source "${RALPH_DIR}/lib/display.sh"
 
     # Check prerequisites
     prereqs_check || exit 1
@@ -110,7 +112,7 @@ cmd_run() {
 
     # Parse run-specific flags
     local iterations verbose dry_run specific_story resume_from timeout_secs
-    local use_parallel=false no_tmux=false no_interactive=false
+    local use_parallel=false no_tmux=false no_interactive=false no_dashboard=false
 
     iterations=$(config_get '.loop.max_iterations' '0')
     timeout_secs=$(config_get '.loop.timeout_seconds' '1800')
@@ -128,6 +130,7 @@ cmd_run() {
             -d|--dry-run)      dry_run=true; shift ;;
             -t|--timeout)      timeout_secs="$2"; shift 2 ;;
             --parallel)        use_parallel=true; shift ;;
+            --no-dashboard)    no_dashboard=true; shift ;;
             --no-tmux)         no_tmux=true; shift ;;
             --no-interactive)  no_interactive=true; shift ;;
             *) log_error "Unknown option: $1"; exit 1 ;;
@@ -153,6 +156,11 @@ cmd_run() {
 
     # Re-export after interactive may have changed verbose
     export RALPH_VERBOSE="$verbose"
+
+    # Dashboard control
+    if [[ "$no_dashboard" == true ]]; then
+        export RALPH_DASHBOARD="false"
+    fi
 
     # Auto tmux
     if [[ "$no_tmux" == false ]]; then

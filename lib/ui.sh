@@ -102,3 +102,28 @@ iteration_header() {
 divider() {
     echo "────────────────────────────────────────────────────────────────────"
 }
+
+# ── Progress bar ─────────────────────────────────────────────────────
+# Renders a progress bar string: [████████░░░░] 5/12
+# Usage: ui_progress_bar <completed> <total> [width]
+# Width defaults to 20. Output is returned via stdout (no newline).
+ui_progress_bar() {
+    local completed="$1"
+    local total="$2"
+    local width="${3:-20}"
+
+    if [[ "$total" -le 0 ]]; then
+        printf '['; printf '░%.0s' $(seq 1 "$width"); printf '] 0/0'
+        return 0
+    fi
+
+    local filled=$(( (completed * width) / total ))
+    # Clamp filled to width
+    [[ "$filled" -gt "$width" ]] && filled="$width"
+    local empty=$(( width - filled ))
+
+    printf '['
+    [[ "$filled" -gt 0 ]] && printf '█%.0s' $(seq 1 "$filled")
+    [[ "$empty" -gt 0 ]] && printf '░%.0s' $(seq 1 "$empty")
+    printf '] %d/%d' "$completed" "$total"
+}

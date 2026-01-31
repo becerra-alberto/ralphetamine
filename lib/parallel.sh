@@ -30,6 +30,11 @@ parallel_run() {
 
     log_info "Parallel mode: max_concurrent=$max_concurrent, stagger=${stagger_seconds}s"
 
+    # Dashboard: set worker max for parallel mode
+    if type display_update_workers &>/dev/null; then
+        display_update_workers 0 "$max_concurrent"
+    fi
+
     # Find which batches exist and need execution
     local current_batch=1
     while true; do
@@ -189,6 +194,12 @@ _parallel_execute_batch() {
 
         running=$((running + 1))
 
+        # Dashboard: update active worker count
+        if type display_update_workers &>/dev/null; then
+            display_update_workers "$running" "$max_concurrent"
+            display_refresh
+        fi
+
         log_info "Spawned Claude for story $story (PID $pid)"
 
         # Stagger to avoid API burst
@@ -206,6 +217,13 @@ _parallel_execute_batch() {
     for pid in "${pids[@]}"; do
         local exit_code=0
         wait "$pid" || exit_code=$?
+
+        running=$((running - 1))
+        # Dashboard: update active worker count
+        if type display_update_workers &>/dev/null; then
+            display_update_workers "$running" "$max_concurrent"
+            display_refresh
+        fi
 
         local story
         story=$(cat "${pid_dir}/pid_${pid}" 2>/dev/null)
