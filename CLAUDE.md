@@ -4,72 +4,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Stackz is a local-first personal finance application built with:
-- **Frontend:** SvelteKit 5 + TypeScript + Tailwind CSS
-- **Backend:** Tauri 2.0 (Rust)
-- **Database:** SQLite with libsql
-- **State:** Svelte stores + Tauri events
+Ralph v2 is an autonomous implementation loop for Claude Code. It reads story specs, sends them to Claude one at a time, tracks success/failure, manages retries, and accumulates learnings — all without human intervention.
 
-The app targets power users transitioning from spreadsheet-based budgeting, featuring a keyboard-first interface with Cmd+K command palette.
+- **Language:** Bash 3.2+ (macOS compatible)
+- **Dependencies:** jq, git, coreutils (for timeout/gtimeout)
+- **CLI:** `claude` (Claude Code CLI)
 
-## Build Commands
+## Project Structure
 
-```bash
-# Development
-npm run tauri dev          # Run Tauri app in dev mode
-npm run dev                # SvelteKit dev server only
-
-# Build
-npm run tauri build        # Build production app
-
-# Testing
-npm run test               # Run unit tests (Vitest)
-npm run test:watch         # Run tests in watch mode
-npm run test:coverage      # Run tests with coverage report
-npm run test:e2e           # Run E2E tests (Playwright)
-npm run test:e2e:ui        # Run E2E tests with UI
-cd src-tauri && cargo test # Run Rust backend tests
-
-# Linting/Formatting
-npm run lint               # ESLint
-npm run format             # Prettier
-npm run check              # Svelte type checking
+```
+ralph-v2/
+├── bin/ralph              # CLI entry point
+├── lib/                   # 16 modular bash libraries
+├── templates/             # Default prompt templates
+├── tests/                 # 5-tier BATS test suite
+├── commands/              # Claude Code slash command skills
+├── skills/                # Skill definitions
+├── install.sh             # Symlink installer
+└── .ralph/                # Runtime state (per-project)
 ```
 
-## Architecture
+## Running Tests
 
-### Core Views
-1. **Budget View** - Spreadsheet-style monthly budget table with collapsible sections (Income, Housing, Essential, Lifestyle, Savings)
-2. **Transaction View** - List-based transaction management with filters
-3. **Net Worth View** - Assets/liabilities tracker with historical data
-4. **Home/Dashboard** - Onboarding wizard or quick navigation hub
+```bash
+# All tiers
+tests/libs/bats-core/bin/bats tests/tier1-unit/ tests/tier2-filesystem/ tests/tier3-component/ tests/tier4-workflow/ tests/tier5-e2e/
 
-### Data Model (SQLite)
-- **Transaction:** id, date, payee, categoryId, memo, amountCents (integer), accountId, tags[], isReconciled, importSource
-- **Category:** id, name, parentId (for nesting), type (income|expense|transfer), icon, color, sortOrder
-- **Budget:** categoryId, month (YYYY-MM), amountCents, note
-- **Account:** id, name, type (checking|savings|credit|investment|cash), institution, currency (EUR|USD|CAD), isActive, includeInNetWorth
+# Individual tier
+tests/libs/bats-core/bin/bats tests/tier1-unit/
+```
 
-### Key Design Decisions
-- Store amounts as **cents (integer)** to avoid floating point issues
-- Month identifiers use **YYYY-MM format**
-- All data local-first, sync-ready schema
-- Every action must be keyboard-accessible
-- Target < 100ms UI response time
+## Key Conventions
 
-## Keyboard Shortcuts (Must Implement)
-
-| Shortcut | Action |
-|----------|--------|
-| Cmd+K | Command palette |
-| Cmd+T | Go to Transactions |
-| Cmd+U | Go to Budget |
-| Cmd+W | Go to Net Worth |
-| Cmd+N | New transaction |
-| Cmd+F | Focus search |
-
-## Design Tokens
-
-Light mode accent: #4F46E5, success: #10B981, danger: #EF4444
-Dark mode bg: #0F0F0F, secondary: #1A1A1A
-Typography: Inter/SF Pro, tabular figures for numbers
+- All shell scripts must be compatible with **Bash 3.2** (macOS default)
+- Amounts/numeric values stored as integers where applicable
+- State tracked in `.ralph/state.json` (JSON via jq)
+- Story specs follow the pattern `specs/epic-{N}/story-{N.M}-{slug}.md`
+- Claude communication uses structured signals: `<ralph>DONE X.X</ralph>`, `<ralph>FAIL X.X: reason</ralph>`, `<ralph>LEARN: text</ralph>`
