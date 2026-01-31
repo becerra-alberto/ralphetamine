@@ -26,13 +26,18 @@ signals_parse_fail() {
     local output="$1"
 
     if [[ "$output" =~ \<ralph\>FAIL[[:space:]]+([0-9]+\.[0-9]+):[[:space:]]*([^\<]+)\</ralph\> ]]; then
-        echo "${BASH_REMATCH[1]}|${BASH_REMATCH[2]}"
+        local fail_reason="${BASH_REMATCH[2]}"
+        # Sanitize pipe characters to avoid collision with our story|reason delimiter
+        fail_reason="${fail_reason//|/-}"
+        echo "${BASH_REMATCH[1]}|${fail_reason}"
         return 0
     fi
 
     # Legacy fallback: [FAIL] Story X.X - reason
     if [[ "$output" =~ \[FAIL\][[:space:]]*Story[[:space:]]+([0-9]+\.[0-9]+)[[:space:]]*-[[:space:]]*(.*) ]]; then
-        echo "${BASH_REMATCH[1]}|${BASH_REMATCH[2]}"
+        local fail_reason="${BASH_REMATCH[2]}"
+        fail_reason="${fail_reason//|/-}"
+        echo "${BASH_REMATCH[1]}|${fail_reason}"
         return 0
     fi
 

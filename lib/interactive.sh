@@ -165,12 +165,9 @@ interactive_run_prompt() {
         4)
             RALPH_RUN_ITERATIONS=1
             export RALPH_RUN_ITERATIONS
-            # Set dry_run externally — caller checks this
             echo ""
             echo "[DRY RUN MODE]"
-            # We need to signal dry run back to the caller.
-            # Use a sentinel file since we can't modify the caller's local var
-            touch "/tmp/.ralph_dry_run_$$"
+            export RALPH_RUN_DRY_RUN=true
             ;;
         5)
             exit 0

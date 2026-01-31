@@ -24,5 +24,5 @@ tmux_ensure() {
 
     # Create new session and re-exec ralph inside it
     log_info "Creating tmux session: $session_name"
-    exec tmux new-session -s "$session_name" "$0 $*"
+    exec tmux new-session -s "$session_name" "$0" "$@"
 }

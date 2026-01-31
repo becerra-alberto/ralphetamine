@@ -48,8 +48,8 @@ spec_get_title() {
 
     # Remove "story-X.X-" prefix
     local slug="${filename#story-*-}"
-    # Convert hyphens to spaces
-    echo "$slug" | sed 's/-/ /g' | sed 's/\b\(.\)/\u\1/g'
+    # Convert hyphens to spaces and title-case (portable — no GNU \u)
+    echo "$slug" | sed 's/-/ /g' | LC_ALL=C awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1'
 }
 
 # Update YAML frontmatter status field in a spec file
@@ -65,7 +65,7 @@ spec_update_status() {
     status_field=$(config_get '.specs.frontmatter_status_field' 'status')
 
     if grep -q "^${status_field}:" "$spec_path"; then
-        sed -i '' "s/^${status_field}:.*$/${status_field}: ${new_status}/" "$spec_path"
+        sed -i.bak "s/^${status_field}:.*$/${status_field}: ${new_status}/" "$spec_path" && rm -f "${spec_path}.bak"
         log_debug "Updated spec status to '$new_status': $spec_path"
     fi
 }

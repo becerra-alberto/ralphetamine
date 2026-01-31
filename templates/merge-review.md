@@ -8,7 +8,7 @@ Story {{STORY_ID}} was implemented on branch `{{BRANCH_NAME}}` and is being merg
 
 {{CONFLICT_FILES}}
 
-## CONFLICT DIFF (truncated)
+## CONFLICT DIFF (truncated to 500 lines / 30,000 chars)
 
 {{CONFLICT_DIFF}}
 

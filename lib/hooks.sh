@@ -18,7 +18,7 @@ hooks_run() {
 
     # Export context variables for the hook
     for pair in "$@"; do
-        export "${pair?}"
+        export "$pair"
     done
 
     # Execute the hook command

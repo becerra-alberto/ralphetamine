@@ -1,5 +1,22 @@
 #!/bin/bash
-# Ralph v2 — UI helpers: logging, colors, box drawing
+# Ralph v2 — UI helpers: logging, colors, box drawing, trap registry
+
+# ── Centralized EXIT trap registry ──────────────────────────────────────────
+# Multiple modules (caffeine, parallel PID cleanup) need EXIT traps.
+# This registry prevents trap clobbering — each module registers a handler
+# via ralph_on_exit() instead of calling `trap` directly.
+_RALPH_EXIT_HANDLERS=()
+
+ralph_on_exit() {
+    _RALPH_EXIT_HANDLERS+=("$1")
+}
+
+_ralph_run_exit_handlers() {
+    for handler in "${_RALPH_EXIT_HANDLERS[@]}"; do
+        eval "$handler" || true
+    done
+}
+trap _ralph_run_exit_handlers EXIT
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 readonly CLR_RESET='\033[0m'

@@ -4,14 +4,16 @@
 RALPH_LEARNINGS_DIR=".ralph/learnings"
 RALPH_LEARNINGS_INDEX="$RALPH_LEARNINGS_DIR/_index.json"
 
-# Category keyword patterns
-declare -A _LEARNING_CATEGORIES=(
-    ["testing"]="test|mock|assert|vitest|jest|playwright|expect|describe|it("
-    ["framework"]="svelte|react|component|render|template|store|reactive|rune"
-    ["data-model"]="sql|migration|schema|table|column|sqlite|database|query"
-    ["tooling"]="build|compile|bundle|config|webpack|vite|tauri|cargo"
-    ["patterns"]="pattern|convention|approach|architecture|design|refactor"
-    ["gotchas"]="gotcha|pitfall|trap|caveat|careful|warning|workaround|bug"
+# Category keyword patterns — parallel indexed arrays for Bash 3.2 compatibility
+# (replaces declare -A associative array which requires Bash 4.0+)
+_CATEGORY_NAMES=("testing" "framework" "data-model" "tooling" "patterns" "gotchas")
+_CATEGORY_PATTERNS=(
+    "test|mock|assert|vitest|jest|playwright|expect|describe|it("
+    "svelte|react|component|render|template|store|reactive|rune"
+    "sql|migration|schema|table|column|sqlite|database|query"
+    "build|compile|bundle|config|webpack|vite|tauri|cargo"
+    "pattern|convention|approach|architecture|design|refactor"
+    "gotcha|pitfall|trap|caveat|careful|warning|workaround|bug"
 )
 
 # Initialize learnings directory
@@ -28,10 +30,10 @@ _learnings_categorize() {
     local lower_text
     lower_text=$(echo "$text" | tr '[:upper:]' '[:lower:]')
 
-    for category in "${!_LEARNING_CATEGORIES[@]}"; do
-        local pattern="${_LEARNING_CATEGORIES[$category]}"
-        if echo "$lower_text" | grep -qE "$pattern"; then
-            echo "$category"
+    local i
+    for (( i=0; i<${#_CATEGORY_NAMES[@]}; i++ )); do
+        if echo "$lower_text" | grep -qE "${_CATEGORY_PATTERNS[$i]}"; then
+            echo "${_CATEGORY_NAMES[$i]}"
             return 0
         fi
     done
@@ -89,6 +91,7 @@ learnings_extract() {
 }
 
 # Select relevant learnings for a spec (keyword overlap scoring)
+# O(n*m) scan is acceptable — typically <50 learnings, <20 keywords
 learnings_select_relevant() {
     local spec_content="$1"
     local max_count="${2:-5}"
@@ -101,9 +104,13 @@ learnings_select_relevant() {
     # Collect all learnings with scores
     local scored_learnings=()
 
-    for category_file in "${RALPH_LEARNINGS_DIR}"/*.md; do
+    for category_file in "${RALPH_LEARNINGS_DIR}"/*; do
         [[ -f "$category_file" ]] || continue
-        [[ "$(basename "$category_file")" == "_index.json" ]] && continue
+        # Skip non-.md files (e.g., _index.json)
+        case "$category_file" in
+            *.md) ;;
+            *) continue ;;
+        esac
 
         while IFS= read -r line; do
             # Only process learning lines (start with -)

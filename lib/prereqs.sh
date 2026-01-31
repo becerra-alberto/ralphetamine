@@ -50,6 +50,22 @@ prereqs_timeout_cmd() {
     fi
 }
 
+# Get the current Bash version as "major.minor"
+prereqs_bash_version() {
+    local major="${BASH_VERSINFO[0]}"
+    local minor="${BASH_VERSINFO[1]}"
+    echo "${major}.${minor}"
+}
+
+# Gate features that require Bash 4.0+
+prereqs_require_bash4() {
+    if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+        log_error "This feature requires Bash 4.0+. Current: $(prereqs_bash_version)"
+        log_error "On macOS: brew install bash"
+        return 1
+    fi
+}
+
 # Check that we're in a project with ralph initialized
 prereqs_check_project() {
     if [[ ! -f ".ralph/config.json" ]]; then

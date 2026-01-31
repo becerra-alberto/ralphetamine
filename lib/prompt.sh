@@ -48,16 +48,21 @@ prompt_substitute() {
 
 # Process {{#if VAR}}...{{/if}} conditionals
 # If VAR is non-empty, keep the block; otherwise remove it
+# NOTE: Nested {{#if}} on different variables is single-level only.
+# Nesting the same depth works for skipping (inner #if increments nesting
+# counter), but true multi-variable nesting (e.g., {{#if A}} ... {{#if B}})
+# where A is truthy and B is falsy will not correctly skip B's block.
+# For that case, flatten the conditionals or restructure the template.
 prompt_process_conditionals() {
     local template="$1"
     shift
 
-    # Build associative array of variables
-    declare -A vars
+    # Store variable names and values in parallel indexed arrays (Bash 3.2 safe)
+    local _cond_keys=()
+    local _cond_vals=()
     for pair in "$@"; do
-        local key="${pair%%=*}"
-        local value="${pair#*=}"
-        vars["$key"]="$value"
+        _cond_keys+=("${pair%%=*}")
+        _cond_vals+=("${pair#*=}")
     done
 
     # Process each conditional block
@@ -70,7 +75,16 @@ prompt_process_conditionals() {
         # Check for {{#if VAR}}
         if [[ "$line" =~ \{\{#if[[:space:]]+([A-Za-z_]+)\}\} ]]; then
             local var_name="${BASH_REMATCH[1]}"
-            if [[ -z "${vars[$var_name]}" ]]; then
+            # Look up var_name in parallel arrays
+            local _found_val=""
+            local _ci
+            for (( _ci=0; _ci<${#_cond_keys[@]}; _ci++ )); do
+                if [[ "${_cond_keys[$_ci]}" == "$var_name" ]]; then
+                    _found_val="${_cond_vals[$_ci]}"
+                    break
+                fi
+            done
+            if [[ -z "$_found_val" ]]; then
                 skip_until="$var_name"
                 nesting=1
                 continue

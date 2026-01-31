@@ -1,10 +1,22 @@
 #!/bin/bash
 # Ralph v2 — Git worktree parallelization and merge orchestration
+# Requires Bash 4.0+ (gated at entry via prereqs_require_bash4)
 
 RALPH_WORKTREE_DIR=".ralph/worktrees"
 
+# Module-scope arrays for batch results (not declared inside functions)
+_PARALLEL_SUCCESSFUL=()
+_PARALLEL_FAILED=()
+
 # Main parallel execution entry point
 parallel_run() {
+    prereqs_require_bash4 || return 1
+
+    # Source shared runner (for _run_sequential fallback)
+    if ! type _run_sequential &>/dev/null; then
+        source "${RALPH_DIR}/lib/runner.sh"
+    fi
+
     local timeout_secs="$1"
     local verbose="$2"
     local dry_run="$3"
@@ -108,16 +120,20 @@ _parallel_execute_batch() {
 
     mkdir -p "$RALPH_WORKTREE_DIR"
 
+    # PID files in project-local directory (not /tmp) to avoid conflicts
+    # between multiple Ralph instances
+    local pid_dir="${RALPH_WORKTREE_DIR}/.pids-$$"
+    mkdir -p "$pid_dir"
+    # Register cleanup via centralized trap registry
+    ralph_on_exit "rm -rf '$pid_dir'"
+
     local pids=()
-    local pid_to_story=()
     local running=0
 
     for story in "${stories[@]}"; do
-        # Respect max_concurrent
-        while [[ $running -ge $max_concurrent ]]; do
-            # Wait for any child to finish
-            wait -n 2>/dev/null || true
-            running=$((running - 1))
+        # Respect max_concurrent — polling loop (Bash 3.2+ compatible, no wait -n)
+        while [[ $(jobs -r | wc -l) -ge $max_concurrent ]]; do
+            sleep 1
         done
 
         local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
@@ -126,23 +142,28 @@ _parallel_execute_batch() {
         log_info "Creating worktree: $worktree_dir (branch: $branch_name)"
 
         # Create worktree on a new branch from current HEAD
-        git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null || {
+        if ! git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
             # Branch might already exist from a previous interrupted run
-            git worktree add "$worktree_dir" "$branch_name" 2>/dev/null || {
+            if ! git worktree add "$worktree_dir" "$branch_name" 2>/dev/null; then
                 log_error "Failed to create worktree for story $story"
+                _PARALLEL_FAILED+=("$story")
                 continue
-            }
-        }
+            fi
+        fi
 
         # Find spec and build prompt
         local spec_path
         spec_path=$(spec_find "$story") || {
             log_error "No spec found for story $story"
+            _PARALLEL_FAILED+=("$story")
             continue
         }
 
         local prompt
-        prompt=$(prompt_build "$story" "$spec_path") || continue
+        prompt=$(prompt_build "$story" "$spec_path") || {
+            _PARALLEL_FAILED+=("$story")
+            continue
+        }
 
         # Build claude command
         local claude_flags=()
@@ -163,8 +184,8 @@ _parallel_execute_batch() {
 
         local pid=$!
         pids+=("$pid")
-        # Store pid-to-story mapping using a temp file (bash doesn't support associative in subshells easily)
-        echo "$story" > "/tmp/.ralph_pid_${pid}"
+        # Store pid-to-story mapping in project-local directory
+        echo "$story" > "${pid_dir}/pid_${pid}"
 
         running=$((running + 1))
 
@@ -187,8 +208,8 @@ _parallel_execute_batch() {
         wait "$pid" || exit_code=$?
 
         local story
-        story=$(cat "/tmp/.ralph_pid_${pid}" 2>/dev/null)
-        rm -f "/tmp/.ralph_pid_${pid}"
+        story=$(cat "${pid_dir}/pid_${pid}" 2>/dev/null)
+        rm -f "${pid_dir}/pid_${pid}"
 
         local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
         local result=""
@@ -223,9 +244,9 @@ _parallel_execute_batch() {
     log_info "Batch results: ${#successful[@]} succeeded, ${#failed[@]} failed"
     [[ ${#failed[@]} -gt 0 ]] && log_warn "Failed stories: ${failed[*]}"
 
-    # Store successful stories for merge step
+    # Store results in module-scope arrays for merge step
     _PARALLEL_SUCCESSFUL=("${successful[@]}")
-    _PARALLEL_FAILED=("${failed[@]}")
+    _PARALLEL_FAILED+=("${failed[@]}")
 }
 
 # Merge successful worktree branches back to main
@@ -309,8 +330,9 @@ _parallel_resolve_conflict() {
         return 1
     }
 
+    # Truncate diff to 500 lines and 30000 chars to stay within prompt limits
     local conflict_diff
-    conflict_diff=$(git diff 2>/dev/null | head -500)
+    conflict_diff=$(git diff 2>/dev/null | head -500 | head -c 30000)
 
     template=$(prompt_substitute "$template" \
         "STORY_ID=$story" \
