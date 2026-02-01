@@ -11,6 +11,8 @@ RALPH_START_TIME="${RALPH_START_TIME:-}"
 _DISPLAY_PANEL_LINES=6  # header(1) + data(4) + footer(1)
 _DISPLAY_MIN_WIDTH=68
 _DISPLAY_INITIALIZED=false
+_DISPLAY_TIMER_PID=""
+_DISPLAY_PANEL_ROW=""   # Absolute row where panel starts (1-indexed)
 
 # Cached display data (updated via display_update_*)
 _DISPLAY_TOTAL_STORIES=0
@@ -43,11 +45,19 @@ display_init() {
 
     _DISPLAY_INITIALIZED=true
 
-    # Reserve space for the panel by printing blank lines
-    local i
-    for (( i=0; i<_DISPLAY_PANEL_LINES; i++ )); do
-        echo ""
-    done
+    # Calculate panel position: pin to bottom of terminal
+    local rows
+    rows=$(tput lines 2>/dev/null) || rows=24
+    _DISPLAY_PANEL_ROW=$((rows - _DISPLAY_PANEL_LINES))
+
+    # Set scroll region to exclude bottom panel area + 1 buffer row.
+    # The buffer row prevents the last panel newline from scrolling the screen.
+    printf '\033[1;%dr' "$((_DISPLAY_PANEL_ROW - 1))"
+
+    # Register cleanup to restore full scroll region on exit
+    if type ralph_on_exit &>/dev/null; then
+        ralph_on_exit _display_cleanup
+    fi
 }
 
 # ── Data update functions ────────────────────────────────────────────
@@ -171,16 +181,9 @@ _display_render_panel() {
     [[ "$max_current" -lt 5 ]] && max_current=5
     current_str="${current_str:0:$max_current}"
 
-    # Save cursor position
-    tput sc 2>/dev/null || true
-
-    # Move to top of panel area (go up _DISPLAY_PANEL_LINES lines)
-    local i
-    for (( i=0; i<_DISPLAY_PANEL_LINES; i++ )); do
-        tput cuu1 2>/dev/null || printf '\033[A'
-    done
-    # Move to column 0
-    printf '\r'
+    # Save cursor, jump to fixed panel position, render, restore cursor
+    printf '\0337'                              # DEC save cursor
+    printf '\033[%d;1H' "$_DISPLAY_PANEL_ROW"   # absolute row, column 1
 
     # Render panel lines
     _display_box_top "$width"
@@ -190,8 +193,7 @@ _display_render_panel() {
     _display_box_row "$inner" "$half" "Last Done" "$last_done_str" "Elapsed" "$elapsed_str"
     _display_box_bottom "$width"
 
-    # Restore cursor position
-    tput rc 2>/dev/null || true
+    printf '\0338'                              # DEC restore cursor
 }
 
 # ── Box drawing helpers ──────────────────────────────────────────────
@@ -357,4 +359,39 @@ display_refresh_from_state() {
     _DISPLAY_LEARNINGS_COUNT=$(_display_count_learnings)
 
     display_refresh
+}
+
+# ── Live timer ─────────────────────────────────────────────────────
+# Background process that refreshes the dashboard every N seconds
+# so the elapsed timer ticks while Claude is running.
+
+display_start_live_timer() {
+    [[ "$RALPH_DASHBOARD" != "true" ]] && return 0
+    [[ "$_DISPLAY_INITIALIZED" != true ]] && return 0
+
+    # Kill any existing timer
+    display_stop_live_timer
+
+    (
+        trap 'exit 0' TERM INT
+        while true; do
+            sleep 1
+            _display_render_panel 2>/dev/null || true
+        done
+    ) &
+    _DISPLAY_TIMER_PID=$!
+}
+
+display_stop_live_timer() {
+    if [[ -n "${_DISPLAY_TIMER_PID:-}" ]]; then
+        kill "$_DISPLAY_TIMER_PID" 2>/dev/null
+        wait "$_DISPLAY_TIMER_PID" 2>/dev/null || true
+        _DISPLAY_TIMER_PID=""
+    fi
+}
+
+_display_cleanup() {
+    display_stop_live_timer
+    printf '\033[r'          # reset scroll region to full terminal
+    printf '\033[%d;1H' "$(tput lines 2>/dev/null || echo 24)"  # move cursor to bottom
 }

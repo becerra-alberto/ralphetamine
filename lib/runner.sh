@@ -14,6 +14,16 @@ _run_sequential() {
     total_stories=$(stories_count_total)
     local done_count
     done_count=$(state_completed_count)
+    local max_retries
+    max_retries=$(config_get '.loop.max_retries' '3')
+
+    # Initialize dashboard FIRST (sets scroll region before any output)
+    if type display_init &>/dev/null; then
+        display_init
+        display_update_stories "$total_stories" "$done_count"
+        display_update_retry 0 "$max_retries"
+        display_refresh
+    fi
 
     box_header "RALPH IMPLEMENTATION LOOP"
     box_kv "Project" "$(config_get '.project.name' '(unnamed)')"
@@ -25,17 +35,6 @@ _run_sequential() {
     echo ""
 
     log "Ralph loop starting"
-
-    local max_retries
-    max_retries=$(config_get '.loop.max_retries' '3')
-
-    # Initialize dashboard
-    if type display_init &>/dev/null; then
-        display_init
-        display_update_stories "$total_stories" "$done_count"
-        display_update_retry 0 "$max_retries"
-        display_refresh
-    fi
 
     local timeout_cmd
     timeout_cmd=$(prereqs_timeout_cmd)
@@ -115,10 +114,20 @@ _run_sequential() {
 
         local result exit_code=0
 
+        # Start live dashboard timer so elapsed clock ticks during execution
+        if type display_start_live_timer &>/dev/null; then
+            display_start_live_timer
+        fi
+
         if [[ "$verbose" == true ]]; then
             result=$($timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" 2>&1 | tee /dev/stderr) || exit_code=$?
         else
             result=$($timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" 2>&1) || exit_code=$?
+        fi
+
+        # Stop live timer now that Claude has returned
+        if type display_stop_live_timer &>/dev/null; then
+            display_stop_live_timer
         fi
 
         # Handle timeout
