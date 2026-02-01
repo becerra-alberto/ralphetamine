@@ -148,6 +148,9 @@ _parallel_execute_batch() {
     current_branch=$(git rev-parse --abbrev-ref HEAD)
 
     mkdir -p "$RALPH_WORKTREE_DIR"
+    # Resolve to absolute path — subshells cd into worktrees and need
+    # absolute paths for output files and pid tracking
+    RALPH_WORKTREE_DIR="$(cd "$RALPH_WORKTREE_DIR" && pwd)"
 
     # Prune stale worktree records from previous failed runs
     git worktree prune 2>/dev/null || true
@@ -211,7 +214,8 @@ _parallel_execute_batch() {
         local timeout_cmd
         timeout_cmd=$(prereqs_timeout_cmd)
 
-        # Spawn Claude in the worktree directory
+        # Spawn Claude in the worktree directory (output_file must be absolute
+        # because the subshell cd's into the worktree)
         local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
         (
             cd "$worktree_dir"
