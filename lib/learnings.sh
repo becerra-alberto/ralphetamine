@@ -72,9 +72,13 @@ learnings_extract() {
         echo "- [Story $story_id] $learning" >> "$category_file"
 
         # Update index
-        jq --arg cat "$category" --arg file "${category}.md" \
-            '.[$cat] = $file' "$RALPH_LEARNINGS_INDEX" > "${RALPH_LEARNINGS_INDEX}.tmp"
-        mv "${RALPH_LEARNINGS_INDEX}.tmp" "$RALPH_LEARNINGS_INDEX"
+        if jq --arg cat "$category" --arg file "${category}.md" \
+            '.[$cat] = $file' "$RALPH_LEARNINGS_INDEX" > "${RALPH_LEARNINGS_INDEX}.tmp" 2>/dev/null; then
+            mv "${RALPH_LEARNINGS_INDEX}.tmp" "$RALPH_LEARNINGS_INDEX"
+        else
+            rm -f "${RALPH_LEARNINGS_INDEX}.tmp"
+            log_warn "Failed to update learnings index for: $category"
+        fi
 
         count=$((count + 1))
     done <<< "$learnings"
@@ -82,7 +86,7 @@ learnings_extract() {
     # Also append to progress.txt (legacy compatibility)
     while IFS= read -r learning; do
         [[ -z "$learning" ]] && continue
-        echo "[LEARN] $learning" >> progress.txt
+        echo "[LEARN] $learning" >> progress.txt 2>/dev/null || true
     done <<< "$learnings"
 
     if [[ $count -gt 0 ]]; then
@@ -171,9 +175,13 @@ learnings_import_legacy() {
 
             echo "- [legacy] $text" >> "$category_file"
 
-            jq --arg cat "$category" --arg file "${category}.md" \
-                '.[$cat] = $file' "$RALPH_LEARNINGS_INDEX" > "${RALPH_LEARNINGS_INDEX}.tmp"
-            mv "${RALPH_LEARNINGS_INDEX}.tmp" "$RALPH_LEARNINGS_INDEX"
+            if jq --arg cat "$category" --arg file "${category}.md" \
+                '.[$cat] = $file' "$RALPH_LEARNINGS_INDEX" > "${RALPH_LEARNINGS_INDEX}.tmp" 2>/dev/null; then
+                mv "${RALPH_LEARNINGS_INDEX}.tmp" "$RALPH_LEARNINGS_INDEX"
+            else
+                rm -f "${RALPH_LEARNINGS_INDEX}.tmp"
+                log_warn "Failed to update learnings index for: $category"
+            fi
 
             count=$((count + 1))
         fi

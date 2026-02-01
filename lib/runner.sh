@@ -101,10 +101,10 @@ _run_sequential() {
         fi
 
         # Run hooks
-        hooks_run "pre_story" "RALPH_STORY=$next_story" "RALPH_SPEC=$spec_path"
+        hooks_run "pre_story" "RALPH_STORY=$next_story" "RALPH_SPEC=$spec_path" || true
 
         # Update state
-        state_set_current "$next_story"
+        state_set_current "$next_story" || log_warn "Could not update state"
 
         # Build claude command
         local claude_flags=()
@@ -112,18 +112,31 @@ _run_sequential() {
             [[ -n "$flag" ]] && claude_flags+=("$flag")
         done < <(config_get_claude_flags)
 
-        local result exit_code=0
+        local output_file=".ralph/last-claude-output.txt"
+        local exit_code=0
 
         # Start live dashboard timer so elapsed clock ticks during execution
         if type display_start_live_timer &>/dev/null; then
             display_start_live_timer
         fi
 
+        log "Invoking Claude (timeout: ${timeout_secs}s)"
+
         if [[ "$verbose" == true ]]; then
-            result=$($timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" 2>&1 | tee /dev/stderr) || exit_code=$?
+            # Verbose: tee to terminal AND file
+            $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
+                < /dev/null 2>&1 | tee "$output_file" || exit_code=$?
         else
-            result=$($timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" 2>&1) || exit_code=$?
+            # Silent: write directly to file
+            $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
+                < /dev/null > "$output_file" 2>&1 || exit_code=$?
         fi
+
+        # Read captured output
+        local result
+        result=$(cat "$output_file" 2>/dev/null) || true
+        local result_len=${#result}
+        log "Claude returned: exit_code=$exit_code output_length=$result_len"
 
         # Stop live timer now that Claude has returned
         if type display_stop_live_timer &>/dev/null; then
@@ -134,7 +147,7 @@ _run_sequential() {
         if [[ $exit_code -eq 124 ]]; then
             log_warn "Story $next_story timed out after ${timeout_secs}s"
             _handle_failure "$next_story" "Timeout after ${timeout_secs}s" "$spec_path" "$max_retries"
-            hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=timeout"
+            hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=timeout" || true
             continue
         fi
 
@@ -142,13 +155,13 @@ _run_sequential() {
         if [[ $exit_code -ne 0 ]]; then
             log_error "Story $next_story failed (exit code: $exit_code)"
             _handle_failure "$next_story" "Exit code $exit_code" "$spec_path" "$max_retries"
-            hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=error"
+            hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=error" || true
             continue
         fi
 
         # Extract learnings
         if type learnings_extract &>/dev/null; then
-            learnings_extract "$result" "$next_story"
+            learnings_extract "$result" "$next_story" || true
         fi
 
         # Parse signals
@@ -172,7 +185,7 @@ _run_sequential() {
                 # Append to progress.txt
                 local timestamp
                 timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
-                echo "[DONE] Story $next_story - $title - $timestamp" >> progress.txt
+                echo "[DONE] Story $next_story - $title - $timestamp" >> progress.txt 2>/dev/null || true
 
                 # Testing specialist phase
                 if [[ "$(config_get '.testing_phase.enabled' 'false')" == "true" ]]; then
@@ -181,7 +194,7 @@ _run_sequential() {
                     fi
                 fi
 
-                hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=done"
+                hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=done" || true
 
                 [[ -n "$specific_story" ]] && return 0
             else
@@ -193,14 +206,14 @@ _run_sequential() {
             local fail_reason="${fail_info#*|}"
             log_error "Story $fail_id failed: $fail_reason"
             _handle_failure "$next_story" "$fail_reason" "$spec_path" "$max_retries"
-            hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=fail"
+            hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=fail" || true
         else
             log_warn "No completion signal found"
             _handle_failure "$next_story" "No completion signal in output" "$spec_path" "$max_retries"
-            hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=no_signal"
+            hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=no_signal" || true
         fi
 
-        hooks_run "post_iteration" "RALPH_ITERATION=$iteration"
+        hooks_run "post_iteration" "RALPH_ITERATION=$iteration" || true
     done
 }
 
@@ -216,7 +229,7 @@ _handle_failure() {
 
     local timestamp
     timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
-    echo "[FAIL] Story $story - $reason - $timestamp (attempt $retry_count/$max_retries)" >> progress.txt
+    echo "[FAIL] Story $story - $reason - $timestamp (attempt $retry_count/$max_retries)" >> progress.txt 2>/dev/null || true
 
     log "Story $story failed (attempt $retry_count/$max_retries): $reason"
 

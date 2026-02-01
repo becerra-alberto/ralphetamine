@@ -22,7 +22,9 @@ tmux_ensure() {
         exec tmux attach-session -t "$session_name"
     fi
 
-    # Create new session and re-exec ralph inside it
+    # Create new session with remain-on-exit so crashes stay visible
     log_info "Creating tmux session: $session_name"
-    exec tmux new-session -s "$session_name" "$0" "$@"
+    exec tmux new-session -d -s "$session_name" -- "$0" "$@" \; \
+        set-option -t "$session_name" remain-on-exit on \; \
+        attach-session -t "$session_name"
 }

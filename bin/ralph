@@ -1,7 +1,7 @@
 #!/bin/bash
 # Ralph v2 — Autonomous Implementation Loop
 # Usage: ralph <command> [options]
-set -euo pipefail
+set -Eeuo pipefail
 
 # ── Resolve RALPH_DIR (the ralph installation directory) ────────────────────
 # Portable symlink resolution — macOS BSD readlink lacks -f
@@ -111,7 +111,8 @@ cmd_run() {
     config_load || exit 1
 
     # Save original args before parsing consumes them (needed for tmux re-exec)
-    local original_args=("$@")
+    local original_args=()
+    [[ $# -gt 0 ]] && original_args=("$@")
 
     # Parse run-specific flags
     local iterations verbose dry_run specific_story resume_from timeout_secs
@@ -144,7 +145,7 @@ cmd_run() {
 
     # Auto tmux — must happen before interactive prompt so user is only prompted once
     if [[ "$no_tmux" == false ]]; then
-        tmux_ensure run "${original_args[@]}"
+        tmux_ensure run "${original_args[@]+"${original_args[@]}"}"
     fi
 
     # Interactive startup (if no flags override and not disabled)

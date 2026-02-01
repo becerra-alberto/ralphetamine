@@ -4,6 +4,22 @@
 RALPH_STATE_DIR=".ralph"
 RALPH_STATE_FILE="$RALPH_STATE_DIR/state.json"
 
+_state_safe_write() {
+    local jq_expr="$1"; shift
+    local tmp_file="${RALPH_STATE_FILE}.tmp"
+    if ! jq "$@" "$jq_expr" "$RALPH_STATE_FILE" > "$tmp_file" 2>/dev/null; then
+        log_error "State write failed: jq error"
+        rm -f "$tmp_file"
+        return 1
+    fi
+    if [[ ! -s "$tmp_file" ]] || ! jq empty "$tmp_file" 2>/dev/null; then
+        log_error "State write failed: invalid output"
+        rm -f "$tmp_file"
+        return 1
+    fi
+    mv "$tmp_file" "$RALPH_STATE_FILE"
+}
+
 state_init() {
     mkdir -p "$RALPH_STATE_DIR"
 
@@ -82,8 +98,7 @@ state_is_completed() {
 
 state_set_current() {
     local story="$1"
-    jq --arg story "$story" '.current_story = $story' "$RALPH_STATE_FILE" > "${RALPH_STATE_FILE}.tmp"
-    mv "${RALPH_STATE_FILE}.tmp" "$RALPH_STATE_FILE"
+    _state_safe_write '.current_story = $story' --arg story "$story" || return 1
 }
 
 state_get_current() {
@@ -92,13 +107,12 @@ state_get_current() {
 
 state_mark_done() {
     local story="$1"
-    jq --arg story "$story" '
+    _state_safe_write '
         .completed_stories += [$story]
         | .completed_stories |= unique
         | .current_story = null
         | .retry_count = 0
-    ' "$RALPH_STATE_FILE" > "${RALPH_STATE_FILE}.tmp"
-    mv "${RALPH_STATE_FILE}.tmp" "$RALPH_STATE_FILE"
+    ' --arg story "$story" || return 1
     log_success "Story $story marked as DONE"
 }
 
@@ -108,14 +122,12 @@ state_get_retry_count() {
 
 state_increment_retry() {
     local story="$1"
-    jq --arg story "$story" '
+    _state_safe_write '
         .retry_count = (.retry_count // 0) + 1
         | .current_story = $story
-    ' "$RALPH_STATE_FILE" > "${RALPH_STATE_FILE}.tmp"
-    mv "${RALPH_STATE_FILE}.tmp" "$RALPH_STATE_FILE"
+    ' --arg story "$story" || return 1
 }
 
 state_reset_retries() {
-    jq '.retry_count = 0' "$RALPH_STATE_FILE" > "${RALPH_STATE_FILE}.tmp"
-    mv "${RALPH_STATE_FILE}.tmp" "$RALPH_STATE_FILE"
+    _state_safe_write '.retry_count = 0' || return 1
 }

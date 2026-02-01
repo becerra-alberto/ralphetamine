@@ -20,6 +20,24 @@ _ralph_run_exit_handlers() {
 }
 trap _ralph_run_exit_handlers EXIT
 
+# ── ERR trap for crash diagnostics ────────────────────────────────────────
+_ralph_err_handler() {
+    local exit_code=$?
+    # Skip in subshells — the caller's ||/if/! handles the exit code
+    [[ "${BASH_SUBSHELL:-0}" -gt 0 ]] && return 0
+    local line_no="${1:-unknown}"
+    local func_name="${FUNCNAME[1]:-main}"
+    local command="${BASH_COMMAND:-unknown}"
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    {
+        echo "[$ts] [CRASH] exit=$exit_code cmd='$command' func=$func_name line=$line_no"
+        echo "[$ts] [CRASH] stack: ${FUNCNAME[*]:-unavailable}"
+    } >> "${RALPH_LOG_FILE:-ralph.log}" 2>/dev/null
+    echo "[RALPH CRASH] exit=$exit_code cmd='$command' func=$func_name line=$line_no" >&2
+}
+trap '_ralph_err_handler "$LINENO"' ERR
+
 # ── Colors ──────────────────────────────────────────────────────────────────
 readonly CLR_RESET='\033[0m'
 readonly CLR_RED='\033[0;31m'

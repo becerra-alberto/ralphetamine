@@ -51,7 +51,7 @@ signals_parse_learnings() {
 
     echo "$output" | grep -oE '<ralph>LEARN:[[:space:]]*[^<]+</ralph>' | \
         sed 's/<ralph>LEARN:[[:space:]]*//' | \
-        sed 's/<\/ralph>//'
+        sed 's/<\/ralph>//' || true
 }
 
 # Parse TEST_REVIEW_DONE signal: <ralph>TEST_REVIEW_DONE X.X: result</ralph>

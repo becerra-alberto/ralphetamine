@@ -208,6 +208,11 @@ _parallel_execute_batch() {
         fi
     done
 
+    # Start live dashboard timer so elapsed clock ticks while waiting
+    if type display_start_live_timer &>/dev/null; then
+        display_start_live_timer
+    fi
+
     # Wait for all to complete
     log_info "Waiting for ${#pids[@]} parallel Claude instances..."
 
@@ -261,6 +266,11 @@ _parallel_execute_batch() {
     echo ""
     log_info "Batch results: ${#successful[@]} succeeded, ${#failed[@]} failed"
     [[ ${#failed[@]} -gt 0 ]] && log_warn "Failed stories: ${failed[*]}"
+
+    # Stop live dashboard timer
+    if type display_stop_live_timer &>/dev/null; then
+        display_stop_live_timer
+    fi
 
     # Store results in module-scope arrays for merge step
     _PARALLEL_SUCCESSFUL=("${successful[@]}")
