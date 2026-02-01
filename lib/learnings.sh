@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Learning extraction, categorization, and injection
 
 RALPH_LEARNINGS_DIR=".ralph/learnings"

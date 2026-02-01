@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Real-time dashboard display (Level 2: structured panel)
 # Uses POSIX-standard tput for cursor positioning. Bash 3.2 compatible.
 # Degrades to single-line progress (Level 1) if terminal is too small.

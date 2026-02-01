@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 Test Runner — Execute BATS test suites by tier
 set -euo pipefail
 

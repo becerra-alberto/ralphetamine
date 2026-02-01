@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Parse structured <ralph> tags from Claude output
 
 # Parse DONE signal: <ralph>DONE X.X</ralph>

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ralph v2 is an autonomous implementation loop for Claude Code. It reads story specs, sends them to Claude one at a time, tracks success/failure, manages retries, and accumulates learnings — all without human intervention.
 
-- **Language:** Bash 3.2+ (macOS compatible)
+- **Language:** Bash 4.0+ (auto-detected on macOS via self-re-exec)
 - **Dependencies:** jq, git, coreutils (for timeout/gtimeout)
 - **CLI:** `claude` (Claude Code CLI)
 
@@ -36,7 +36,7 @@ tests/libs/bats-core/bin/bats tests/tier1-unit/
 
 ## Key Conventions
 
-- All shell scripts must be compatible with **Bash 3.2** (macOS default)
+- All shell scripts require **Bash 4.0+** (entry points auto-detect Homebrew Bash on macOS)
 - Amounts/numeric values stored as integers where applicable
 - State tracked in `.ralph/state.json` (JSON via jq)
 - Story specs follow the pattern `specs/epic-{N}/story-{N.M}-{slug}.md`

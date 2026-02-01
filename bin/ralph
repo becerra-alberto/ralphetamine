@@ -1,6 +1,22 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Autonomous Implementation Loop
 # Usage: ralph <command> [options]
+
+# ── Ensure Bash 4+ ────────────────────────────────────────────────────────────
+# macOS ships Bash 3.2 at /bin/bash. Ralph requires Bash 4+ for regex
+# captures (BASH_REMATCH), arrays, and parallel execution. If the current
+# shell is too old, find a newer one and re-exec transparently.
+if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+    for _ralph_bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$_ralph_bash" ]] && "$_ralph_bash" -c '[[ "${BASH_VERSINFO[0]}" -ge 4 ]]' 2>/dev/null; then
+            exec "$_ralph_bash" "${BASH_SOURCE[0]}" "$@"
+        fi
+    done
+    echo "[ERROR] Ralph requires Bash 4.0+. Current: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}" >&2
+    echo "[ERROR] On macOS: brew install bash" >&2
+    exit 1
+fi
+
 set -Eeuo pipefail
 
 # ── Resolve RALPH_DIR (the ralph installation directory) ────────────────────

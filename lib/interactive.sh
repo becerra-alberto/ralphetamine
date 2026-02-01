@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Interactive startup prompts and init wizard
 
 # ── Init wizard ─────────────────────────────────────────────────────────────

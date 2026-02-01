@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Configuration loading from .ralph/config.json
 
 RALPH_CONFIG_FILE=".ralph/config.json"

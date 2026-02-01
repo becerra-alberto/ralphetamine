@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — State management (state.json read/write)
 
 RALPH_STATE_DIR=".ralph"

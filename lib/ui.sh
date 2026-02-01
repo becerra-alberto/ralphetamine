@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — UI helpers: logging, colors, box drawing, trap registry
 
 # ── Centralized EXIT trap registry ──────────────────────────────────────────

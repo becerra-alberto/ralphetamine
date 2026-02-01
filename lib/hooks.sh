@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Lifecycle hook execution
 
 # Execute a hook by name (pre_iteration, post_iteration, pre_story, post_story)

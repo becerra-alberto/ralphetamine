@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Spec file discovery and management
 
 # Find the spec file for a given story ID using the configured pattern

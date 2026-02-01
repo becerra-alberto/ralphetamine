@@ -1,9 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph - Autonomous Implementation Loop via Claude Code CLI
 # Usage: ./ralph.sh [OPTIONS]
 #
 # Runs Claude Code autonomously to implement stories from specs/
 # Each iteration: pick next story -> implement -> test -> commit or revert
+
+# ── Ensure Bash 4+ (see bin/ralph for rationale) ─────────────────────────────
+if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+    for _ralph_bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$_ralph_bash" ]] && "$_ralph_bash" -c '[[ "${BASH_VERSINFO[0]}" -ge 4 ]]' 2>/dev/null; then
+            exec "$_ralph_bash" "${BASH_SOURCE[0]}" "$@"
+        fi
+    done
+    echo "[ERROR] Ralph requires Bash 4.0+. Current: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}" >&2
+    echo "[ERROR] On macOS: brew install bash" >&2
+    exit 1
+fi
 
 set -e
 

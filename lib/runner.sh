@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Shared sequential runner and failure handler
 # Extracted from bin/ralph so both sequential and parallel paths can use them.
 
@@ -174,7 +174,7 @@ _run_sequential() {
 
                 # Dashboard: update completion
                 if type display_update_stories &>/dev/null; then
-                    done_count=$((done_count + 1))
+                    done_count=$(state_completed_count)
                     display_update_stories "$total_stories" "$done_count"
                     display_update_last_done "$next_story"
                     display_update_retry 0 "$max_retries"

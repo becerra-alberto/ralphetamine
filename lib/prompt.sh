@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Template loading and variable substitution engine
 
 RALPH_TEMPLATES_DIR=""

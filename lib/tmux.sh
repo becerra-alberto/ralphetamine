@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — tmux auto-wrapping (detachable sessions)
 
 tmux_ensure() {

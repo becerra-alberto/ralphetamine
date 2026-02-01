@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Install script
 # Adds bin/ralph to PATH via symlink
 
@@ -11,6 +11,19 @@ INSTALL_DIR="${HOME}/.local/bin"
 echo "Ralph v2 Installer"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+
+# Warn if Bash 4+ is not available (ralph requires it at runtime)
+if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
+    _has_bash4=false
+    for _bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        [[ -x "$_bash" ]] && "$_bash" -c '[[ "${BASH_VERSINFO[0]}" -ge 4 ]]' 2>/dev/null && _has_bash4=true && break
+    done
+    if [[ "$_has_bash4" == false ]]; then
+        echo "WARNING: Ralph requires Bash 4.0+. Current system bash is ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}."
+        echo "Install via: brew install bash"
+        echo ""
+    fi
+fi
 
 # Make ralph executable
 chmod +x "$RALPH_BIN"

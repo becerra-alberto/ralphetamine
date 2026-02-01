@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Story queue management (stories.txt parsing)
 
 RALPH_STORIES_FILE=".ralph/stories.txt"
@@ -145,6 +145,24 @@ stories_get_batch_members() {
         [[ "$line" =~ ^[[:space:]]*x[[:space:]] ]] && continue
 
         if [[ "$current_batch" == "$target_batch" ]]; then
+            local id
+            id=$(echo "$line" | sed 's/|.*//' | xargs)
+            echo "$id"
+        fi
+    done < "$RALPH_STORIES_FILE"
+}
+
+# Get stories with no [batch:N] annotation above them
+stories_get_unbatched() {
+    local current_batch=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*\[batch:([0-9]+)\] ]]; then
+            current_batch="${BASH_REMATCH[1]}"
+            continue
+        fi
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*x[[:space:]] ]] && continue
+        if [[ -z "$current_batch" ]]; then
             local id
             id=$(echo "$line" | sed 's/|.*//' | xargs)
             echo "$id"
