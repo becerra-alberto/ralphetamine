@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph v2 — Git worktree parallelization and merge orchestration
 # Requires Bash 4.0+ (gated at entry via prereqs_require_bash4)
 
@@ -35,8 +35,26 @@ parallel_run() {
         display_update_workers 0 "$max_concurrent"
     fi
 
+    # Run any unbatched stories (no [batch:N] annotation) sequentially first
+    local _unbatched=()
+    while IFS= read -r sid; do
+        [[ -z "$sid" ]] && continue
+        state_is_completed "$sid" || _unbatched+=("$sid")
+    done < <(stories_get_unbatched)
+
+    if [[ ${#_unbatched[@]} -gt 0 ]]; then
+        log_info "Running ${#_unbatched[@]} unbatched foundation stories sequentially"
+        for story in "${_unbatched[@]}"; do
+            if [[ "$dry_run" == true ]]; then
+                echo "[DRY RUN] Unbatched story: $story"
+            else
+                _run_sequential "1" "$timeout_secs" "$verbose" false "$story" ""
+            fi
+        done
+    fi
+
     # Find which batches exist and need execution
-    local current_batch=1
+    local current_batch=0
     while true; do
         local batch_stories=()
         while IFS= read -r story_id; do
@@ -46,21 +64,27 @@ parallel_run() {
 
         # No stories in this batch — try next, or we're done
         if [[ ${#batch_stories[@]} -eq 0 ]]; then
-            # Check if there are more batches
             local next_batch=$((current_batch + 1))
             local next_members
             next_members=$(stories_get_batch_members "$next_batch" | head -1)
             if [[ -z "$next_members" ]]; then
-                # Also check unbatched stories (batch 0)
-                if [[ $current_batch -gt 1 ]]; then
-                    break
-                fi
-                # Batch 0 = unbatched stories, run sequentially
-                log_info "No batch annotations found. Running sequentially."
-                _run_sequential "0" "$timeout_secs" "$verbose" "$dry_run" "" ""
-                return $?
+                break
             fi
             current_batch=$next_batch
+            continue
+        fi
+
+        # Batch 0 = sequential foundation — always run one at a time
+        if [[ "$current_batch" -eq 0 ]]; then
+            log_info "Batch 0: running ${#batch_stories[@]} stories sequentially (foundation)"
+            for story in "${batch_stories[@]}"; do
+                if [[ "$dry_run" == true ]]; then
+                    echo "[DRY RUN] Batch 0 story: $story"
+                else
+                    _run_sequential "1" "$timeout_secs" "$verbose" false "$story" ""
+                fi
+            done
+            current_batch=$((current_batch + 1))
             continue
         fi
 
@@ -125,6 +149,9 @@ _parallel_execute_batch() {
 
     mkdir -p "$RALPH_WORKTREE_DIR"
 
+    # Prune stale worktree records from previous failed runs
+    git worktree prune 2>/dev/null || true
+
     # PID files in project-local directory (not /tmp) to avoid conflicts
     # between multiple Ralph instances
     local pid_dir="${RALPH_WORKTREE_DIR}/.pids-$$"
@@ -148,8 +175,13 @@ _parallel_execute_batch() {
 
         # Create worktree on a new branch from current HEAD
         if ! git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
-            # Branch might already exist from a previous interrupted run
-            if ! git worktree add "$worktree_dir" "$branch_name" 2>/dev/null; then
+            # Stale worktree/branch from previous run — clean everything and retry
+            log_debug "Cleaning stale worktree/branch for story $story"
+            git worktree remove "$worktree_dir" --force 2>/dev/null || true
+            rm -rf "$worktree_dir" 2>/dev/null || true
+            git worktree prune 2>/dev/null || true
+            git branch -D "$branch_name" 2>/dev/null || true
+            if ! git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
                 log_error "Failed to create worktree for story $story"
                 _PARALLEL_FAILED+=("$story")
                 continue
@@ -184,7 +216,7 @@ _parallel_execute_batch() {
         (
             cd "$worktree_dir"
             $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
-                > "$output_file" 2>&1
+                < /dev/null > "$output_file" 2>&1
         ) &
 
         local pid=$!
@@ -319,12 +351,14 @@ _parallel_merge_batch() {
         git branch -d "$branch_name" 2>/dev/null || true
     done
 
-    # Also cleanup failed worktrees (leave branches for investigation)
+    # Cleanup failed worktrees and branches so retries aren't blocked
     for story in "${_PARALLEL_FAILED[@]}"; do
         local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
+        local branch_name="ralph/story-${story}"
         if [[ -d "$worktree_dir" ]]; then
-            git worktree remove "$worktree_dir" 2>/dev/null || true
+            git worktree remove "$worktree_dir" --force 2>/dev/null || true
         fi
+        git branch -D "$branch_name" 2>/dev/null || true
     done
 
     # Remove worktree dir if empty
