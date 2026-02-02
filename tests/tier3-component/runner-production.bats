@@ -188,3 +188,26 @@ echo "this should never appear"
     # Assert: timeout was recorded in progress
     assert_file_contains "progress.txt" "Timeout"
 }
+
+# ─── Test 6: Timeout loop terminates after max retries ────────────────
+# Targets: _handle_failure return 1 + local retry counter in _run_sequential
+#
+# Without the fix, state_increment_retry failures are silently ignored,
+# retry_count stays at 0, and the while-true loop runs forever.
+@test "production: timeout loop terminates after max retries" {
+    # Override timeout function to always simulate exit 124 (timeout)
+    _mock_timeout() { return 124; }
+
+    set -Eeuo pipefail
+    _run_sequential 0 1800 false false "1.1" "" || true
+    set +Eeu +o pipefail
+
+    # Should have retried max_retries times (3), not looped forever
+    local retry_count
+    retry_count=$(jq '.retry_count // 0' .ralph/state.json)
+    [[ $retry_count -le 3 ]]
+
+    # Assert: each retry was recorded as a [FAIL] in progress.txt
+    assert_file_contains "progress.txt" "[FAIL]"
+    assert_file_contains "progress.txt" "Timeout"
+}

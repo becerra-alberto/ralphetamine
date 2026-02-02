@@ -50,3 +50,16 @@ teardown() {
     assert_success
     assert_json_field ".ralph/state.json" ".retry_count" "1"
 }
+
+@test "_handle_failure: returns 1 at max retries (not exit)" {
+    # Pre-increment retries to reach the limit
+    state_increment_retry "2.1"
+    state_increment_retry "2.1"
+    # With return 1 (not exit 1), BATS `run` captures it as a failure status
+    run _wrapped_handle_failure "2.1" "persistent failure" "specs/epic-2/story-2.1.md" "3"
+    assert_failure
+    assert_output --partial "MAX RETRIES"
+    # Verify progress.txt was still written before returning
+    assert_file_contains "progress.txt" "FAIL"
+    assert_file_contains "progress.txt" "persistent failure"
+}

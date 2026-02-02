@@ -2,6 +2,25 @@
 # Ralph v2 — Shared sequential runner and failure handler
 # Extracted from bin/ralph so both sequential and parallel paths can use them.
 
+# Tracks consecutive failures per story using caller's local variables.
+# Returns 0 (true) when local retry limit is reached, signaling the caller to abort.
+# Relies on local_retry_count and last_failed_story from _run_sequential's scope.
+_track_local_retry() {
+    local story="$1"
+    local max_retries="$2"
+    if [[ "$story" == "$last_failed_story" ]]; then
+        local_retry_count=$((local_retry_count + 1))
+    else
+        local_retry_count=1
+        last_failed_story="$story"
+    fi
+    if [[ $local_retry_count -ge $max_retries ]]; then
+        log "Local retry limit reached for $story ($local_retry_count/$max_retries)"
+        return 0  # true — caller should abort
+    fi
+    return 1  # false — keep going
+}
+
 _run_sequential() {
     local iterations="$1"
     local timeout_secs="$2"
@@ -38,6 +57,11 @@ _run_sequential() {
 
     local timeout_cmd
     timeout_cmd=$(prereqs_timeout_cmd)
+
+    # Local retry counter — primary defense against infinite loops.
+    # Does not depend on state.json I/O succeeding.
+    local local_retry_count=0
+    local last_failed_story=""
 
     local iteration=0
     while true; do
@@ -146,7 +170,10 @@ _run_sequential() {
         # Handle timeout
         if [[ $exit_code -eq 124 ]]; then
             log_warn "Story $next_story timed out after ${timeout_secs}s"
-            _handle_failure "$next_story" "Timeout after ${timeout_secs}s" "$spec_path" "$max_retries"
+            if ! _handle_failure "$next_story" "Timeout after ${timeout_secs}s" "$spec_path" "$max_retries"; then
+                return 1
+            fi
+            _track_local_retry "$next_story" "$max_retries" && return 1
             hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=timeout" || true
             continue
         fi
@@ -154,7 +181,10 @@ _run_sequential() {
         # Handle other errors
         if [[ $exit_code -ne 0 ]]; then
             log_error "Story $next_story failed (exit code: $exit_code)"
-            _handle_failure "$next_story" "Exit code $exit_code" "$spec_path" "$max_retries"
+            if ! _handle_failure "$next_story" "Exit code $exit_code" "$spec_path" "$max_retries"; then
+                return 1
+            fi
+            _track_local_retry "$next_story" "$max_retries" && return 1
             hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=error" || true
             continue
         fi
@@ -196,20 +226,33 @@ _run_sequential() {
 
                 hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=done" || true
 
+                # Reset local retry tracking on success
+                local_retry_count=0
+                last_failed_story=""
+
                 [[ -n "$specific_story" ]] && return 0
             else
                 log_warn "DONE signal for $done_id but expected $next_story"
-                _handle_failure "$next_story" "Mismatched DONE signal" "$spec_path" "$max_retries"
+                if ! _handle_failure "$next_story" "Mismatched DONE signal" "$spec_path" "$max_retries"; then
+                    return 1
+                fi
+                _track_local_retry "$next_story" "$max_retries" && return 1
             fi
         elif fail_info=$(signals_parse_fail "$result"); then
             local fail_id="${fail_info%%|*}"
             local fail_reason="${fail_info#*|}"
             log_error "Story $fail_id failed: $fail_reason"
-            _handle_failure "$next_story" "$fail_reason" "$spec_path" "$max_retries"
+            if ! _handle_failure "$next_story" "$fail_reason" "$spec_path" "$max_retries"; then
+                return 1
+            fi
+            _track_local_retry "$next_story" "$max_retries" && return 1
             hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=fail" || true
         else
             log_warn "No completion signal found"
-            _handle_failure "$next_story" "No completion signal in output" "$spec_path" "$max_retries"
+            if ! _handle_failure "$next_story" "No completion signal in output" "$spec_path" "$max_retries"; then
+                return 1
+            fi
+            _track_local_retry "$next_story" "$max_retries" && return 1
             hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=no_signal" || true
         fi
 
@@ -248,6 +291,6 @@ _handle_failure() {
         echo ""
         echo "  To retry: ralph run -s $story"
         log "EXITING: Story $story exceeded max retries ($max_retries)"
-        exit 1
+        return 1
     fi
 }
