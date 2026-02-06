@@ -95,6 +95,15 @@ stories_count_total() {
     stories_list_all | wc -l | xargs
 }
 
+# Count completed stories in the current queue (intersects state with stories.txt)
+stories_count_completed() {
+    local count=0
+    while IFS= read -r id; do
+        state_is_completed "$id" && count=$((count + 1))
+    done < <(stories_list_all)
+    echo "$count"
+}
+
 # Count remaining stories
 stories_count_remaining() {
     local total remaining=0

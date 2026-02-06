@@ -126,7 +126,7 @@ interactive_init() {
 interactive_run_prompt() {
     local total done_count remaining
     total=$(stories_count_total)
-    done_count=$(state_completed_count)
+    done_count=$(stories_count_completed)
     remaining=$(stories_count_remaining)
 
     echo ""

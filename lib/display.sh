@@ -340,7 +340,9 @@ display_refresh_from_state() {
     if type stories_count_total &>/dev/null; then
         total=$(stories_count_total 2>/dev/null || echo "0")
     fi
-    if type state_completed_count &>/dev/null; then
+    if type stories_count_completed &>/dev/null; then
+        done_count=$(stories_count_completed 2>/dev/null || echo "0")
+    elif type state_completed_count &>/dev/null; then
         done_count=$(state_completed_count 2>/dev/null || echo "0")
     fi
     display_update_stories "$total" "$done_count"

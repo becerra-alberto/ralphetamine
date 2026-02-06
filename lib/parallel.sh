@@ -66,7 +66,7 @@ parallel_run() {
         if [[ ${#batch_stories[@]} -eq 0 ]]; then
             local next_batch=$((current_batch + 1))
             local next_members
-            next_members=$(stories_get_batch_members "$next_batch" | head -1)
+            next_members=$(stories_get_batch_members "$next_batch" | head -1) || true
             if [[ -z "$next_members" ]]; then
                 break
             fi
@@ -177,14 +177,17 @@ _parallel_execute_batch() {
         log_info "Creating worktree: $worktree_dir (branch: $branch_name)"
 
         # Create worktree on a new branch from current HEAD
-        if ! git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
+        local wt_timeout_cmd
+        wt_timeout_cmd=$(prereqs_timeout_cmd)
+        if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
             # Stale worktree/branch from previous run — clean everything and retry
             log_debug "Cleaning stale worktree/branch for story $story"
+            git worktree unlock "$worktree_dir" 2>/dev/null || true
             git worktree remove "$worktree_dir" --force 2>/dev/null || true
             rm -rf "$worktree_dir" 2>/dev/null || true
             git worktree prune 2>/dev/null || true
             git branch -D "$branch_name" 2>/dev/null || true
-            if ! git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
+            if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
                 log_error "Failed to create worktree for story $story"
                 _PARALLEL_FAILED+=("$story")
                 continue
@@ -220,7 +223,7 @@ _parallel_execute_batch() {
         (
             cd "$worktree_dir"
             $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
-                < /dev/null > "$output_file" 2>&1
+                < /dev/null 2>&1 | cat > "$output_file"
         ) &
 
         local pid=$!
@@ -349,8 +352,9 @@ _parallel_merge_batch() {
         local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
         local branch_name="ralph/story-${story}"
 
+        git worktree unlock "$worktree_dir" 2>/dev/null || true
         if [[ -d "$worktree_dir" ]]; then
-            git worktree remove "$worktree_dir" 2>/dev/null || true
+            git worktree remove "$worktree_dir" --force 2>/dev/null || rm -rf "$worktree_dir"
         fi
         git branch -d "$branch_name" 2>/dev/null || true
     done
@@ -359,11 +363,13 @@ _parallel_merge_batch() {
     for story in "${_PARALLEL_FAILED[@]}"; do
         local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
         local branch_name="ralph/story-${story}"
+        git worktree unlock "$worktree_dir" 2>/dev/null || true
         if [[ -d "$worktree_dir" ]]; then
-            git worktree remove "$worktree_dir" --force 2>/dev/null || true
+            git worktree remove "$worktree_dir" --force 2>/dev/null || rm -rf "$worktree_dir"
         fi
         git branch -D "$branch_name" 2>/dev/null || true
     done
+    git worktree prune 2>/dev/null || true
 
     # Remove worktree dir if empty
     rmdir "$RALPH_WORKTREE_DIR" 2>/dev/null || true
