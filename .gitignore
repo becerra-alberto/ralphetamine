@@ -2,3 +2,5 @@
 ralph.log
 .claude/
 sandbox/
+.ralph/
+tests/libs/
