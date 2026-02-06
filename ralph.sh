@@ -410,11 +410,7 @@ $spec_content
    - Create/modify all files listed in the spec
    - Follow acceptance criteria exactly
    - Write all tests defined in Test Definition section
-3. Use Bash tool for validation:
-   - Run 'npm run check' for TypeScript validation
-   - Run 'npm run test' for unit tests
-   - NEVER run cargo commands (cargo build/test/run) - sandbox blocks Rust
-   - NEVER run 'npm run tauri dev/build' - these trigger cargo
+3. Use Bash tool for validation — run any test/lint/check commands appropriate for the project
 4. On SUCCESS:
    - Use Bash tool to stage and commit with message: feat(story-$story): $title
    - Output the exact text: <ralph>DONE $story</ralph>
