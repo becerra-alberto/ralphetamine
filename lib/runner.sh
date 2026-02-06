@@ -32,7 +32,7 @@ _run_sequential() {
     local total_stories
     total_stories=$(stories_count_total)
     local done_count
-    done_count=$(state_completed_count)
+    done_count=$(stories_count_completed)
     local max_retries
     max_retries=$(config_get '.loop.max_retries' '3')
 
@@ -204,7 +204,7 @@ _run_sequential() {
 
                 # Dashboard: update completion
                 if type display_update_stories &>/dev/null; then
-                    done_count=$(state_completed_count)
+                    done_count=$(stories_count_completed)
                     display_update_stories "$total_stories" "$done_count"
                     display_update_last_done "$next_story"
                     display_update_retry 0 "$max_retries"
