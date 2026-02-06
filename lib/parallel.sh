@@ -152,6 +152,14 @@ _parallel_execute_batch() {
     # absolute paths for output files and pid tracking
     RALPH_WORKTREE_DIR="$(cd "$RALPH_WORKTREE_DIR" && pwd)"
 
+    # Remove stale git locks from previous crashes — a crashed Ralph can
+    # leave index.lock or worktree locks that cause ALL subsequent git
+    # worktree operations to hang until timeout
+    rm -f .git/index.lock .git/HEAD.lock 2>/dev/null || true
+    for lockfile in .git/worktrees/*/locked; do
+        rm -f "$lockfile" 2>/dev/null || true
+    done
+
     # Prune stale worktree records from previous failed runs
     git worktree prune 2>/dev/null || true
 
@@ -322,32 +330,36 @@ _parallel_merge_batch() {
     local current_branch
     current_branch=$(git rev-parse --abbrev-ref HEAD)
 
-    if [[ ${#_PARALLEL_SUCCESSFUL[@]} -eq 0 ]]; then
+    if [[ ${#_PARALLEL_SUCCESSFUL[@]} -gt 0 ]]; then
+        log_info "Merging ${#_PARALLEL_SUCCESSFUL[@]} branches..."
+
+        local merge_failures=()
+
+        for story in "${_PARALLEL_SUCCESSFUL[@]}"; do
+            local branch_name="ralph/story-${story}"
+
+            log_debug "Merging $branch_name into $current_branch"
+
+            if git merge --no-ff "$branch_name" -m "merge: story ${story}" 2>/dev/null; then
+                log_success "Merged story $story"
+            else
+                log_warn "Merge conflict on story $story"
+                merge_failures+=("$story")
+
+                # Attempt conflict resolution via Claude agent
+                if ! _parallel_resolve_conflict "$story" "$branch_name"; then
+                    log_error "Could not resolve merge conflict for story $story"
+                fi
+            fi
+        done
+    else
         log_warn "No successful stories to merge"
-        return 0
     fi
 
-    log_info "Merging ${#_PARALLEL_SUCCESSFUL[@]} branches..."
+    # Cleanup ALWAYS runs — even when all stories failed, worktrees must be
+    # removed so the next batch can create fresh ones without conflicts.
 
-    local merge_failures=()
-
-    for story in "${_PARALLEL_SUCCESSFUL[@]}"; do
-        local branch_name="ralph/story-${story}"
-
-        log_debug "Merging $branch_name into $current_branch"
-
-        if git merge --no-ff "$branch_name" -m "merge: story ${story}" 2>/dev/null; then
-            log_success "Merged story $story"
-        else
-            log_warn "Merge conflict on story $story"
-            merge_failures+=("$story")
-
-            # Attempt conflict resolution via Claude agent
-            _parallel_resolve_conflict "$story" "$branch_name"
-        fi
-    done
-
-    # Cleanup worktrees and branches
+    # Cleanup successful worktrees and branches
     for story in "${_PARALLEL_SUCCESSFUL[@]}"; do
         local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
         local branch_name="ralph/story-${story}"
