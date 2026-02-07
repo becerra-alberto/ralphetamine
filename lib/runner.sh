@@ -589,5 +589,26 @@ _run_summary() {
         fi
     fi
 
+    # ── HITL review generation (config-gated) ────────────────────
+    if [[ "$(config_get '.hitl.auto_generate' 'false')" == "true" ]]; then
+        if declare -f hitl_generate_report &>/dev/null; then
+            local hitl_path
+            hitl_path=$(config_get '.hitl.output_path' 'docs/hitl-review.html')
+            if hitl_generate_report "$hitl_path" 2>/dev/null; then
+                echo ""
+                divider
+                printf "  ${CLR_DIM}%-14s${CLR_RESET} %s\n" "HITL Review" "$hitl_path"
+            fi
+        fi
+    fi
+
+    # ── HITL review nudge (always shown) ───────────────────────────
+    # Show nudge when auto_generate is off, or after auto_generate ran
+    if [[ "$(config_get '.hitl.auto_generate' 'false')" != "true" ]]; then
+        echo ""
+        divider
+        echo -e "  ${CLR_DIM}→ Review what was built:${CLR_RESET} ralph hitl"
+    fi
+
     echo ""
 }
