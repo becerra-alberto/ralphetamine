@@ -9,6 +9,9 @@ _PARALLEL_SUCCESSFUL=()
 _PARALLEL_FAILED=()
 _PARALLEL_PID_DIR=""
 
+# Per-story start-time tracking (story → epoch) for duration calculation
+declare -A _PARALLEL_STORY_START
+
 _parallel_cleanup_pid_dir() {
     [[ -n "$_PARALLEL_PID_DIR" ]] && rm -rf "$_PARALLEL_PID_DIR"
 }
@@ -40,6 +43,10 @@ parallel_run() {
     local timeout_secs="$1"
     local verbose="$2"
     local dry_run="$3"
+
+    # Capture baseline for end-of-run summary
+    _RALPH_RUN_START_COMMIT=$(git rev-parse HEAD 2>/dev/null) || true
+    _RALPH_RUN_START_TIME=$(date '+%s')
 
     local max_concurrent
     max_concurrent=$(config_get '.parallel.max_concurrent' '8')
@@ -146,7 +153,7 @@ parallel_run() {
         current_batch=$((current_batch + 1))
     done
 
-    box_header "PARALLEL EXECUTION COMPLETE"
+    _run_summary "parallel"
 }
 
 # Execute a batch of stories in parallel via git worktrees
@@ -249,6 +256,10 @@ _parallel_execute_batch() {
         # Spawn Claude in the worktree directory (output_file must be absolute
         # because the subshell cd's into the worktree)
         local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
+
+        # Record start time for duration calculation
+        _PARALLEL_STORY_START["$story"]=$(date '+%s')
+
         (
             cd "$worktree_dir"
             $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
@@ -302,6 +313,13 @@ _parallel_execute_batch() {
         story=$(cat "${pid_dir}/pid_${pid}" 2>/dev/null)
         rm -f "${pid_dir}/pid_${pid}"
 
+        # Record per-story duration
+        local story_end
+        story_end=$(date '+%s')
+        if [[ -n "${_PARALLEL_STORY_START[$story]:-}" ]]; then
+            _STORY_TIMINGS["$story"]=$(( story_end - _PARALLEL_STORY_START[$story] ))
+        fi
+
         local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
         local result=""
         [[ -f "$output_file" ]] && result=$(cat "$output_file")
@@ -315,6 +333,7 @@ _parallel_execute_batch() {
             if done_id=$(signals_parse_done "$result") && [[ "$done_id" == "$story" ]]; then
                 log_success "Story $story: completed"
                 successful+=("$story")
+                _STORY_OUTCOMES["$story"]="done"
                 state_mark_done "$story"
                 classified=true
 
@@ -336,6 +355,7 @@ _parallel_execute_batch() {
             if _parallel_has_new_commits "$story" "$current_branch"; then
                 log_warn "Story $story: no DONE signal but branch has commits — tentative success"
                 successful+=("$story")
+                _STORY_OUTCOMES["$story"]="tentative"
                 state_mark_done "$story"
 
                 local title timestamp
@@ -354,6 +374,7 @@ _parallel_execute_batch() {
                     log_warn "Story $story: no DONE signal (no commits)"
                 fi
                 failed+=("$story")
+                _STORY_OUTCOMES["$story"]="failed"
 
                 local title timestamp
                 title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")

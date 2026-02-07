@@ -4,6 +4,12 @@
 
 RALPH_LOCK_FILE=".ralph/.lock"
 
+# ── Run-level timing data ──────────────────────────────────────────
+declare -A _STORY_TIMINGS          # story_id → seconds
+declare -A _STORY_OUTCOMES         # story_id → done|tentative|failed|absorbed
+_RALPH_RUN_START_COMMIT=""
+_RALPH_RUN_START_TIME=""
+
 # Acquire an exclusive run lock. Prevents concurrent ralph instances.
 # Writes PID to lock file. Detects stale locks via kill -0.
 _acquire_run_lock() {
@@ -61,6 +67,10 @@ _run_sequential() {
     local specific_story="$5"
     local resume_from="$6"
 
+    # Capture baseline for end-of-run summary
+    _RALPH_RUN_START_COMMIT=$(git rev-parse HEAD 2>/dev/null) || true
+    _RALPH_RUN_START_TIME=$(date '+%s')
+
     local total_stories
     total_stories=$(stories_count_total)
     local done_count
@@ -102,6 +112,7 @@ _run_sequential() {
         # Check iteration limit
         if [[ "$iterations" != "0" && $iteration -gt $iterations ]]; then
             box_header "Reached iteration limit ($iterations)"
+            _run_summary "sequential"
             break
         fi
 
@@ -114,6 +125,7 @@ _run_sequential() {
         elif ! next_story=$(stories_find_next "$resume_from"); then
             box_header "ALL STORIES COMPLETE!"
             log "All stories complete — Ralph loop finished"
+            _run_summary "sequential"
             return 0
         fi
         # Clear resume after first use
@@ -176,6 +188,9 @@ _run_sequential() {
             display_start_live_timer
         fi
 
+        local story_start
+        story_start=$(date '+%s')
+
         log "Invoking Claude (timeout: ${timeout_secs}s)"
 
         if [[ "$verbose" == true ]]; then
@@ -199,9 +214,15 @@ _run_sequential() {
             display_stop_live_timer
         fi
 
+        # Record per-story duration
+        local story_end
+        story_end=$(date '+%s')
+        _STORY_TIMINGS["$next_story"]=$(( story_end - story_start ))
+
         # Handle timeout
         if [[ $exit_code -eq 124 ]]; then
             log_warn "Story $next_story timed out after ${timeout_secs}s"
+            _STORY_OUTCOMES["$next_story"]="failed"
             if ! _handle_failure "$next_story" "Timeout after ${timeout_secs}s" "$spec_path" "$max_retries"; then
                 return 1
             fi
@@ -213,6 +234,7 @@ _run_sequential() {
         # Handle other errors
         if [[ $exit_code -ne 0 ]]; then
             log_error "Story $next_story failed (exit code: $exit_code)"
+            _STORY_OUTCOMES["$next_story"]="failed"
             if ! _handle_failure "$next_story" "Exit code $exit_code" "$spec_path" "$max_retries"; then
                 return 1
             fi
@@ -231,6 +253,7 @@ _run_sequential() {
         if done_id=$(signals_parse_done "$result"); then
             if [[ "$done_id" == "$next_story" ]]; then
                 log_success "Story $next_story completed!"
+                _STORY_OUTCOMES["$next_story"]="done"
                 state_mark_done "$next_story"
                 spec_update_status "$spec_path" "done"
 
@@ -265,6 +288,7 @@ _run_sequential() {
                 [[ -n "$specific_story" ]] && return 0
             else
                 log_warn "DONE signal for $done_id but expected $next_story"
+                _STORY_OUTCOMES["$next_story"]="failed"
                 if ! _handle_failure "$next_story" "Mismatched DONE signal" "$spec_path" "$max_retries"; then
                     return 1
                 fi
@@ -274,6 +298,7 @@ _run_sequential() {
             local fail_id="${fail_info%%|*}"
             local fail_reason="${fail_info#*|}"
             log_error "Story $fail_id failed: $fail_reason"
+            _STORY_OUTCOMES["$next_story"]="failed"
             if ! _handle_failure "$next_story" "$fail_reason" "$spec_path" "$max_retries"; then
                 return 1
             fi
@@ -281,6 +306,7 @@ _run_sequential() {
             hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=fail" || true
         else
             log_warn "No completion signal found"
+            _STORY_OUTCOMES["$next_story"]="failed"
             if ! _handle_failure "$next_story" "No completion signal in output" "$spec_path" "$max_retries"; then
                 return 1
             fi
@@ -325,4 +351,243 @@ _handle_failure() {
         log "EXITING: Story $story exceeded max retries ($max_retries)"
         return 1
     fi
+}
+
+# ── End-of-run summary ─────────────────────────────────────────────
+# Shared by sequential and parallel paths. Reads from:
+#   _STORY_TIMINGS[], _STORY_OUTCOMES[]
+#   _RALPH_RUN_START_COMMIT, _RALPH_RUN_START_TIME
+#   _PARALLEL_ALL_SUCCESSFUL[], _PARALLEL_ALL_TENTATIVE[], _PARALLEL_ALL_FAILED[] (parallel only)
+_run_summary() {
+    local mode="${1:-sequential}"   # sequential | parallel
+
+    # ── Format duration helper ──────────────────────────────────────
+    _fmt_duration() {
+        local secs="$1"
+        [[ "$secs" -lt 0 ]] && secs=0
+        local h=$(( secs / 3600 ))
+        local m=$(( (secs % 3600) / 60 ))
+        local s=$(( secs % 60 ))
+        if [[ $h -gt 0 ]]; then
+            printf '%02d:%02d:%02d' "$h" "$m" "$s"
+        else
+            printf '%02d:%02d' "$m" "$s"
+        fi
+    }
+
+    # ── Gather story lists by outcome ──────────────────────────────
+    local completed_ids=() tentative_ids=() failed_ids=() absorbed_ids=()
+
+    for sid in "${!_STORY_OUTCOMES[@]}"; do
+        case "${_STORY_OUTCOMES[$sid]}" in
+            done)      completed_ids+=("$sid") ;;
+            tentative) tentative_ids+=("$sid") ;;
+            failed)    failed_ids+=("$sid") ;;
+            absorbed)  absorbed_ids+=("$sid") ;;
+        esac
+    done
+
+    # Check for absorbed stories from state
+    if type state_is_absorbed &>/dev/null; then
+        for sid in "${completed_ids[@]}"; do
+            if state_is_absorbed "$sid" 2>/dev/null; then
+                absorbed_ids+=("$sid")
+            fi
+        done
+    fi
+
+    local total_stories
+    total_stories=$(stories_count_total 2>/dev/null || echo "0")
+    local done_count
+    done_count=$(stories_count_completed 2>/dev/null || echo "0")
+
+    # ── Elapsed time ────────────────────────────────────────────────
+    local elapsed_str="--:--"
+    local elapsed_secs=0
+    if [[ -n "$_RALPH_RUN_START_TIME" ]]; then
+        elapsed_secs=$(( $(date '+%s') - _RALPH_RUN_START_TIME ))
+        elapsed_str=$(_fmt_duration "$elapsed_secs")
+    fi
+
+    # ── Average time per story ──────────────────────────────────────
+    local avg_str="--:--"
+    local stories_with_timing=${#_STORY_TIMINGS[@]}
+    if [[ $stories_with_timing -gt 0 ]]; then
+        local total_time=0
+        for t in "${_STORY_TIMINGS[@]}"; do
+            total_time=$((total_time + t))
+        done
+        avg_str=$(_fmt_duration $(( total_time / stories_with_timing )))
+    fi
+
+    # ── Fastest / longest ───────────────────────────────────────────
+    local fastest_id="" fastest_secs=999999
+    local longest_id="" longest_secs=0
+    for sid in "${!_STORY_TIMINGS[@]}"; do
+        local t="${_STORY_TIMINGS[$sid]}"
+        if [[ $t -lt $fastest_secs ]]; then
+            fastest_secs=$t; fastest_id="$sid"
+        fi
+        if [[ $t -gt $longest_secs ]]; then
+            longest_secs=$t; longest_id="$sid"
+        fi
+    done
+
+    # ── Git stats ───────────────────────────────────────────────────
+    local commit_count=0 insertions=0 deletions=0 merged_count=0
+    if [[ -n "$_RALPH_RUN_START_COMMIT" ]]; then
+        commit_count=$(git rev-list --count "${_RALPH_RUN_START_COMMIT}..HEAD" 2>/dev/null) || commit_count=0
+        local shortstat
+        shortstat=$(git diff --shortstat "${_RALPH_RUN_START_COMMIT}..HEAD" 2>/dev/null) || true
+        if [[ -n "$shortstat" ]]; then
+            insertions=$(echo "$shortstat" | grep -o '[0-9]* insertion' | grep -o '[0-9]*') || insertions=0
+            deletions=$(echo "$shortstat" | grep -o '[0-9]* deletion' | grep -o '[0-9]*') || deletions=0
+        fi
+    fi
+
+    # Count merged branches (parallel only)
+    if [[ "$mode" == "parallel" ]]; then
+        merged_count=${#_PARALLEL_ALL_SUCCESSFUL[@]}
+        merged_count=$((merged_count + ${#_PARALLEL_ALL_TENTATIVE[@]}))
+    fi
+
+    # ── Learnings ───────────────────────────────────────────────────
+    local learnings_count=0
+    learnings_count=$(_display_count_learnings 2>/dev/null || echo "0")
+
+    # ── Render ──────────────────────────────────────────────────────
+    echo ""
+    box_header "RUN SUMMARY"
+
+    # Progress line
+    local bar
+    bar=$(ui_progress_bar "$done_count" "$total_stories")
+    printf "  ${CLR_DIM}%-14s${CLR_RESET} %s\n" "Progress" "$bar"
+    printf "  ${CLR_DIM}%-14s${CLR_RESET} %s\n" "Elapsed" "$elapsed_str"
+    if [[ $stories_with_timing -gt 0 ]]; then
+        printf "  ${CLR_DIM}%-14s${CLR_RESET} %s\n" "Avg/story" "$avg_str"
+    fi
+    echo ""
+
+    # Outcome counts
+    printf "  ${CLR_GREEN}%-14s${CLR_RESET} %d\n" "Completed" "${#completed_ids[@]}"
+    if [[ "$mode" == "parallel" ]]; then
+        printf "  ${CLR_YELLOW}%-14s${CLR_RESET} %d" "Tentative" "${#tentative_ids[@]}"
+        [[ ${#tentative_ids[@]} -gt 0 ]] && printf "   ${CLR_DIM}(committed code, no DONE signal)${CLR_RESET}"
+        echo ""
+    fi
+    printf "  ${CLR_RED}%-14s${CLR_RESET} %d\n" "Failed" "${#failed_ids[@]}"
+    if [[ ${#absorbed_ids[@]} -gt 0 ]]; then
+        printf "  ${CLR_DIM}%-14s${CLR_RESET} %d\n" "Absorbed" "${#absorbed_ids[@]}"
+    fi
+
+    # ── Fastest / Longest ───────────────────────────────────────────
+    if [[ -n "$fastest_id" && $stories_with_timing -gt 1 ]]; then
+        echo ""
+        divider
+        local fastest_title longest_title
+        fastest_title=$(stories_get_title "$fastest_id" 2>/dev/null || echo "")
+        longest_title=$(stories_get_title "$longest_id" 2>/dev/null || echo "")
+        printf "  ${CLR_DIM}%-14s${CLR_RESET} %-10s %s — %s\n" \
+            "Fastest" "$(_fmt_duration "$fastest_secs")" "$fastest_id" "$fastest_title"
+        printf "  ${CLR_DIM}%-14s${CLR_RESET} %-10s %s — %s\n" \
+            "Longest" "$(_fmt_duration "$longest_secs")" "$longest_id" "$longest_title"
+    fi
+
+    # ── Git stats ───────────────────────────────────────────────────
+    if [[ -n "$_RALPH_RUN_START_COMMIT" && $commit_count -gt 0 ]]; then
+        echo ""
+        divider
+        printf "  ${CLR_DIM}%-14s${CLR_RESET} %s\n" "Commits" "$commit_count"
+        printf "  ${CLR_DIM}%-14s${CLR_RESET} %s lines\n" "Insertions" "${insertions:-0}"
+        printf "  ${CLR_DIM}%-14s${CLR_RESET} %s lines\n" "Deletions" "${deletions:-0}"
+        if [[ "$mode" == "parallel" && $merged_count -gt 0 ]]; then
+            printf "  ${CLR_DIM}%-14s${CLR_RESET} %d branches\n" "Merged" "$merged_count"
+        fi
+    fi
+
+    # ── Story details ───────────────────────────────────────────────
+    if [[ ${#completed_ids[@]} -gt 0 || ${#tentative_ids[@]} -gt 0 || ${#failed_ids[@]} -gt 0 ]]; then
+        echo ""
+        divider
+
+        if [[ ${#completed_ids[@]} -gt 0 ]]; then
+            echo -e "  ${CLR_GREEN}Completed Stories${CLR_RESET}"
+            for sid in "${completed_ids[@]}"; do
+                local stitle dur_str=""
+                stitle=$(stories_get_title "$sid" 2>/dev/null || echo "")
+                if [[ -n "${_STORY_TIMINGS[$sid]:-}" ]]; then
+                    dur_str=" ($(_fmt_duration "${_STORY_TIMINGS[$sid]}"))"
+                fi
+                printf "    ${CLR_GREEN}✓${CLR_RESET} %-8s— %-40s${CLR_DIM}%s${CLR_RESET}\n" \
+                    "$sid" "$stitle" "$dur_str"
+            done
+        fi
+
+        if [[ ${#tentative_ids[@]} -gt 0 ]]; then
+            echo ""
+            echo -e "  ${CLR_YELLOW}Tentative (review recommended)${CLR_RESET}"
+            for sid in "${tentative_ids[@]}"; do
+                local stitle dur_str=""
+                stitle=$(stories_get_title "$sid" 2>/dev/null || echo "")
+                if [[ -n "${_STORY_TIMINGS[$sid]:-}" ]]; then
+                    dur_str=" ($(_fmt_duration "${_STORY_TIMINGS[$sid]}"))"
+                fi
+                printf "    ${CLR_YELLOW}~${CLR_RESET} %-8s— %-40s${CLR_DIM}%s${CLR_RESET}\n" \
+                    "$sid" "$stitle" "$dur_str"
+            done
+        fi
+
+        if [[ ${#failed_ids[@]} -gt 0 ]]; then
+            echo ""
+            echo -e "  ${CLR_RED}Failed${CLR_RESET}"
+            for sid in "${failed_ids[@]}"; do
+                local stitle dur_str=""
+                stitle=$(stories_get_title "$sid" 2>/dev/null || echo "")
+                if [[ -n "${_STORY_TIMINGS[$sid]:-}" ]]; then
+                    dur_str=" ($(_fmt_duration "${_STORY_TIMINGS[$sid]}"))"
+                fi
+                printf "    ${CLR_RED}✗${CLR_RESET} %-8s— %-40s${CLR_DIM}%s${CLR_RESET}\n" \
+                    "$sid" "$stitle" "$dur_str"
+            done
+        fi
+    fi
+
+    # ── Learnings ───────────────────────────────────────────────────
+    if [[ $learnings_count -gt 0 ]]; then
+        echo ""
+        divider
+        printf "  ${CLR_DIM}%-14s${CLR_RESET} %d extracted → .ralph/learnings/\n" "Learnings" "$learnings_count"
+    fi
+
+    # ── Pending git status ──────────────────────────────────────────
+    local git_status
+    git_status=$(git status --porcelain 2>/dev/null) || true
+    if [[ -n "$git_status" ]]; then
+        echo ""
+        divider
+        echo -e "  ${CLR_DIM}Pending Review${CLR_RESET}"
+        echo "$git_status" | head -10 | while IFS= read -r line; do
+            printf "    %s\n" "$line"
+        done
+        local status_lines
+        status_lines=$(echo "$git_status" | wc -l | xargs)
+        if [[ "$status_lines" -gt 10 ]]; then
+            printf "    ${CLR_DIM}... and %d more${CLR_RESET}\n" $(( status_lines - 10 ))
+        fi
+    fi
+
+    # ── Retry hint ──────────────────────────────────────────────────
+    if [[ ${#failed_ids[@]} -gt 0 ]]; then
+        echo ""
+        divider
+        local first_failed="${failed_ids[0]}"
+        if [[ ${#failed_ids[@]} -eq 1 ]]; then
+            echo -e "  ${CLR_DIM}→ 1 failed. Retry:${CLR_RESET} ralph run -s $first_failed"
+        else
+            echo -e "  ${CLR_DIM}→ ${#failed_ids[@]} failed. Retry first:${CLR_RESET} ralph run -s $first_failed"
+        fi
+    fi
+
+    echo ""
 }
