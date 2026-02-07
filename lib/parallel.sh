@@ -13,6 +13,21 @@ _parallel_cleanup_pid_dir() {
     [[ -n "$_PARALLEL_PID_DIR" ]] && rm -rf "$_PARALLEL_PID_DIR"
 }
 
+# Check if a story branch has new commits relative to a base branch.
+# Returns 0 (true) if the branch has commits beyond the base.
+_parallel_has_new_commits() {
+    local story="$1"
+    local base_branch="$2"
+    local branch_name="ralph/story-${story}"
+
+    # Branch must exist
+    git rev-parse --verify "$branch_name" &>/dev/null || return 1
+
+    local count
+    count=$(git rev-list --count "${base_branch}..${branch_name}" 2>/dev/null) || return 1
+    [[ "$count" -gt 0 ]]
+}
+
 # Main parallel execution entry point
 parallel_run() {
     prereqs_require_bash4 || return 1
@@ -291,22 +306,61 @@ _parallel_execute_batch() {
         local result=""
         [[ -f "$output_file" ]] && result=$(cat "$output_file")
 
-        if [[ $exit_code -eq 124 ]]; then
-            log_warn "Story $story: timed out"
-            failed+=("$story")
-        elif [[ $exit_code -ne 0 ]]; then
-            log_warn "Story $story: failed (exit code $exit_code)"
-            failed+=("$story")
-        else
+        # Classify result
+        local classified=false
+
+        if [[ $exit_code -eq 0 ]]; then
             # Check for DONE signal
             local done_id
             if done_id=$(signals_parse_done "$result") && [[ "$done_id" == "$story" ]]; then
                 log_success "Story $story: completed"
                 successful+=("$story")
                 state_mark_done "$story"
+                classified=true
+
+                # Progress.txt parity with sequential runner
+                local title timestamp
+                title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
+                timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
+                echo "[DONE] Story $story - $title - $timestamp" >> progress.txt 2>/dev/null || true
+
+                # Spec status parity with sequential runner
+                local spec_path
+                spec_path=$(spec_find "$story") 2>/dev/null && spec_update_status "$spec_path" "done"
+            fi
+        fi
+
+        if [[ "$classified" == false ]]; then
+            # No DONE signal (timeout, error, or missing signal)
+            # Commit-based fallback: if the branch has new commits, treat as tentative success
+            if _parallel_has_new_commits "$story" "$current_branch"; then
+                log_warn "Story $story: no DONE signal but branch has commits — tentative success"
+                successful+=("$story")
+                state_mark_done "$story"
+
+                local title timestamp
+                title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
+                timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
+                echo "[DONE] Story $story - $title - $timestamp (tentative: commits detected)" >> progress.txt 2>/dev/null || true
+
+                local spec_path
+                spec_path=$(spec_find "$story") 2>/dev/null && spec_update_status "$spec_path" "done"
             else
-                log_warn "Story $story: no DONE signal"
+                if [[ $exit_code -eq 124 ]]; then
+                    log_warn "Story $story: timed out (no commits)"
+                elif [[ $exit_code -ne 0 ]]; then
+                    log_warn "Story $story: failed exit code $exit_code (no commits)"
+                else
+                    log_warn "Story $story: no DONE signal (no commits)"
+                fi
                 failed+=("$story")
+
+                local title timestamp
+                title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
+                timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
+                local reason="exit_code=$exit_code"
+                [[ $exit_code -eq 124 ]] && reason="timeout"
+                echo "[FAIL] Story $story - $title - $reason - $timestamp" >> progress.txt 2>/dev/null || true
             fi
         fi
 

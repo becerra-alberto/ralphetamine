@@ -2,6 +2,38 @@
 # Ralph v2 — Shared sequential runner and failure handler
 # Extracted from bin/ralph so both sequential and parallel paths can use them.
 
+RALPH_LOCK_FILE=".ralph/.lock"
+
+# Acquire an exclusive run lock. Prevents concurrent ralph instances.
+# Writes PID to lock file. Detects stale locks via kill -0.
+_acquire_run_lock() {
+    if [[ -f "$RALPH_LOCK_FILE" ]]; then
+        local existing_pid
+        existing_pid=$(cat "$RALPH_LOCK_FILE" 2>/dev/null) || true
+        if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+            log_error "Another Ralph instance is running (PID $existing_pid)"
+            log_error "If this is stale, remove $RALPH_LOCK_FILE manually"
+            return 1
+        fi
+        log_warn "Removing stale lock (PID $existing_pid no longer running)"
+        rm -f "$RALPH_LOCK_FILE"
+    fi
+    echo "$$" > "$RALPH_LOCK_FILE"
+    log_debug "Acquired run lock (PID $$)"
+}
+
+# Release the run lock — only deletes if we own it.
+_release_run_lock() {
+    if [[ -f "$RALPH_LOCK_FILE" ]]; then
+        local lock_pid
+        lock_pid=$(cat "$RALPH_LOCK_FILE" 2>/dev/null) || true
+        if [[ "$lock_pid" == "$$" ]]; then
+            rm -f "$RALPH_LOCK_FILE"
+            log_debug "Released run lock (PID $$)"
+        fi
+    fi
+}
+
 # Tracks consecutive failures per story using caller's local variables.
 # Returns 0 (true) when local retry limit is reached, signaling the caller to abort.
 # Relies on local_retry_count and last_failed_story from _run_sequential's scope.

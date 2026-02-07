@@ -25,6 +25,7 @@ state_init() {
 
     if [[ -f "$RALPH_STATE_FILE" ]]; then
         log_debug "State file exists: $RALPH_STATE_FILE"
+        _state_ensure_schema
         return 0
     fi
 
@@ -41,6 +42,8 @@ _state_write_empty() {
     cat > "$RALPH_STATE_FILE" << 'EOF'
 {
     "completed_stories": [],
+    "absorbed_stories": {},
+    "merged_stories": [],
     "current_story": null,
     "retry_count": 0
 }
@@ -130,4 +133,70 @@ state_increment_retry() {
 
 state_reset_retries() {
     _state_safe_write '.retry_count = 0' || return 1
+}
+
+# Mark a story as absorbed by another story.
+# Adds to absorbed_stories map and completed_stories.
+state_mark_absorbed() {
+    local story="$1"
+    local absorbed_by="$2"
+    _state_safe_write '
+        .absorbed_stories[$story] = $absorbed_by
+        | .completed_stories += [$story]
+        | .completed_stories |= unique
+    ' --arg story "$story" --arg absorbed_by "$absorbed_by" || return 1
+    log_info "Story $story marked as absorbed by $absorbed_by"
+}
+
+# Check if a story was absorbed
+state_is_absorbed() {
+    local story="$1"
+    [[ ! -f "$RALPH_STATE_FILE" ]] && return 1
+    local absorber
+    absorber=$(jq -r --arg s "$story" '.absorbed_stories[$s] // empty' "$RALPH_STATE_FILE" 2>/dev/null)
+    [[ -n "$absorber" ]]
+}
+
+# Get the story that absorbed a given story
+state_absorbed_by() {
+    local story="$1"
+    [[ ! -f "$RALPH_STATE_FILE" ]] && return 1
+    jq -r --arg s "$story" '.absorbed_stories[$s] // empty' "$RALPH_STATE_FILE" 2>/dev/null
+}
+
+# Mark a story as merged (branch merged into main)
+state_mark_merged() {
+    local story="$1"
+    _state_safe_write '
+        .merged_stories += [$story]
+        | .merged_stories |= unique
+    ' --arg story "$story" || return 1
+    log_debug "Story $story marked as merged"
+}
+
+# Get list of merged stories
+state_get_merged() {
+    [[ ! -f "$RALPH_STATE_FILE" ]] && return 0
+    jq -r '.merged_stories[]? // empty' "$RALPH_STATE_FILE" 2>/dev/null || true
+}
+
+# Ensure schema fields exist (idempotent upgrade for older state files)
+_state_ensure_schema() {
+    [[ ! -f "$RALPH_STATE_FILE" ]] && return 0
+    local needs_update=false
+
+    if ! jq -e '.absorbed_stories' "$RALPH_STATE_FILE" &>/dev/null; then
+        needs_update=true
+    fi
+    if ! jq -e '.merged_stories' "$RALPH_STATE_FILE" &>/dev/null; then
+        needs_update=true
+    fi
+
+    if [[ "$needs_update" == true ]]; then
+        _state_safe_write '
+            .absorbed_stories //= {}
+            | .merged_stories //= []
+        ' || return 1
+        log_debug "State schema upgraded with absorbed/merged fields"
+    fi
 }

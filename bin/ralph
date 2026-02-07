@@ -51,6 +51,7 @@ usage() {
     echo "Commands:"
     echo "  init                  Initialize Ralph in current project"
     echo "  run [options]         Run the implementation loop"
+    echo "  reconcile [--apply]   Find/merge orphaned story branches"
     echo "  status                Show current progress"
     echo "  stories               List all stories and their status"
     echo "  learnings [topic]     Show extracted learnings"
@@ -200,6 +201,10 @@ cmd_run() {
     # Initialize state
     state_init
 
+    # Acquire run lock (prevents concurrent instances)
+    _acquire_run_lock || exit 1
+    ralph_on_exit _release_run_lock
+
     # Parallel mode
     if [[ "$use_parallel" == true || "$(config_get '.parallel.enabled' 'false')" == "true" ]]; then
         if type parallel_run &>/dev/null; then
@@ -312,10 +317,26 @@ cmd_reset() {
     log_success "State reset."
 }
 
+# ── Subcommand: reconcile ──────────────────────────────────────────────────
+cmd_reconcile() {
+    source "${RALPH_DIR}/lib/config.sh"
+    source "${RALPH_DIR}/lib/state.sh"
+    source "${RALPH_DIR}/lib/stories.sh"
+    source "${RALPH_DIR}/lib/specs.sh"
+    source "${RALPH_DIR}/lib/reconcile.sh"
+
+    prereqs_check_project || exit 1
+    config_load || exit 1
+    state_init
+
+    ralph_reconcile "$@"
+}
+
 # ── Dispatch ────────────────────────────────────────────────────────────────
 case "${1:-}" in
     init)      shift; cmd_init "$@" ;;
     run)       shift; cmd_run "$@" ;;
+    reconcile) shift; cmd_reconcile "$@" ;;
     status)    shift; cmd_status "$@" ;;
     stories)   shift; cmd_stories "$@" ;;
     learnings) shift; cmd_learnings "$@" ;;
