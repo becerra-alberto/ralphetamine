@@ -7,6 +7,11 @@ RALPH_WORKTREE_DIR=".ralph/worktrees"
 # Module-scope arrays for batch results (not declared inside functions)
 _PARALLEL_SUCCESSFUL=()
 _PARALLEL_FAILED=()
+_PARALLEL_PID_DIR=""
+
+_parallel_cleanup_pid_dir() {
+    [[ -n "$_PARALLEL_PID_DIR" ]] && rm -rf "$_PARALLEL_PID_DIR"
+}
 
 # Main parallel execution entry point
 parallel_run() {
@@ -165,10 +170,11 @@ _parallel_execute_batch() {
 
     # PID files in project-local directory (not /tmp) to avoid conflicts
     # between multiple Ralph instances
-    local pid_dir="${RALPH_WORKTREE_DIR}/.pids-$$"
+    _PARALLEL_PID_DIR="${RALPH_WORKTREE_DIR}/.pids-$$"
+    local pid_dir="$_PARALLEL_PID_DIR"
     mkdir -p "$pid_dir"
     # Register cleanup via centralized trap registry
-    ralph_on_exit "rm -rf '$pid_dir'"
+    ralph_on_exit _parallel_cleanup_pid_dir
 
     local pids=()
     local running=0

@@ -124,11 +124,11 @@ learnings_select_relevant() {
             local learning_lower
             learning_lower=$(echo "$learning_text" | tr '[:upper:]' '[:lower:]')
 
-            # Score: count word overlaps with spec
+            # Score: count word overlaps with spec (pure Bash, no subprocess per word)
             local score=0
             for word in $learning_lower; do
                 [[ ${#word} -lt 4 ]] && continue  # skip short words
-                if echo "$spec_lower" | grep -q "$word"; then
+                if [[ "$spec_lower" == *"$word"* ]]; then
                     score=$((score + 1))
                 fi
             done

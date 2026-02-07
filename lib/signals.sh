@@ -2,18 +2,31 @@
 # Ralph v2 — Parse structured <ralph> tags from Claude output
 
 # Parse DONE signal: <ralph>DONE X.X</ralph>
-# Returns story ID on success, empty on failure
+# Scans entire output and returns the LAST match (authoritative signal).
 signals_parse_done() {
     local output="$1"
+    local last_id=""
 
-    if [[ "$output" =~ \<ralph\>DONE[[:space:]]+([0-9]+\.[0-9]+)\</ralph\> ]]; then
-        echo "${BASH_REMATCH[1]}"
+    # Scan for all <ralph>DONE X.X</ralph> tags
+    local match
+    while IFS= read -r match; do
+        [[ -n "$match" ]] && last_id="$match"
+    done < <(echo "$output" | grep -oE '<ralph>DONE[[:space:]]+[0-9]+\.[0-9]+</ralph>' \
+        | sed 's/<ralph>DONE[[:space:]]*//' | sed 's/<\/ralph>//')
+
+    if [[ -n "$last_id" ]]; then
+        echo "$last_id"
         return 0
     fi
 
-    # Legacy fallback: [DONE] Story X.X
-    if [[ "$output" =~ \[DONE\][[:space:]]*Story[[:space:]]+([0-9]+\.[0-9]+) ]]; then
-        echo "${BASH_REMATCH[1]}"
+    # Legacy fallback: [DONE] Story X.X (last match)
+    while IFS= read -r match; do
+        [[ -n "$match" ]] && last_id="$match"
+    done < <(echo "$output" | grep -oE '\[DONE\][[:space:]]*Story[[:space:]]+[0-9]+\.[0-9]+' \
+        | grep -oE '[0-9]+\.[0-9]+')
+
+    if [[ -n "$last_id" ]]; then
+        echo "$last_id"
         return 0
     fi
 
@@ -21,23 +34,41 @@ signals_parse_done() {
 }
 
 # Parse FAIL signal: <ralph>FAIL X.X: reason</ralph>
+# Scans entire output and returns the LAST match (authoritative signal).
 # Outputs "story_id|reason" on success
 signals_parse_fail() {
     local output="$1"
+    local last_result=""
 
-    if [[ "$output" =~ \<ralph\>FAIL[[:space:]]+([0-9]+\.[0-9]+):[[:space:]]*([^\<]+)\</ralph\> ]]; then
-        local fail_reason="${BASH_REMATCH[2]}"
-        # Sanitize pipe characters to avoid collision with our story|reason delimiter
-        fail_reason="${fail_reason//|/-}"
-        echo "${BASH_REMATCH[1]}|${fail_reason}"
+    # Scan for all <ralph>FAIL X.X: reason</ralph> tags
+    local match
+    while IFS= read -r match; do
+        [[ -z "$match" ]] && continue
+        # Extract ID and reason from the matched tag
+        if [[ "$match" =~ FAIL[[:space:]]+([0-9]+\.[0-9]+):[[:space:]]*(.*)\</ralph\> ]]; then
+            local fail_reason="${BASH_REMATCH[2]}"
+            fail_reason="${fail_reason//|/-}"
+            last_result="${BASH_REMATCH[1]}|${fail_reason}"
+        fi
+    done < <(echo "$output" | grep -oE '<ralph>FAIL[[:space:]]+[0-9]+\.[0-9]+:[[:space:]]*[^<]+</ralph>')
+
+    if [[ -n "$last_result" ]]; then
+        echo "$last_result"
         return 0
     fi
 
-    # Legacy fallback: [FAIL] Story X.X - reason
-    if [[ "$output" =~ \[FAIL\][[:space:]]*Story[[:space:]]+([0-9]+\.[0-9]+)[[:space:]]*-[[:space:]]*(.*) ]]; then
-        local fail_reason="${BASH_REMATCH[2]}"
-        fail_reason="${fail_reason//|/-}"
-        echo "${BASH_REMATCH[1]}|${fail_reason}"
+    # Legacy fallback: [FAIL] Story X.X - reason (last match)
+    while IFS= read -r match; do
+        [[ -z "$match" ]] && continue
+        if [[ "$match" =~ \[FAIL\][[:space:]]*Story[[:space:]]+([0-9]+\.[0-9]+)[[:space:]]*-[[:space:]]*(.*) ]]; then
+            local fail_reason="${BASH_REMATCH[2]}"
+            fail_reason="${fail_reason//|/-}"
+            last_result="${BASH_REMATCH[1]}|${fail_reason}"
+        fi
+    done < <(echo "$output" | grep -oE '\[FAIL\][[:space:]]*Story[[:space:]]+[0-9]+\.[0-9]+ - .*')
+
+    if [[ -n "$last_result" ]]; then
+        echo "$last_result"
         return 0
     fi
 

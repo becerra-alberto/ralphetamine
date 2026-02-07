@@ -14,7 +14,7 @@ ralph_on_exit() {
 _ralph_run_exit_handlers() {
     if [[ ${#_RALPH_EXIT_HANDLERS[@]} -gt 0 ]]; then
         for handler in "${_RALPH_EXIT_HANDLERS[@]}"; do
-            eval "$handler" || true
+            "$handler" || true
         done
     fi
 }
@@ -52,6 +52,19 @@ readonly CLR_BOLD='\033[1m'
 
 RALPH_LOG_FILE="${RALPH_LOG_FILE:-ralph.log}"
 RALPH_VERBOSE="${RALPH_VERBOSE:-false}"
+RALPH_LOG_MAX_BYTES="${RALPH_LOG_MAX_BYTES:-1048576}"  # 1MB
+
+# Rotate log file if it exceeds RALPH_LOG_MAX_BYTES
+_ralph_rotate_log() {
+    [[ ! -f "$RALPH_LOG_FILE" ]] && return 0
+    local size
+    size=$(wc -c < "$RALPH_LOG_FILE" 2>/dev/null) || return 0
+    size="${size// /}"  # strip whitespace (macOS wc pads)
+    if [[ "$size" -gt "$RALPH_LOG_MAX_BYTES" ]]; then
+        mv "$RALPH_LOG_FILE" "${RALPH_LOG_FILE}.1"
+    fi
+}
+_ralph_rotate_log
 
 log() {
     local timestamp

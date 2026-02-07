@@ -151,9 +151,9 @@ _run_sequential() {
             $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
                 < /dev/null 2>&1 | tee "$output_file" || exit_code=$?
         else
-            # Silent: write directly to file
+            # Silent: pipe-based capture (Claude CLI doesn't flush with file redirects)
             $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
-                < /dev/null > "$output_file" 2>&1 || exit_code=$?
+                < /dev/null 2>&1 | cat > "$output_file" || exit_code=$?
         fi
 
         # Read captured output

@@ -96,6 +96,10 @@ cmd_init() {
 
     log_success "Ralph initialized. Edit .ralph/stories.txt to add your stories."
     log_info "Then run: ralph run"
+    echo ""
+    log_warn "Security note: Ralph runs Claude with --dangerously-skip-permissions by default."
+    log_warn "This grants Claude unrestricted system access during story execution."
+    log_warn "Review .ralph/config.json 'claude.flags' to customize."
 }
 
 # ── Subcommand: run ─────────────────────────────────────────────────────────

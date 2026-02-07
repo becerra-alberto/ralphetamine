@@ -37,6 +37,24 @@ Final cleanup line"
     assert_output "5.2"
 }
 
+@test "parse_done: multiple DONE tags returns the last one" {
+    local output='<ralph>DONE 1.1</ralph>
+some intermediate work
+<ralph>DONE 1.2</ralph>'
+    run signals_parse_done "$output"
+    assert_success
+    assert_output "1.2"
+}
+
+@test "parse_done: FAIL then DONE returns the DONE" {
+    local output='<ralph>FAIL 2.1: build failed</ralph>
+fixed the issue
+<ralph>DONE 2.1</ralph>'
+    run signals_parse_done "$output"
+    assert_success
+    assert_output "2.1"
+}
+
 # ── parse_fail ──────────────────────────────────────────────────────────────
 
 @test "parse_fail: with reason" {
@@ -55,6 +73,15 @@ Final cleanup line"
     run signals_parse_fail '[FAIL] Story 1.1 - build error in component'
     assert_success
     assert_output "1.1|build error in component"
+}
+
+@test "parse_fail: multiple FAIL tags returns the last one" {
+    local output='<ralph>FAIL 3.1: first error</ralph>
+retried...
+<ralph>FAIL 3.1: second error</ralph>'
+    run signals_parse_fail "$output"
+    assert_success
+    assert_output "3.1|second error"
 }
 
 # ── parse_learnings ─────────────────────────────────────────────────────────

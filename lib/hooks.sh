@@ -21,8 +21,8 @@ hooks_run() {
         export "$pair"
     done
 
-    # Execute the hook command
-    if eval "$hook_cmd"; then
+    # Execute the hook command in a subshell for sandboxing
+    if bash -c "$hook_cmd"; then
         log_debug "Hook $hook_name completed successfully"
     else
         log_warn "Hook $hook_name failed (exit code: $?)"
