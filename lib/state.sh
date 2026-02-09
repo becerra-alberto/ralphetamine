@@ -26,15 +26,17 @@ state_init() {
     if [[ -f "$RALPH_STATE_FILE" ]]; then
         log_debug "State file exists: $RALPH_STATE_FILE"
         _state_ensure_schema
-        return 0
-    fi
-
-    # Check for legacy progress.txt to bootstrap from
-    if [[ -f "progress.txt" ]]; then
+    elif [[ -f "progress.txt" ]]; then
+        # Check for legacy progress.txt to bootstrap from
         log_info "Initializing state from legacy progress.txt"
         _state_init_from_progress
     else
         _state_write_empty
+    fi
+
+    # Initialize provenance tracking if the module is loaded
+    if type provenance_init &>/dev/null; then
+        provenance_init
     fi
 }
 

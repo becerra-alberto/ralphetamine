@@ -54,6 +54,8 @@ usage() {
     echo "  reconcile [--apply]   Find/merge orphaned story branches"
     echo "  status                Show current progress"
     echo "  stories               List all stories and their status"
+    echo "  verify                Verify PRD-to-spec provenance integrity"
+    echo "  hitl [generate|feedback] Generate HITL review page or feedback PRD"
     echo "  learnings [topic]     Show extracted learnings"
     echo "  reset                 Reset state (completed stories, retries)"
     echo ""
@@ -83,6 +85,7 @@ usage() {
 cmd_init() {
     source "${RALPH_DIR}/lib/config.sh"
     source "${RALPH_DIR}/lib/state.sh"
+    source "${RALPH_DIR}/lib/provenance.sh"
     source "${RALPH_DIR}/lib/interactive.sh"
 
     log_info "Initializing Ralph in $(pwd)"
@@ -116,6 +119,7 @@ cmd_run() {
     source "${RALPH_DIR}/lib/caffeine.sh"
     source "${RALPH_DIR}/lib/tmux.sh"
     source "${RALPH_DIR}/lib/runner.sh"
+    source "${RALPH_DIR}/lib/provenance.sh"
 
     # Optional modules
     [[ -f "${RALPH_DIR}/lib/learnings.sh" ]] && source "${RALPH_DIR}/lib/learnings.sh"
@@ -123,6 +127,7 @@ cmd_run() {
     [[ -f "${RALPH_DIR}/lib/parallel.sh" ]] && source "${RALPH_DIR}/lib/parallel.sh"
     [[ -f "${RALPH_DIR}/lib/interactive.sh" ]] && source "${RALPH_DIR}/lib/interactive.sh"
     [[ -f "${RALPH_DIR}/lib/display.sh" ]] && source "${RALPH_DIR}/lib/display.sh"
+    [[ -f "${RALPH_DIR}/lib/hitl.sh" ]] && source "${RALPH_DIR}/lib/hitl.sh"
 
     # Check prerequisites
     prereqs_check || exit 1
@@ -317,6 +322,42 @@ cmd_reset() {
     log_success "State reset."
 }
 
+# ── Subcommand: hitl ───────────────────────────────────────────────────────
+cmd_hitl() {
+    source "${RALPH_DIR}/lib/config.sh"
+    source "${RALPH_DIR}/lib/state.sh"
+    source "${RALPH_DIR}/lib/stories.sh"
+    source "${RALPH_DIR}/lib/specs.sh"
+    source "${RALPH_DIR}/lib/hitl.sh"
+
+    prereqs_check_project || exit 1
+    config_load || exit 1
+    state_init
+
+    local output_path
+    output_path=$(config_get '.hitl.output_path' 'docs/hitl-review.html')
+    local subcommand="${1:-generate}"
+
+    case "$subcommand" in
+        generate)
+            [[ "${2:-}" == "--output" && -n "${3:-}" ]] && output_path="$3"
+            hitl_generate_report "$output_path"
+            ;;
+        feedback)
+            local feedback_input="${2:?Usage: ralph hitl feedback <hitl-evaluation.json>}"
+            hitl_generate_feedback_prd "$feedback_input"
+            ;;
+        *)
+            echo "Usage: ralph hitl [generate|feedback] [options]"
+            echo ""
+            echo "Subcommands:"
+            echo "  generate [--output PATH]     Generate HITL review page (default: docs/hitl-review.html)"
+            echo "  feedback <evaluation.json>   Generate remediation PRD from exported HITL evaluation"
+            exit 1
+            ;;
+    esac
+}
+
 # ── Subcommand: reconcile ──────────────────────────────────────────────────
 cmd_reconcile() {
     source "${RALPH_DIR}/lib/config.sh"
@@ -332,10 +373,30 @@ cmd_reconcile() {
     ralph_reconcile "$@"
 }
 
+# ── Subcommand: verify ────────────────────────────────────────────────────
+cmd_verify() {
+    source "${RALPH_DIR}/lib/config.sh"
+    source "${RALPH_DIR}/lib/state.sh"
+    source "${RALPH_DIR}/lib/stories.sh"
+    source "${RALPH_DIR}/lib/provenance.sh"
+
+    prereqs_check_project || exit 1
+    config_load || exit 1
+
+    box_header "PROVENANCE VERIFICATION"
+    provenance_verify
+
+    if [[ "${1:-}" == "--list" ]]; then
+        provenance_list
+    fi
+}
+
 # ── Dispatch ────────────────────────────────────────────────────────────────
 case "${1:-}" in
     init)      shift; cmd_init "$@" ;;
     run)       shift; cmd_run "$@" ;;
+    hitl)      shift; cmd_hitl "$@" ;;
+    verify)    shift; cmd_verify "$@" ;;
     reconcile) shift; cmd_reconcile "$@" ;;
     status)    shift; cmd_status "$@" ;;
     stories)   shift; cmd_stories "$@" ;;

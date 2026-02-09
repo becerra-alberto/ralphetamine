@@ -166,6 +166,7 @@ id: "N.M"
 epic: N
 title: "Short Descriptive Title"
 status: pending
+source_prd: "tasks/prd-<name>.md"
 priority: critical|high|medium|low
 estimation: small|medium|large
 depends_on: []
@@ -242,6 +243,55 @@ After writing all files, verify:
 - No circular dependencies in `depends_on` fields
 - All spec files have valid YAML frontmatter
 - Report the final count: "Created X specs across Y epics"
+
+### 8. Record Provenance
+
+After validation passes, record the PRD-to-specs conversion for traceability. This enables `ralph verify` to detect missing stories, stale PRDs, and orphaned specs later.
+
+**Steps:**
+
+1. **Compute PRD sha256:** `shasum -a 256 <prd_path>` — this captures the PRD content at conversion time.
+
+2. **Write/append to `.ralph/provenance.json`:** Call the `provenance_record` function (from `lib/provenance.sh`) with:
+   - The PRD file path
+   - Comma-separated list of all story IDs generated
+   - Comma-separated list of all spec file paths generated
+
+   If `.ralph/provenance.json` doesn't exist yet, create it first with `provenance_init`.
+
+3. **Add `source_prd` to each spec's frontmatter:** For every generated spec file, add a `source_prd` field to the YAML frontmatter pointing back to the PRD:
+   ```yaml
+   ---
+   id: "1.1"
+   epic: 1
+   title: "Setup Project"
+   status: pending
+   source_prd: "tasks/prd-feature-x.md"
+   ...
+   ---
+   ```
+   Use `provenance_add_source_prd_to_spec` or add the field directly when writing the spec.
+
+4. **Add provenance header to stories.txt:** Prepend structured comments at the top of `stories.txt`:
+   ```
+   # Source: tasks/prd-feature-x.md
+   # Generated: 2026-02-09T12:00:00Z
+   # Stories: 1.1, 1.2, 1.3, 2.1, 2.2
+   ```
+   Use `provenance_add_stories_header` or write the header directly.
+
+5. **Update PRD frontmatter:** Add/update YAML frontmatter on the PRD file itself:
+   ```yaml
+   ---
+   ralph_status: converted
+   ralph_converted_at: 2026-02-09T12:00:00Z
+   ralph_stories: "1.1–2.2"
+   ralph_spec_dir: specs/
+   ---
+   ```
+   Use `provenance_update_prd_frontmatter`. If the PRD already has frontmatter, merge into it. If this fails, warn but don't fail the conversion.
+
+**Important:** Provenance recording is non-blocking. If any step fails, log a warning and continue — the specs and stories.txt are already valid at this point.
 
 ---
 
