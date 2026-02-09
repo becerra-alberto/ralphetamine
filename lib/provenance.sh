@@ -323,23 +323,16 @@ provenance_add_source_prd_to_spec() {
         # Update existing
         sed -i.bak "s|^source_prd:.*|source_prd: \"${prd_path}\"|" "$spec_path" && rm -f "${spec_path}.bak"
     else
-        # Add before closing --- of frontmatter
-        sed -i.bak "/^---$/,/^---$/ { /^---$/ { x; /^$/ { x; b; }; x; i\\
-source_prd: \"${prd_path}\"
-}; }" "$spec_path" && rm -f "${spec_path}.bak"
-
-        # Verify it was added — fallback to awk if sed didn't work
-        if ! grep -q "^source_prd:" "$spec_path"; then
-            local tmp_file="${spec_path}.tmp"
-            awk -v prd="$prd_path" '
-            BEGIN { in_fm=0; added=0 }
-            /^---$/ {
-                if (in_fm == 0) { in_fm=1; print; next }
-                if (in_fm == 1 && added == 0) { printf "source_prd: \"%s\"\n", prd; added=1; print; in_fm=2; next }
-            }
-            { print }
-            ' "$spec_path" > "$tmp_file" && mv "$tmp_file" "$spec_path"
-        fi
+        # Add before closing --- of frontmatter (awk for macOS/GNU portability)
+        local tmp_file="${spec_path}.tmp"
+        awk -v prd="$prd_path" '
+        BEGIN { in_fm=0; added=0 }
+        /^---$/ {
+            if (in_fm == 0) { in_fm=1; print; next }
+            if (in_fm == 1 && added == 0) { printf "source_prd: \"%s\"\n", prd; added=1; print; in_fm=2; next }
+        }
+        { print }
+        ' "$spec_path" > "$tmp_file" && mv "$tmp_file" "$spec_path"
     fi
 
     log_debug "Added source_prd to spec: $spec_path"
