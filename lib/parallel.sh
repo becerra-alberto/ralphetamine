@@ -55,7 +55,20 @@ parallel_run() {
     local auto_merge
     auto_merge=$(config_get '.parallel.auto_merge' 'true')
 
+    local total_stories remaining_stories
+    total_stories=$(stories_count_total)
+    remaining_stories=$(stories_count_remaining)
+    if [[ "$total_stories" -eq 0 ]]; then
+        log_error "No stories found in stories.txt"
+        return 1
+    fi
+    if [[ "$remaining_stories" -eq 0 ]]; then
+        log_success "All $total_stories stories already complete"
+        return 0
+    fi
+
     log_info "Parallel mode: max_concurrent=$max_concurrent, stagger=${stagger_seconds}s"
+    log_info "Stories: $remaining_stories remaining of $total_stories total"
 
     # Dashboard: set worker max for parallel mode
     if type display_update_workers &>/dev/null; then

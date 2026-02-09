@@ -5,8 +5,8 @@
 RALPH_LOCK_FILE=".ralph/.lock"
 
 # ── Run-level timing data ──────────────────────────────────────────
-declare -A _STORY_TIMINGS          # story_id → seconds
-declare -A _STORY_OUTCOMES         # story_id → done|tentative|failed|absorbed
+declare -A _STORY_TIMINGS=()       # story_id → seconds
+declare -A _STORY_OUTCOMES=()      # story_id → done|tentative|failed|absorbed
 _RALPH_RUN_START_COMMIT=""
 _RALPH_RUN_START_TIME=""
 
@@ -123,6 +123,10 @@ _run_sequential() {
         if [[ -n "$specific_story" ]]; then
             next_story="$specific_story"
         elif ! next_story=$(stories_find_next "$resume_from"); then
+            if [[ "$total_stories" -eq 0 ]]; then
+                log_error "No stories found in stories.txt"
+                return 1
+            fi
             box_header "ALL STORIES COMPLETE!"
             log "All stories complete — Ralph loop finished"
             _run_summary "sequential"

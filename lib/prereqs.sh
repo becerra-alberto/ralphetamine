@@ -81,5 +81,11 @@ prereqs_check_project() {
         return 1
     fi
 
+    local story_count
+    story_count=$(grep -cvE '^[[:space:]]*(#|x[[:space:]]|$)' ".ralph/stories.txt" 2>/dev/null) || story_count=0
+    if [[ "$story_count" -eq 0 ]]; then
+        log_warn "stories.txt exists but has no active stories. Run /ralph to populate."
+    fi
+
     return 0
 }

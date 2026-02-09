@@ -134,6 +134,13 @@ interactive_run_prompt() {
     echo ""
     echo "  Progress: $done_count / $total stories ($remaining remaining)"
 
+    if [[ "$total" -eq 0 ]]; then
+        log_error "No stories found in .ralph/stories.txt"
+        log_info "Add stories in format: 1.1 | Story Title"
+        log_info "Or run /ralph to generate specs from a PRD"
+        exit 1
+    fi
+
     local next
     if next=$(stories_find_next); then
         local next_title
