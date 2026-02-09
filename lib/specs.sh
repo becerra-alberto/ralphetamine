@@ -14,6 +14,13 @@ spec_find() {
     pattern="${pattern//\{\{epic\}\}/$epic}"
     pattern="${pattern//\{\{id\}\}/$story_id}"
 
+    # Catch malformed patterns with unresolved template variables
+    if [[ "$pattern" == *'{{'* ]]; then
+        log_error "Pattern still contains unresolved template variables: $pattern"
+        log_error "Check specs.pattern in .ralph/config.json — expected {{epic}} and {{id}} with double braces"
+        return 1
+    fi
+
     # Use find with the glob pattern
     local spec_file
     spec_file=$(find . -path "./$pattern" 2>/dev/null | head -1)
