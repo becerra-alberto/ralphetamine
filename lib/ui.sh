@@ -72,32 +72,41 @@ log() {
     echo "[$timestamp] $*" | tee -a "$RALPH_LOG_FILE"
 }
 
+# Write to log file only (no stdout). Used by colored log functions
+# that already handle their own stdout output.
+_log_to_file() {
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] $*" >> "$RALPH_LOG_FILE"
+}
+
 log_debug() {
     if [[ "$RALPH_VERBOSE" == true ]]; then
         local timestamp
         timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-        echo -e "${CLR_DIM}[$timestamp] $*${CLR_RESET}" | tee -a "$RALPH_LOG_FILE"
+        echo -e "${CLR_DIM}[$timestamp] $*${CLR_RESET}"
+        _log_to_file "$*"
     fi
 }
 
 log_success() {
     echo -e "${CLR_GREEN}[OK]${CLR_RESET} $*"
-    log "[OK] $*"
+    _log_to_file "[OK] $*"
 }
 
 log_error() {
     echo -e "${CLR_RED}[ERROR]${CLR_RESET} $*" >&2
-    log "[ERROR] $*"
+    _log_to_file "[ERROR] $*"
 }
 
 log_warn() {
     echo -e "${CLR_YELLOW}[WARN]${CLR_RESET} $*"
-    log "[WARN] $*"
+    _log_to_file "[WARN] $*"
 }
 
 log_info() {
     echo -e "${CLR_CYAN}[INFO]${CLR_RESET} $*"
-    log "[INFO] $*"
+    _log_to_file "[INFO] $*"
 }
 
 # ── Box drawing ─────────────────────────────────────────────────────────────

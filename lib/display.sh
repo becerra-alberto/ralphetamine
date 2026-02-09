@@ -50,9 +50,9 @@ display_init() {
     rows=$(tput lines 2>/dev/null) || rows=24
     _DISPLAY_PANEL_ROW=$((rows - _DISPLAY_PANEL_LINES))
 
-    # Set scroll region to exclude bottom panel area + 1 buffer row.
-    # The buffer row prevents the last panel newline from scrolling the screen.
-    printf '\033[1;%dr' "$((_DISPLAY_PANEL_ROW - 1))"
+    # Set scroll region to exclude bottom panel area + buffer rows.
+    # The buffer prevents log output from bleeding into the panel.
+    printf '\033[1;%dr' "$((_DISPLAY_PANEL_ROW - 2))"
 
     # Register cleanup to restore full scroll region on exit
     if type ralph_on_exit &>/dev/null; then
