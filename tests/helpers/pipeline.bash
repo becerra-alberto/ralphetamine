@@ -32,6 +32,8 @@ scaffold_pipeline_project() {
 
     # Initialize git repo
     git init -q .
+    git config user.name "Test"
+    git config user.email "test@test.com"
     git add -A
     git commit -q -m "notely scaffold" --allow-empty
 

@@ -64,6 +64,8 @@ scaffold_ralph_project() {
 
     # Initialize git repo (some tests need git context)
     git init -q .
+    git config user.name "Test"
+    git config user.email "test@test.com"
     git add -A
     git commit -q -m "test scaffold" --allow-empty
 }

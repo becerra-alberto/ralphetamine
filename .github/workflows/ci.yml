@@ -18,6 +18,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@test.com"
+
       - name: Run BATS tests
         run: |
           bash tests/run-tests.sh all
