@@ -78,3 +78,32 @@ teardown() {
     assert_success
     assert_output "2.2"
 }
+
+# ── Merged from stories-extra.bats ──────────────────────────────────────────
+
+@test "stories_append: adds new story to stories.txt" {
+    stories_append "4.1" "New Feature Story"
+    assert_file_contains ".ralph/stories.txt" "4.1 | New Feature Story"
+}
+
+@test "stories_count_remaining: with partial state returns correct count" {
+    copy_fixture state-partial.json .ralph/state.json
+    # state-partial.json has [1.1, 1.2, 2.1] completed
+    # stories.txt has 5 active stories: 1.1, 1.2, 2.1, 2.2, 3.1
+    # Remaining = 5 - 3 = 2
+    run stories_count_remaining
+    assert_success
+    assert_output "2"
+}
+
+@test "stories_list_details: returns full lines excluding skipped and comments" {
+    run stories_list_details
+    assert_success
+    # Should include active stories with their titles
+    assert_output --partial "1.1 | Initialize Project"
+    assert_output --partial "2.1 | First Parallel Story"
+    assert_output --partial "3.1 | Regular Story"
+    # Should NOT include skipped story or comments
+    refute_output --partial "x 1.3"
+    refute_output --partial "# Ralph Story Queue"
+}

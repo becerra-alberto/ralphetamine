@@ -1,0 +1,31 @@
+{
+    "stories": {
+        "1.1": {
+            "title": "Initialize Project",
+            "priority": "HIGH",
+            "items": {
+                "Project builds successfully": {
+                    "description": "Project builds successfully",
+                    "status": "pass",
+                    "notes": ""
+                },
+                "Dev server starts": {
+                    "description": "Dev server starts on port 5173",
+                    "status": "fail",
+                    "notes": "Server starts on 3000 instead of 5173"
+                }
+            }
+        },
+        "2.1": {
+            "title": "First Parallel Story",
+            "priority": "MED",
+            "items": {
+                "Builds on work from 2.1": {
+                    "description": "Feature works as expected",
+                    "status": "fail",
+                    "notes": "Missing error handling for edge case"
+                }
+            }
+        }
+    }
+}

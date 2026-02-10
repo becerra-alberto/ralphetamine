@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<title>/*PROJECT_NAME*/ — HITL Review Audit</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'JetBrains Mono', 'Fira Code', monospace; margin: 0; padding: 2rem; background: #fafafa; color: #1a1a1a; }
+  h1 { font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+  h2 { font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem; color: #666; font-weight: 400; margin-bottom: 1rem; }
+
+  /* ── toolbar ── */
+  .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .toolbar button {
+    padding: 8px 16px; border: 1px solid #ccc; border-radius: 6px;
+    background: #fff; color: #1a1a1a; cursor: pointer; font-size: 0.8rem; font-family: inherit;
+    transition: background 0.15s;
+  }
+  .toolbar button:hover { background: #f0f0f0; }
+  .toolbar button.primary { background: #0d9488; border-color: #0d9488; color: #fff; }
+  .toolbar button.primary:hover { background: #0f766e; }
+  .toolbar .spacer { flex: 1; }
+  .filter-group { display: flex; gap: 4px; }
+  .filter-group button.active { background: #e0e0e0; border-color: #aaa; }
+
+  /* ── progress bar ── */
+  .progress-bar { width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; margin-bottom: 1.5rem; overflow: hidden; }
+  .progress-bar-inner { height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .dot-pass { background: #10b981; }
+  .dot-fail { background: #ef4444; }
+  .dot-skip { background: #f59e0b; }
+  .dot-pending { background: #ccc; }
+
+  /* ── table ── */
+  table.main { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+  table.main th { background: #f0f0f0; color: #555; text-align: left; padding: 10px 12px; border-bottom: 2px solid #ddd; position: sticky; top: 0; z-index: 10; }
+  table.main td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; vertical-align: top; }
+  table.main tr:hover > td { background: #f5f5f5; }
+  table.main tr.hidden { display: none; }
+  .id { font-weight: 700; white-space: nowrap; min-width: 50px; }
+  .status-col { min-width: 70px; text-align: center; vertical-align: middle; }
+  .title-col { white-space: nowrap; min-width: 160px; }
+  .changed { min-width: 200px; color: #555; }
+  .pri { white-space: nowrap; text-align: center; min-width: 50px; font-weight: 600; }
+  .pri-crit { color: #dc2626; }
+  .pri-high { color: #d97706; }
+  .pri-med  { color: #2563eb; }
+  .pri-low  { color: #6b7280; }
+  .epic-header { cursor: pointer; user-select: none; }
+  .epic-header td { background: #f0f0f0; font-weight: 700; color: #334155; font-size: 0.9rem; padding: 12px; border-bottom: 2px solid #ddd; font-family: 'Space Grotesk', sans-serif; }
+  .epic-header:hover td { background: #e8e8f0; }
+  .epic-chevron { display: inline-block; width: 16px; font-size: 0.75rem; color: #888; transition: transform 0.15s; }
+  .epic-header .epic-actions { float: right; }
+  .epic-header .epic-pass-btn {
+    padding: 3px 10px; border: 1px solid #10b981; border-radius: 4px;
+    background: transparent; color: #10b981; cursor: pointer; font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace; font-weight: 600; transition: all 0.15s;
+  }
+  .epic-header .epic-pass-btn:hover { background: #10b981; color: #fff; }
+
+  /* ── verification items ── */
+  .verify-col { min-width: 420px; }
+  .v-item { margin-bottom: 10px; padding: 8px; border-radius: 6px; background: #fff; border: 1px solid #e0e0e0; transition: border-color 0.2s; }
+  .v-item.status-pass { border-color: #10b981; }
+  .v-item.status-fail { border-color: #ef4444; }
+  .v-item.status-skip { border-color: #f59e0b; }
+  .v-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .v-label { color: #10b981; font-weight: 600; font-size: 0.8rem; min-width: 24px; }
+  .v-text { flex: 1; line-height: 1.4; }
+
+  /* ── status toggles ── */
+  .status-toggles { display: flex; gap: 3px; margin-left: auto; flex-shrink: 0; }
+  .status-toggles button {
+    padding: 2px 8px; border: 1px solid #ccc; border-radius: 4px;
+    background: transparent; color: #888; cursor: pointer; font-size: 0.7rem; font-family: inherit;
+    transition: all 0.15s;
+  }
+  .status-toggles button:hover { border-color: #999; color: #333; }
+  .status-toggles button.sel-pass { background: #10b981; border-color: #10b981; color: #fff; }
+  .status-toggles button.sel-fail { background: #ef4444; border-color: #ef4444; color: #fff; }
+  .status-toggles button.sel-skip { background: #f59e0b; border-color: #f59e0b; color: #000; }
+
+  /* ── notes input ── */
+  .v-notes {
+    width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;
+    background: #fff; color: #333; font-size: 0.78rem; font-family: inherit;
+    resize: vertical; min-height: 28px; max-height: 120px;
+    transition: border-color 0.2s;
+  }
+  .v-notes:focus { border-color: #4F46E5; outline: none; }
+  .v-notes::placeholder { color: #999; }
+
+  /* ── timestamp ── */
+  .v-timestamp { font-size: 0.7rem; color: #999; margin-top: 2px; }
+
+  /* ── story status pill ── */
+  .story-status {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 0.7rem; font-weight: 600;
+  }
+  .story-all-pass { background: #d1fae5; color: #059669; }
+  .story-has-fail { background: #fee2e2; color: #dc2626; }
+  .story-partial { background: #dbeafe; color: #2563eb; }
+  .story-pending { background: #f3f4f6; color: #9ca3af; }
+
+  /* ── summary ── */
+  .summary { margin-bottom: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; }
+  .summary h3 { margin: 0 0 0.5rem 0; font-size: 1rem; font-family: 'Space Grotesk', sans-serif; }
+  .summary table { font-size: 0.85rem; border-collapse: collapse; }
+  .summary td, .summary th { padding: 6px 12px; border-bottom: 1px solid #e8e8e8; text-align: left; font-variant-numeric: tabular-nums; }
+  .summary td:not(:first-child), .summary th:not(:first-child) { text-align: right; }
+
+  /* ── toast ── */
+  .toast {
+    position: fixed; bottom: 2rem; right: 2rem; padding: 10px 20px;
+    background: #10b981; color: #fff; border-radius: 6px; font-size: 0.85rem;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>/*PROJECT_NAME*/ — HITL Review Audit</h1>
+<h2>/*SUBTITLE*/</h2>
+
+<!-- progress -->
+<div class="progress-bar"><div class="progress-bar-inner" id="progressBar"></div></div>
+
+<!-- summary (moved above toolbar) -->
+<div class="summary" id="summarySection"></div>
+
+<!-- toolbar -->
+<div class="toolbar">
+  <div class="filter-group">
+    <button data-filter="all" class="active">All</button>
+    <button data-filter="pending">Pending</button>
+    <button data-filter="pass">Pass</button>
+    <button data-filter="fail">Fail</button>
+    <button data-filter="skip">Skip</button>
+  </div>
+  <div class="spacer"></div>
+  <button onclick="collapseAllEpics()">Collapse All</button>
+  <button onclick="expandAllEpics()">Expand All</button>
+  <button onclick="markAllVisible('pass')">Mark Visible: Pass</button>
+  <button onclick="resetAll()" style="border-color:#ef4444;color:#ef4444;">Reset All</button>
+  <button class="primary" onclick="exportJSON()">Export JSON</button>
+</div>
+
+<table class="main">
+<thead>
+  <tr>
+    <th>ID</th>
+    <th>Status</th>
+    <th>Title</th>
+    <th>What Changed</th>
+    <th>Pri</th>
+    <th>Verification Items</th>
+  </tr>
+</thead>
+<tbody id="tableBody">
+</tbody>
+</table>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════
+const stories = /*STORIES_DATA*/[];
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const STORAGE_KEY = "hitl-review-state";
+const COLLAPSE_KEY = "hitl-review-collapse";
+let state = {};
+let collapseState = {}; // { epicNum: true/false }
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state = JSON.parse(raw);
+  } catch(e) { state = {}; }
+  try {
+    const raw = localStorage.getItem(COLLAPSE_KEY);
+    if (raw) collapseState = JSON.parse(raw);
+  } catch(e) { collapseState = {}; }
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function saveCollapseState() {
+  localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapseState));
+}
+
+function getItemState(storyId, vIdx) {
+  const key = `${storyId}.V${vIdx + 1}`;
+  if (!state[key]) state[key] = { status: "pending", notes: "" };
+  return state[key];
+}
+
+function setItemStatus(storyId, vIdx, status) {
+  const s = getItemState(storyId, vIdx);
+  s.status = s.status === status ? "pending" : status; // toggle off if same
+  s.updated_at = new Date().toISOString();
+  saveState();
+  renderAll();
+}
+
+function setItemNotes(storyId, vIdx, notes) {
+  const s = getItemState(storyId, vIdx);
+  s.notes = notes;
+  saveState();
+  // don't re-render, just save
+}
+
+function formatTimestamp(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + ", " +
+         d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+// ══════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════
+let currentFilter = "all";
+
+function priClass(pri) {
+  return { CRIT: "pri-crit", HIGH: "pri-high", MED: "pri-med", LOW: "pri-low" }[pri] || "";
+}
+
+function getStoryStatus(storyId, itemCount) {
+  let pass = 0, fail = 0, skip = 0, pending = 0;
+  for (let i = 0; i < itemCount; i++) {
+    const s = getItemState(storyId, i);
+    if (s.status === "pass") pass++;
+    else if (s.status === "fail") fail++;
+    else if (s.status === "skip") skip++;
+    else pending++;
+  }
+  if (fail > 0) return { cls: "story-has-fail", text: `${fail} FAIL` };
+  if (pass === itemCount) return { cls: "story-all-pass", text: "ALL PASS" };
+  if (pass > 0 || skip > 0) return { cls: "story-partial", text: `${pass}/${itemCount}` };
+  return { cls: "story-pending", text: "PENDING" };
+}
+
+function shouldShowRow(storyId, itemCount) {
+  if (currentFilter === "all") return true;
+  for (let i = 0; i < itemCount; i++) {
+    const s = getItemState(storyId, i);
+    if (s.status === currentFilter || (currentFilter === "pending" && s.status === "pending")) return true;
+  }
+  return false;
+}
+
+function renderAll() {
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+
+  let totalItems = 0, passCount = 0, failCount = 0, skipCount = 0, pendingCount = 0;
+  let currentEpic = null;
+
+  for (const entry of stories) {
+    if (entry.epic) {
+      currentEpic = entry.epic;
+      const collapsed = !!collapseState[entry.epic];
+      const chevron = collapsed ? "\u25B6" : "\u25BC";
+      const tr = document.createElement("tr");
+      tr.className = "epic-header";
+      tr.dataset.epic = entry.epic;
+      tr.innerHTML = `<td colspan="6"><span class="epic-chevron">${chevron}</span> Epic ${entry.epic} \u2014 ${entry.epicTitle}<span class="epic-actions"><button class="epic-pass-btn" data-epicnum="${entry.epic}">Pass Epic</button></span></td>`;
+      tr.addEventListener("click", (e) => {
+        if (e.target.classList.contains("epic-pass-btn")) return;
+        toggleEpic(entry.epic);
+      });
+      tr.querySelector(".epic-pass-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        passAllInEpic(entry.epic);
+      });
+      tbody.appendChild(tr);
+      continue;
+    }
+
+    const show = shouldShowRow(entry.id, entry.items.length);
+    const collapsed = !!collapseState[currentEpic];
+
+    // count stats
+    for (let i = 0; i < entry.items.length; i++) {
+      totalItems++;
+      const s = getItemState(entry.id, i);
+      if (s.status === "pass") passCount++;
+      else if (s.status === "fail") failCount++;
+      else if (s.status === "skip") skipCount++;
+      else pendingCount++;
+    }
+
+    const storyStatus = getStoryStatus(entry.id, entry.items.length);
+
+    const tr = document.createElement("tr");
+    tr.className = (!show || collapsed) ? "hidden" : "";
+    tr.dataset.storyId = entry.id;
+    tr.dataset.epic = currentEpic;
+
+    let verifyHTML = "";
+    for (let i = 0; i < entry.items.length; i++) {
+      const s = getItemState(entry.id, i);
+      const vid = `V${i + 1}`;
+      const statusCls = s.status !== "pending" ? `status-${s.status}` : "";
+      const tsHTML = s.updated_at ? `<div class="v-timestamp">Last changed: ${formatTimestamp(s.updated_at)}</div>` : "";
+      verifyHTML += `
+        <div class="v-item ${statusCls}" data-story="${entry.id}" data-idx="${i}">
+          <div class="v-item-header">
+            <span class="v-label">${vid}</span>
+            <span class="v-text">${entry.items[i]}</span>
+            <div class="status-toggles">
+              <button class="${s.status === 'pass' ? 'sel-pass' : ''}" onclick="setItemStatus('${entry.id}', ${i}, 'pass')">Pass</button>
+              <button class="${s.status === 'fail' ? 'sel-fail' : ''}" onclick="setItemStatus('${entry.id}', ${i}, 'fail')">Fail</button>
+              <button class="${s.status === 'skip' ? 'sel-skip' : ''}" onclick="setItemStatus('${entry.id}', ${i}, 'skip')">Skip</button>
+            </div>
+          </div>
+          <textarea class="v-notes" placeholder="Notes..." rows="1"
+            oninput="setItemNotes('${entry.id}', ${i}, this.value)">${s.notes || ''}</textarea>
+          ${tsHTML}
+        </div>`;
+    }
+
+    tr.innerHTML = `
+      <td class="id">${entry.id}</td>
+      <td class="status-col"><span class="story-status ${storyStatus.cls}">${storyStatus.text}</span></td>
+      <td class="title-col">${entry.title}</td>
+      <td class="changed">${entry.changed}</td>
+      <td class="pri ${priClass(entry.pri)}">${entry.pri}</td>
+      <td class="verify-col">${verifyHTML}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  // progress bar
+  const pct = totalItems > 0 ? ((passCount + failCount + skipCount) / totalItems * 100) : 0;
+  const bar = document.getElementById("progressBar");
+  bar.style.width = pct.toFixed(1) + "%";
+  if (failCount > 0) bar.style.background = "linear-gradient(90deg, #10b981, #ef4444)";
+  else bar.style.background = "#10b981";
+
+  renderSummary();
+}
+
+function renderSummary() {
+  const sec = document.getElementById("summarySection");
+  const byPri = { CRIT: {t:0,p:0,f:0}, HIGH: {t:0,p:0,f:0}, MED: {t:0,p:0,f:0}, LOW: {t:0,p:0,f:0} };
+  for (const entry of stories) {
+    if (entry.epic) continue;
+    for (let i = 0; i < entry.items.length; i++) {
+      const bucket = byPri[entry.pri];
+      if (!bucket) continue;
+      bucket.t++;
+      const s = getItemState(entry.id, i);
+      if (s.status === "pass") bucket.p++;
+      if (s.status === "fail") bucket.f++;
+    }
+  }
+  const totals = { t: 0, p: 0, f: 0 };
+  ["CRIT","HIGH","MED","LOW"].forEach(p => { totals.t += byPri[p].t; totals.p += byPri[p].p; totals.f += byPri[p].f; });
+  sec.innerHTML = `<h3>Summary by Priority</h3>
+    <table>
+      <tr><th>Priority</th><th>Pending</th><th>Failed</th><th>Pass</th><th>Total</th></tr>
+      ${["CRIT","HIGH","MED","LOW"].map(p => {
+        const b = byPri[p];
+        return `<tr><td class="pri ${priClass(p)}">${p}</td><td style="color:#888">${b.t - b.p - b.f}</td><td style="color:#ef4444">${b.f}</td><td style="color:#10b981">${b.p}</td><td>${b.t}</td></tr>`;
+      }).join("")}
+      <tr style="font-weight:700;border-top:2px solid #ddd;"><td>TOTAL</td><td style="color:#888">${totals.t - totals.p - totals.f}</td><td style="color:#ef4444">${totals.f}</td><td style="color:#10b981">${totals.p}</td><td>${totals.t}</td></tr>
+    </table>`;
+}
+
+// ══════════════════════════════════════════════
+// ACTIONS
+// ══════════════════════════════════════════════
+function exportJSON() {
+  const output = { exported_at: new Date().toISOString(), stories: {} };
+  for (const entry of stories) {
+    if (entry.epic) continue;
+    const items = {};
+    let hasData = false;
+    for (let i = 0; i < entry.items.length; i++) {
+      const s = getItemState(entry.id, i);
+      const textEl = document.createElement("div");
+      textEl.innerHTML = entry.items[i];
+      items[`V${i+1}`] = {
+        description: textEl.textContent,
+        status: s.status,
+        notes: s.notes || "",
+        updated_at: s.updated_at || null
+      };
+      if (s.status !== "pending" || s.notes) hasData = true;
+    }
+    output.stories[entry.id] = {
+      title: entry.title,
+      priority: entry.pri,
+      items: items
+    };
+  }
+
+  const json = JSON.stringify(output, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+
+  // try File System Access API for "save to specific path"
+  if (window.showSaveFilePicker) {
+    window.showSaveFilePicker({
+      suggestedName: "hitl-evaluation.json",
+      types: [{ description: "JSON", accept: { "application/json": [".json"] } }]
+    }).then(async handle => {
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      showToast("Saved! Claude can read this file.");
+    }).catch(() => {
+      // fallback to download
+      downloadBlob(blob, "hitl-evaluation.json");
+    });
+  } else {
+    downloadBlob(blob, "hitl-evaluation.json");
+  }
+}
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Downloaded! Save to project root for Claude to read.");
+}
+
+function markAllVisible(status) {
+  for (const entry of stories) {
+    if (entry.epic) continue;
+    for (let i = 0; i < entry.items.length; i++) {
+      const s = getItemState(entry.id, i);
+      if (s.status === "pending") s.status = status;
+    }
+  }
+  saveState();
+  renderAll();
+}
+
+function resetAll() {
+  if (!confirm("Reset ALL evaluations? This cannot be undone.")) return;
+  state = {};
+  saveState();
+  renderAll();
+  showToast("All evaluations reset.");
+}
+
+// ══════════════════════════════════════════════
+// COLLAPSE / EXPAND
+// ══════════════════════════════════════════════
+function toggleEpic(epicNum) {
+  collapseState[epicNum] = !collapseState[epicNum];
+  saveCollapseState();
+  renderAll();
+}
+
+function collapseAllEpics() {
+  for (const entry of stories) {
+    if (entry.epic) collapseState[entry.epic] = true;
+  }
+  saveCollapseState();
+  renderAll();
+}
+
+function expandAllEpics() {
+  collapseState = {};
+  saveCollapseState();
+  renderAll();
+}
+
+function passAllInEpic(epicNum) {
+  let inEpic = false;
+  for (const entry of stories) {
+    if (entry.epic === epicNum) { inEpic = true; continue; }
+    if (entry.epic && entry.epic !== epicNum && inEpic) break;
+    if (!inEpic || entry.epic) continue;
+    for (let i = 0; i < entry.items.length; i++) {
+      const s = getItemState(entry.id, i);
+      if (s.status === "pending") {
+        s.status = "pass";
+        s.updated_at = new Date().toISOString();
+      }
+    }
+  }
+  saveState();
+  renderAll();
+  showToast(`Epic ${epicNum} \u2014 all pending items marked Pass.`);
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+// ══════════════════════════════════════════════
+// FILTER
+// ══════════════════════════════════════════════
+document.querySelectorAll(".filter-group button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter-group button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentFilter = btn.dataset.filter;
+    renderAll();
+  });
+});
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+loadState();
+renderAll();
+</script>
+
+</body>
+</html>
