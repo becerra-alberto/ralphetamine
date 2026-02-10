@@ -142,6 +142,10 @@ parallel_run() {
         # Single story in batch — run in-place (no worktree needed)
         if [[ ${#batch_stories[@]} -eq 1 ]]; then
             log_info "Single story in batch, running in-place"
+            # Stop parallel dashboard timer to prevent collision with sequential dashboard
+            if type display_stop_live_timer &>/dev/null; then
+                display_stop_live_timer
+            fi
             _run_sequential "1" "$timeout_secs" "$verbose" false "${batch_stories[0]}" ""
             current_batch=$((current_batch + 1))
             continue
@@ -156,6 +160,12 @@ parallel_run() {
             _parallel_merge_batch "${batch_stories[@]}"
         else
             log_info "Auto-merge disabled. Worktrees left intact for manual review."
+            # Mark successful stories as done — no merge phase, so persist state now
+            for story in "${_PARALLEL_SUCCESSFUL[@]}"; do
+                state_mark_done "$story"
+                local spec_path
+                spec_path=$(spec_find "$story") 2>/dev/null && spec_update_status "$spec_path" "done"
+            done
             echo "Worktrees at: $RALPH_WORKTREE_DIR/"
             for story in "${batch_stories[@]}"; do
                 echo "  - story-${story}/"
@@ -347,7 +357,6 @@ _parallel_execute_batch() {
                 log_success "Story $story: completed"
                 successful+=("$story")
                 _STORY_OUTCOMES["$story"]="done"
-                state_mark_done "$story"
                 classified=true
 
                 # Progress.txt parity with sequential runner
@@ -355,10 +364,6 @@ _parallel_execute_batch() {
                 title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
                 timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
                 echo "[DONE] Story $story - $title - $timestamp" >> progress.txt 2>/dev/null || true
-
-                # Spec status parity with sequential runner
-                local spec_path
-                spec_path=$(spec_find "$story") 2>/dev/null && spec_update_status "$spec_path" "done"
             fi
         fi
 
@@ -369,15 +374,11 @@ _parallel_execute_batch() {
                 log_warn "Story $story: no DONE signal but branch has commits — tentative success"
                 successful+=("$story")
                 _STORY_OUTCOMES["$story"]="tentative"
-                state_mark_done "$story"
 
                 local title timestamp
                 title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
                 timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
                 echo "[DONE] Story $story - $title - $timestamp (tentative: commits detected)" >> progress.txt 2>/dev/null || true
-
-                local spec_path
-                spec_path=$(spec_find "$story") 2>/dev/null && spec_update_status "$spec_path" "done"
             else
                 if [[ $exit_code -eq 124 ]]; then
                     log_warn "Story $story: timed out (no commits)"
@@ -424,10 +425,10 @@ _parallel_merge_batch() {
     local current_branch
     current_branch=$(git rev-parse --abbrev-ref HEAD)
 
+    local merge_failures=()
+
     if [[ ${#_PARALLEL_SUCCESSFUL[@]} -gt 0 ]]; then
         log_info "Merging ${#_PARALLEL_SUCCESSFUL[@]} branches..."
-
-        local merge_failures=()
 
         for story in "${_PARALLEL_SUCCESSFUL[@]}"; do
             local branch_name="ralph/story-${story}"
@@ -436,13 +437,22 @@ _parallel_merge_batch() {
 
             if git merge --no-ff "$branch_name" -m "merge: story ${story}" 2>/dev/null; then
                 log_success "Merged story $story"
+                state_mark_done "$story"
+                local spec_path
+                spec_path=$(spec_find "$story") 2>/dev/null && spec_update_status "$spec_path" "done"
             else
                 log_warn "Merge conflict on story $story"
-                merge_failures+=("$story")
 
                 # Attempt conflict resolution via Claude agent
-                if ! _parallel_resolve_conflict "$story" "$branch_name"; then
+                if _parallel_resolve_conflict "$story" "$branch_name"; then
+                    # Resolution succeeded — story is merged
+                    state_mark_done "$story"
+                    local spec_path
+                    spec_path=$(spec_find "$story") 2>/dev/null && spec_update_status "$spec_path" "done"
+                else
                     log_error "Could not resolve merge conflict for story $story"
+                    merge_failures+=("$story")
+                    _STORY_OUTCOMES["$story"]="failed"
                 fi
             fi
         done
@@ -458,11 +468,22 @@ _parallel_merge_batch() {
         local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
         local branch_name="ralph/story-${story}"
 
+        # Always remove worktree (frees disk space)
         git worktree unlock "$worktree_dir" 2>/dev/null || true
         if [[ -d "$worktree_dir" ]]; then
             git worktree remove "$worktree_dir" --force 2>/dev/null || rm -rf "$worktree_dir"
         fi
-        git branch -d "$branch_name" 2>/dev/null || true
+
+        # Preserve branch if merge failed — user needs it to recover code
+        local is_merge_failure=false
+        for mf in "${merge_failures[@]+"${merge_failures[@]}"}"; do
+            [[ "$mf" == "$story" ]] && is_merge_failure=true && break
+        done
+        if [[ "$is_merge_failure" == true ]]; then
+            log_warn "Branch $branch_name preserved (merge failed — code lives there)"
+        else
+            git branch -d "$branch_name" 2>/dev/null || true
+        fi
     done
 
     # Cleanup failed worktrees and branches so retries aren't blocked
@@ -479,6 +500,24 @@ _parallel_merge_batch() {
 
     # Remove worktree dir if empty
     rmdir "$RALPH_WORKTREE_DIR" 2>/dev/null || true
+}
+
+# Save diagnostics when a merge conflict resolution fails
+_parallel_save_merge_diagnostics() {
+    local story="$1" branch_name="$2" exit_code="$3" conflict_files="$4" agent_output="$5"
+    mkdir -p ".ralph/logs"
+    {
+        echo "=== Merge Conflict Resolution Failed ==="
+        echo "Story: $story"
+        echo "Branch: $branch_name"
+        echo "Exit code: $exit_code"
+        echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        echo "Conflict files: $conflict_files"
+        echo ""
+        echo "=== Agent Output ==="
+        echo "$agent_output"
+    } > ".ralph/logs/merge-conflict-${story}.log"
+    log_warn "Merge conflict details saved to .ralph/logs/merge-conflict-${story}.log"
 }
 
 # Resolve merge conflicts using a dedicated Claude invocation
@@ -532,7 +571,8 @@ _parallel_resolve_conflict() {
     result=$($timeout_cmd "$merge_timeout" claude "${claude_flags[@]}" "$template" 2>&1) || exit_code=$?
 
     if [[ $exit_code -ne 0 ]]; then
-        log_error "Conflict resolution agent failed for story $story"
+        log_error "Conflict resolution agent failed for story $story (exit $exit_code)"
+        _parallel_save_merge_diagnostics "$story" "$branch_name" "$exit_code" "$conflict_files" "$result"
         git merge --abort 2>/dev/null || true
         return 1
     fi
@@ -544,10 +584,12 @@ _parallel_resolve_conflict() {
         return 0
     elif merge_result=$(signals_parse_merge_fail "$result"); then
         log_error "Merge resolution failed: $merge_result"
+        _parallel_save_merge_diagnostics "$story" "$branch_name" "0" "$conflict_files" "$result"
         git merge --abort 2>/dev/null || true
         return 1
     else
         log_warn "No merge signal from resolution agent"
+        _parallel_save_merge_diagnostics "$story" "$branch_name" "0" "$conflict_files" "$result"
         git merge --abort 2>/dev/null || true
         return 1
     fi

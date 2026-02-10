@@ -361,7 +361,7 @@ _handle_failure() {
 # Shared by sequential and parallel paths. Reads from:
 #   _STORY_TIMINGS[], _STORY_OUTCOMES[]
 #   _RALPH_RUN_START_COMMIT, _RALPH_RUN_START_TIME
-#   _PARALLEL_ALL_SUCCESSFUL[], _PARALLEL_ALL_TENTATIVE[], _PARALLEL_ALL_FAILED[] (parallel only)
+#   _PARALLEL_SUCCESSFUL[], _PARALLEL_FAILED[] (parallel only — declared in parallel.sh)
 _run_summary() {
     local mode="${1:-sequential}"   # sequential | parallel
 
@@ -449,10 +449,12 @@ _run_summary() {
         fi
     fi
 
-    # Count merged branches (parallel only)
+    # Count merged branches (parallel only — arrays declared in parallel.sh)
     if [[ "$mode" == "parallel" ]]; then
-        merged_count=${#_PARALLEL_ALL_SUCCESSFUL[@]}
-        merged_count=$((merged_count + ${#_PARALLEL_ALL_TENTATIVE[@]}))
+        # Guard against undeclared array (e.g. in tests that don't source parallel.sh)
+        if declare -p _PARALLEL_SUCCESSFUL &>/dev/null; then
+            merged_count=${#_PARALLEL_SUCCESSFUL[@]}
+        fi
     fi
 
     # ── Learnings ───────────────────────────────────────────────────
