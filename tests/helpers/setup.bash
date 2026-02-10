@@ -52,11 +52,15 @@ scaffold_ralph_project() {
     copy_fixture stories.txt .ralph/stories.txt
     copy_fixture state-empty.json .ralph/state.json
     copy_fixture specs/epic-1/story-1.1-initialize-project.md specs/epic-1/story-1.1-initialize-project.md
+    copy_fixture specs/epic-1/story-1.2-setup-database.md specs/epic-1/story-1.2-setup-database.md
     copy_fixture specs/epic-2/story-2.1-first-parallel.md specs/epic-2/story-2.1-first-parallel.md
     copy_fixture specs/epic-2/story-2.3-with-depends.md specs/epic-2/story-2.3-with-depends.md
 
     # Initialize learnings
     echo '{}' > .ralph/learnings/_index.json
+
+    # Initialize progress.txt
+    touch progress.txt
 
     # Initialize git repo (some tests need git context)
     git init -q .

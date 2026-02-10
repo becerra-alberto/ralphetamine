@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
-# Tier 5 — E2E pipeline tests: parallel batch discovery and execution logic
+# Tier 3 — Component tests: parallel batch discovery and execution logic
+# (reclassified from tier5 — calls internal functions directly, not bin/ralph)
 # Tests batch member discovery, dry-run output, testing specialist trigger,
 # single-story fallback, and max_workers chunking.
 

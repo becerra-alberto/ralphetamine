@@ -277,12 +277,23 @@ else
     fail "ralph verify missing stories present count"
 fi
 
-# Should NOT have warnings about missing stories/specs
-if grep -q '\[WARN\].*missing' "$VERIFY_OUTPUT"; then
-    fail "ralph verify has unexpected missing warnings"
+# Should NOT have warnings about missing stories/specs/orphans
+# Note: hash mismatch warning is expected because provenance_update_prd_frontmatter
+# modifies the PRD after the hash was recorded — that's an intentional trade-off.
+if grep -q '\[WARN\].*missing\|orphan\|not tracked' "$VERIFY_OUTPUT"; then
+    fail "ralph verify has unexpected missing/orphan warnings for clean provenance"
     grep '\[WARN\]' "$VERIFY_OUTPUT" | sed 's/^/    /'
 else
-    pass "ralph verify has no missing-item warnings"
+    pass "ralph verify has no missing/orphan warnings for clean provenance"
+fi
+
+# Exit code should be 0 for clean verification (warnings are non-fatal)
+VERIFY_EXIT=0
+$TIMEOUT_CMD 15 "$RALPH_DIR/bin/ralph" verify > /dev/null 2>&1 || VERIFY_EXIT=$?
+if [[ "$VERIFY_EXIT" -eq 0 ]]; then
+    pass "ralph verify exits 0 for clean provenance"
+else
+    fail "ralph verify exits $VERIFY_EXIT (expected 0) for clean provenance"
 fi
 
 echo ""

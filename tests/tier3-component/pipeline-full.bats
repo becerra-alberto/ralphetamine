@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
-# Tier 5 — E2E pipeline tests: full pipeline flow across all epics
+# Tier 3 — Component tests: full pipeline flow across all epics
+# (reclassified from tier5 — calls _run_sequential directly, not bin/ralph)
 # Tests dry-run ordering, resume from mid-point, prompt injection of
 # learnings and validation_commands, state persistence, and progress logging.
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
-# Tier 5 — E2E pipeline tests: sequential execution path
+# Tier 3 — Component tests: sequential execution path
+# (reclassified from tier5 — calls _run_sequential directly, not bin/ralph)
 # Uses the "Notely" mock PRD to exercise sequential DONE, FAIL→retry→DONE,
 # skip handling, learnings extraction, hooks, and depends_on resolution.
 
