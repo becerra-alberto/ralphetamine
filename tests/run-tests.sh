@@ -17,17 +17,15 @@ case "$TIER" in
     2|tier2) "$BATS" "$SCRIPT_DIR/tier2-filesystem/" ;;
     3|tier3) "$BATS" "$SCRIPT_DIR/tier3-component/" ;;
     4|tier4) "$BATS" "$SCRIPT_DIR/tier4-workflow/" ;;
-    5|tier5) "$BATS" "$SCRIPT_DIR/tier5-e2e/" ;;
-    all)     "$BATS" "$SCRIPT_DIR"/tier{1,2,3,4,5}*/ ;;
+    all)     "$BATS" "$SCRIPT_DIR"/tier{1,2,3,4}*/ ;;
     *)
-        echo "Usage: $0 [1|2|3|4|5|all]"
+        echo "Usage: $0 [1|2|3|4|all]"
         echo ""
         echo "Tiers:"
         echo "  1  Pure unit tests (no filesystem, no externals)"
         echo "  2  Filesystem integration (temp dirs + fixtures)"
         echo "  3  Component tests (mocked externals)"
         echo "  4  Workflow integration (full bin/ralph invocations)"
-        echo "  5  E2E pipeline tests (mock PRD end-to-end)"
         echo "  all  Run all tiers"
         exit 1
         ;;
