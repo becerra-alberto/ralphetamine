@@ -13,7 +13,22 @@ _PARALLEL_PID_DIR=""
 declare -A _PARALLEL_STORY_START
 
 _parallel_cleanup_pid_dir() {
-    [[ -n "$_PARALLEL_PID_DIR" ]] && rm -rf "$_PARALLEL_PID_DIR"
+    [[ -n "$_PARALLEL_PID_DIR" && -d "$_PARALLEL_PID_DIR" ]] || return 0
+
+    # Kill all tracked worker processes before removing PID files.
+    # Without this, Ctrl+C leaves orphaned timeout/claude processes
+    # running (potentially for 30+ minutes) burning API credits.
+    for pid_file in "$_PARALLEL_PID_DIR"/pid_*; do
+        [[ -f "$pid_file" ]] || continue
+        local pid="${pid_file##*pid_}"
+        if kill -0 "$pid" 2>/dev/null; then
+            # Kill the process group rooted at the subshell — this reaches
+            # the timeout command and Claude process beneath it
+            kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+        fi
+    done
+
+    rm -rf "$_PARALLEL_PID_DIR"
 }
 
 # Check if a story branch has new commits relative to a base branch.
@@ -29,6 +44,49 @@ _parallel_has_new_commits() {
     local count
     count=$(git rev-list --count "${base_branch}..${branch_name}" 2>/dev/null) || return 1
     [[ "$count" -gt 0 ]]
+}
+
+# Run required validation commands inside a worktree directory.
+# Returns 0 if all required validations pass (or none configured), 1 otherwise.
+_parallel_validate_worktree() {
+    local story="$1"
+    local worktree_dir="$2"
+
+    local validation_json
+    validation_json=$(config_get_json '.validation.commands') 2>/dev/null || true
+
+    # No validation commands configured — accept tentative success as-is
+    if [[ -z "$validation_json" || "$validation_json" == "null" || "$validation_json" == "[]" ]]; then
+        return 0
+    fi
+
+    local cmd_count
+    cmd_count=$(echo "$validation_json" | jq 'length' 2>/dev/null) || return 0
+    [[ "$cmd_count" -eq 0 ]] && return 0
+
+    log_debug "Validating tentative story $story ($cmd_count commands)"
+
+    local i=0
+    while [[ $i -lt $cmd_count ]]; do
+        local name cmd required
+        name=$(echo "$validation_json" | jq -r ".[$i].name // \"check\"" 2>/dev/null)
+        cmd=$(echo "$validation_json" | jq -r ".[$i].cmd // empty" 2>/dev/null)
+        required=$(echo "$validation_json" | jq -r ".[$i].required // \"true\"" 2>/dev/null)
+
+        i=$((i + 1))
+        [[ -z "$cmd" ]] && continue
+        [[ "$required" != "true" ]] && continue
+
+        # Run validation with a 60-second timeout inside the worktree
+        local timeout_cmd
+        timeout_cmd=$(prereqs_timeout_cmd)
+        if ! ( cd "$worktree_dir" && $timeout_cmd 60 bash -c "$cmd" ) &>/dev/null; then
+            log_warn "Story $story: validation '$name' failed ($cmd)"
+            return 1
+        fi
+    done
+
+    return 0
 }
 
 # Main parallel execution entry point
@@ -154,6 +212,13 @@ parallel_run() {
         # Multiple stories — use worktrees
         _parallel_execute_batch "${batch_stories[@]}" \
             "$timeout_secs" "$verbose" "$max_concurrent" "$stagger_seconds"
+
+        # Retry failed stories sequentially (up to max_retries)
+        local max_retries
+        max_retries=$(config_get '.loop.max_retries' '3')
+        if [[ ${#_PARALLEL_FAILED[@]} -gt 0 && "$max_retries" -gt 0 ]]; then
+            _parallel_retry_failed "$timeout_secs" "$verbose" "$max_retries"
+        fi
 
         # Merge results
         if [[ "$auto_merge" == "true" ]]; then
@@ -369,16 +434,31 @@ _parallel_execute_batch() {
 
         if [[ "$classified" == false ]]; then
             # No DONE signal (timeout, error, or missing signal)
-            # Commit-based fallback: if the branch has new commits, treat as tentative success
+            # Commit-based fallback: if the branch has new commits, validate before accepting
             if _parallel_has_new_commits "$story" "$current_branch"; then
-                log_warn "Story $story: no DONE signal but branch has commits — tentative success"
-                successful+=("$story")
-                _STORY_OUTCOMES["$story"]="tentative"
+                local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
 
-                local title timestamp
-                title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
-                timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
-                echo "[DONE] Story $story - $title - $timestamp (tentative: commits detected)" >> progress.txt 2>/dev/null || true
+                # Run required validation commands in the worktree to catch
+                # incomplete/broken code before merging into main
+                if _parallel_validate_worktree "$story" "$worktree_dir"; then
+                    log_warn "Story $story: no DONE signal but branch has commits and passes validation — tentative success"
+                    successful+=("$story")
+                    _STORY_OUTCOMES["$story"]="tentative"
+
+                    local title timestamp
+                    title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
+                    timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
+                    echo "[DONE] Story $story - $title - $timestamp (tentative: commits detected, validated)" >> progress.txt 2>/dev/null || true
+                else
+                    log_warn "Story $story: has commits but failed validation — treating as failed"
+                    failed+=("$story")
+                    _STORY_OUTCOMES["$story"]="failed"
+
+                    local title timestamp
+                    title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
+                    timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
+                    echo "[FAIL] Story $story - $title - validation_failed - $timestamp" >> progress.txt 2>/dev/null || true
+                fi
             else
                 if [[ $exit_code -eq 124 ]]; then
                     log_warn "Story $story: timed out (no commits)"
@@ -419,6 +499,145 @@ _parallel_execute_batch() {
     _PARALLEL_FAILED+=("${failed[@]}")
 }
 
+# Retry failed stories from a batch sequentially.
+# Re-uses worktree infrastructure: cleans up the failed worktree, creates a
+# fresh one, runs Claude again. On success, moves the story from
+# _PARALLEL_FAILED to _PARALLEL_SUCCESSFUL so the merge phase picks it up.
+_parallel_retry_failed() {
+    local timeout_secs="$1"
+    local verbose="$2"
+    local max_retries="$3"
+
+    local to_retry=("${_PARALLEL_FAILED[@]}")
+    [[ ${#to_retry[@]} -eq 0 ]] && return 0
+
+    log_info "Retrying ${#to_retry[@]} failed stories sequentially (up to $max_retries attempts each)"
+
+    local current_branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    local timeout_cmd wt_timeout_cmd
+    timeout_cmd=$(prereqs_timeout_cmd)
+    wt_timeout_cmd=$(prereqs_timeout_cmd)
+
+    for story in "${to_retry[@]}"; do
+        local attempt=1
+        local recovered=false
+
+        while [[ $attempt -le $max_retries ]]; do
+            log_info "Retry $attempt/$max_retries for story $story"
+
+            # Clean up previous worktree/branch
+            local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
+            local branch_name="ralph/story-${story}"
+            git worktree unlock "$worktree_dir" 2>/dev/null || true
+            git worktree remove "$worktree_dir" --force 2>/dev/null || true
+            rm -rf "$worktree_dir" 2>/dev/null || true
+            git worktree prune 2>/dev/null || true
+            git branch -D "$branch_name" 2>/dev/null || true
+
+            # Create fresh worktree
+            if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
+                log_error "Could not create worktree for retry of story $story"
+                attempt=$((attempt + 1))
+                continue
+            fi
+
+            # Build prompt
+            local spec_path
+            spec_path=$(spec_find "$story") || {
+                log_error "No spec found for story $story on retry"
+                break
+            }
+            local prompt
+            prompt=$(prompt_build "$story" "$spec_path") || {
+                log_error "Could not build prompt for story $story on retry"
+                break
+            }
+
+            local claude_flags=()
+            while IFS= read -r flag; do
+                [[ -n "$flag" ]] && claude_flags+=("$flag")
+            done < <(config_get_claude_flags)
+
+            local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
+            _PARALLEL_STORY_START["$story"]=$(date '+%s')
+
+            # Run synchronously (sequential retry)
+            local exit_code=0
+            (
+                cd "$worktree_dir"
+                $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
+                    < /dev/null 2>&1 | cat > "$output_file"
+            ) || exit_code=$?
+
+            # Record duration
+            local story_end
+            story_end=$(date '+%s')
+            if [[ -n "${_PARALLEL_STORY_START[$story]:-}" ]]; then
+                _STORY_TIMINGS["$story"]=$(( story_end - _PARALLEL_STORY_START[$story] ))
+            fi
+
+            local result=""
+            [[ -f "$output_file" ]] && result=$(cat "$output_file")
+
+            # Check for DONE signal
+            local done_id
+            if [[ $exit_code -eq 0 ]] && done_id=$(signals_parse_done "$result") && [[ "$done_id" == "$story" ]]; then
+                log_success "Story $story: completed on retry $attempt"
+                _STORY_OUTCOMES["$story"]="done"
+                recovered=true
+
+                local title timestamp
+                title=$(stories_get_title "$story" 2>/dev/null || echo "unknown")
+                timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
+                echo "[DONE] Story $story - $title - $timestamp (retry $attempt)" >> progress.txt 2>/dev/null || true
+                break
+            fi
+
+            # Commit fallback
+            if _parallel_has_new_commits "$story" "$current_branch"; then
+                log_warn "Story $story: tentative success on retry $attempt (commits but no DONE)"
+                _STORY_OUTCOMES["$story"]="tentative"
+                recovered=true
+                break
+            fi
+
+            log_warn "Story $story: retry $attempt failed"
+            attempt=$((attempt + 1))
+        done
+
+        if [[ "$recovered" == true ]]; then
+            # Move from failed to successful
+            local new_failed=()
+            for s in "${_PARALLEL_FAILED[@]}"; do
+                [[ "$s" != "$story" ]] && new_failed+=("$s")
+            done
+            _PARALLEL_FAILED=("${new_failed[@]}")
+            _PARALLEL_SUCCESSFUL+=("$story")
+        else
+            log_error "Story $story: exhausted $max_retries retries"
+            # Clean up worktree so it doesn't block next batch
+            local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
+            local branch_name="ralph/story-${story}"
+            git worktree unlock "$worktree_dir" 2>/dev/null || true
+            git worktree remove "$worktree_dir" --force 2>/dev/null || true
+            rm -rf "$worktree_dir" 2>/dev/null || true
+            git branch -D "$branch_name" 2>/dev/null || true
+        fi
+
+        # Extract learnings from last attempt
+        local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
+        if type learnings_extract &>/dev/null && [[ -f "$output_file" ]]; then
+            local result
+            result=$(cat "$output_file" 2>/dev/null) || true
+            [[ -n "$result" ]] && learnings_extract "$result" "$story"
+        fi
+    done
+
+    git worktree prune 2>/dev/null || true
+}
+
 # Merge successful worktree branches back to main
 _parallel_merge_batch() {
     local stories=("$@")
@@ -428,9 +647,18 @@ _parallel_merge_batch() {
     local merge_failures=()
 
     if [[ ${#_PARALLEL_SUCCESSFUL[@]} -gt 0 ]]; then
-        log_info "Merging ${#_PARALLEL_SUCCESSFUL[@]} branches..."
+        # Sort by story ID for deterministic merge order. Without this,
+        # merge order depends on worker completion order, which means
+        # different runs of the same batch can produce different conflict
+        # patterns. Sorting by ID matches the stories.txt queue order.
+        local sorted_successful=()
+        while IFS= read -r sid; do
+            sorted_successful+=("$sid")
+        done < <(printf '%s\n' "${_PARALLEL_SUCCESSFUL[@]}" | sort -t. -k1,1n -k2,2n)
 
-        for story in "${_PARALLEL_SUCCESSFUL[@]}"; do
+        log_info "Merging ${#sorted_successful[@]} branches (sorted by story ID)..."
+
+        for story in "${sorted_successful[@]}"; do
             local branch_name="ralph/story-${story}"
 
             log_debug "Merging $branch_name into $current_branch"
