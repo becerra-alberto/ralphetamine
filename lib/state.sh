@@ -46,6 +46,7 @@ _state_write_empty() {
     "completed_stories": [],
     "absorbed_stories": {},
     "merged_stories": [],
+    "decomposed_stories": {},
     "current_story": null,
     "retry_count": 0
 }

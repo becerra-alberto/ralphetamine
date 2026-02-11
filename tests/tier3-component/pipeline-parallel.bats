@@ -55,7 +55,7 @@ teardown() {
 
 # ── Test 3: Parallel dry-run ─────────────────────────────────────────────────
 
-@test "Parallel dry-run lists batch contents" {
+@test "Pipeline parallel dry-run lists batch contents" {
     run parallel_run 300 false true
     assert_success
     assert_output --partial "[DRY RUN]"

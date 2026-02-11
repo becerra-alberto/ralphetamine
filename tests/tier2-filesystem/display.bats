@@ -109,7 +109,6 @@ teardown() {
     # Since display_refresh_from_state calls display_refresh which
     # tries to render, we just verify it doesn't error out
     RALPH_DASHBOARD="true"
-    _DISPLAY_INITIALIZED=false  # Force Level 1 fallback
     run display_refresh_from_state
     assert_success
 }
