@@ -290,6 +290,20 @@ After validation passes, record the PRD-to-specs conversion for traceability. Th
 
 **Important:** Provenance recording is non-blocking. If any step fails, log a warning and continue — the specs and stories.txt are already valid at this point.
 
+### 9. Commit Specs to Git
+
+Ralph uses git worktrees for parallel execution — uncommitted files won't be visible to workers. Commit all generated artifacts so `ralph run` can proceed immediately.
+
+1. Stage the generated files:
+   - `specs/` directory (all new/modified spec files)
+   - `.ralph/stories.txt`
+   - `.ralph/provenance.json` (if it exists)
+   - The PRD file (if its frontmatter was updated in Step 8)
+2. Create a commit with message: `ralph: add specs for <prd-name> (<N> stories across <M> epics)`
+3. Report: "Committed specs to git — ready for `ralph run`"
+
+If the commit fails (e.g., no git repo, nothing to commit), warn but don't fail — the specs are still valid on disk.
+
 ---
 
 ## Story Sizing Rules
