@@ -266,7 +266,7 @@ hitl_collect_run_data() {
 
     # Sort stories by ID (numeric sort on epic.story)
     local sorted_stories
-    sorted_stories=$(printf '%s\n' "${completed_stories[@]}" | sort -t. -k1,1n -k2,2n)
+    sorted_stories=$(printf '%s\n' "${completed_stories[@]}" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
 
     local current_epic=""
     local json_parts=()

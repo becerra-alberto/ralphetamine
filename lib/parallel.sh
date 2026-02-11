@@ -674,6 +674,29 @@ _parallel_retry_failed() {
             _PARALLEL_SUCCESSFUL+=("$story")
         else
             log_error "Story $story: exhausted $max_retries retries"
+
+            # Attempt automatic decomposition before giving up
+            if type decompose_story &>/dev/null; then
+                local decomp_enabled
+                decomp_enabled=$(config_get '.decomposition.enabled' 'true')
+                if [[ "$decomp_enabled" == "true" ]]; then
+                    local spec_path_decomp
+                    spec_path_decomp=$(spec_find "$story" 2>/dev/null) || true
+                    if [[ -n "$spec_path_decomp" ]]; then
+                        log_info "Attempting decomposition of exhausted story $story"
+                        if decompose_story "$story" "$spec_path_decomp" "exhausted retries"; then
+                            log_success "Story $story decomposed — sub-stories queued for next batch"
+                            # Remove from failed list (parent is now "completed" via decomposition)
+                            local new_failed=()
+                            for s in "${_PARALLEL_FAILED[@]}"; do
+                                [[ "$s" != "$story" ]] && new_failed+=("$s")
+                            done
+                            _PARALLEL_FAILED=("${new_failed[@]}")
+                        fi
+                    fi
+                fi
+            fi
+
             # Clean up worktree so it doesn't block next batch
             local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
             local branch_name="ralph/story-${story}"
@@ -706,7 +729,7 @@ _parallel_merge_batch() {
         local sorted_successful=()
         while IFS= read -r sid; do
             sorted_successful+=("$sid")
-        done < <(printf '%s\n' "${_PARALLEL_SUCCESSFUL[@]}" | sort -t. -k1,1n -k2,2n)
+        done < <(printf '%s\n' "${_PARALLEL_SUCCESSFUL[@]}" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
 
         log_info "Merging ${#sorted_successful[@]} branches (sorted by story ID)..."
 

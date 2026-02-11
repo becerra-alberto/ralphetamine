@@ -56,7 +56,7 @@ EOF
 _state_init_from_progress() {
     local completed=()
     while IFS= read -r line; do
-        if [[ "$line" =~ ^\[DONE\]\ Story\ ([0-9]+\.[0-9]+) ]]; then
+        if [[ "$line" =~ ^\[DONE\]\ Story\ ([0-9]+\.[0-9]+(\.[0-9]+)*) ]]; then
             local story="${BASH_REMATCH[1]}"
             local found=false
             for s in "${completed[@]}"; do
@@ -193,12 +193,53 @@ _state_ensure_schema() {
     if ! jq -e '.merged_stories' "$RALPH_STATE_FILE" &>/dev/null; then
         needs_update=true
     fi
+    if ! jq -e '.decomposed_stories' "$RALPH_STATE_FILE" &>/dev/null; then
+        needs_update=true
+    fi
 
     if [[ "$needs_update" == true ]]; then
         _state_safe_write '
             .absorbed_stories //= {}
             | .merged_stories //= []
+            | .decomposed_stories //= {}
         ' || return 1
-        log_debug "State schema upgraded with absorbed/merged fields"
+        log_debug "State schema upgraded with absorbed/merged/decomposed fields"
     fi
+}
+
+# Mark a story as decomposed into children.
+# The parent is added to completed_stories (it's "done" by decomposition).
+# Children IDs are recorded for provenance.
+state_mark_decomposed() {
+    local story="$1"
+    shift
+    local children=("$@")
+
+    local children_json
+    children_json=$(printf '%s\n' "${children[@]}" | jq -R . | jq -s .)
+
+    _state_safe_write '
+        .decomposed_stories[$story] = $children
+        | .completed_stories += [$story]
+        | .completed_stories |= unique
+        | .current_story = null
+        | .retry_count = 0
+    ' --arg story "$story" --argjson children "$children_json" || return 1
+    log_info "Story $story decomposed into: ${children[*]}"
+}
+
+# Check if a story has been decomposed
+state_is_decomposed() {
+    local story="$1"
+    [[ ! -f "$RALPH_STATE_FILE" ]] && return 1
+    local children
+    children=$(jq -r --arg s "$story" '.decomposed_stories[$s] // empty' "$RALPH_STATE_FILE" 2>/dev/null)
+    [[ -n "$children" && "$children" != "null" ]]
+}
+
+# Get the children of a decomposed story
+state_get_decomposition_children() {
+    local story="$1"
+    [[ ! -f "$RALPH_STATE_FILE" ]] && return 1
+    jq -r --arg s "$story" '.decomposed_stories[$s][]? // empty' "$RALPH_STATE_FILE" 2>/dev/null
 }

@@ -57,6 +57,7 @@ usage() {
     echo "  stories               List all stories and their status"
     echo "  verify                Verify PRD-to-spec provenance integrity"
     echo "  hitl [generate|feedback] Generate HITL review page or feedback PRD"
+    echo "  decompose <story-id>  Manually decompose a story into sub-stories"
     echo "  learnings [topic]     Show extracted learnings"
     echo "  reset                 Reset state (completed stories, retries)"
     echo ""
@@ -138,6 +139,7 @@ cmd_run() {
     [[ -f "${RALPH_DIR}/lib/display.sh" ]] && source "${RALPH_DIR}/lib/display.sh"
     [[ -f "${RALPH_DIR}/lib/hitl.sh" ]] && source "${RALPH_DIR}/lib/hitl.sh"
     [[ -f "${RALPH_DIR}/lib/metrics.sh" ]] && source "${RALPH_DIR}/lib/metrics.sh"
+    [[ -f "${RALPH_DIR}/lib/decompose.sh" ]] && source "${RALPH_DIR}/lib/decompose.sh"
 
     # Check prerequisites
     prereqs_check || exit 1
@@ -394,6 +396,41 @@ cmd_hitl() {
     esac
 }
 
+# ── Subcommand: decompose ──────────────────────────────────────────────────
+cmd_decompose() {
+    source "${RALPH_DIR}/lib/config.sh"
+    source "${RALPH_DIR}/lib/state.sh"
+    source "${RALPH_DIR}/lib/stories.sh"
+    source "${RALPH_DIR}/lib/specs.sh"
+    source "${RALPH_DIR}/lib/prompt.sh"
+    source "${RALPH_DIR}/lib/signals.sh"
+    source "${RALPH_DIR}/lib/decompose.sh"
+    [[ -f "${RALPH_DIR}/lib/learnings.sh" ]] && source "${RALPH_DIR}/lib/learnings.sh"
+
+    prereqs_check || exit 1
+    prereqs_check_project || exit 1
+    config_load || exit 1
+    state_init
+
+    local story_id="${1:?Usage: ralph decompose <story-id>}"
+
+    # Find spec file
+    local spec_path
+    if ! spec_path=$(spec_find "$story_id"); then
+        log_error "Could not find spec for story $story_id"
+        exit 1
+    fi
+
+    log_info "Manual decomposition of story $story_id"
+    if decompose_story "$story_id" "$spec_path" "manual"; then
+        log_success "Decomposition complete. Sub-stories added to stories.txt."
+        log_info "Run 'ralph stories' to see the updated queue."
+    else
+        log_error "Decomposition failed for story $story_id"
+        exit 1
+    fi
+}
+
 # ── Subcommand: reconcile ──────────────────────────────────────────────────
 cmd_reconcile() {
     source "${RALPH_DIR}/lib/config.sh"
@@ -431,6 +468,7 @@ cmd_verify() {
 case "${1:-}" in
     init)      shift; cmd_init "$@" ;;
     run)       shift; cmd_run "$@" ;;
+    decompose) shift; cmd_decompose "$@" ;;
     hitl)      shift; cmd_hitl "$@" ;;
     verify)    shift; cmd_verify "$@" ;;
     reconcile) shift; cmd_reconcile "$@" ;;

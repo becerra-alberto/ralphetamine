@@ -538,6 +538,20 @@ _handle_failure() {
     fi
 
     if [[ $retry_count -ge $max_retries ]]; then
+        # Attempt automatic decomposition before giving up
+        if type decompose_story &>/dev/null; then
+            local decomp_enabled
+            decomp_enabled=$(config_get '.decomposition.enabled' 'true')
+            if [[ "$decomp_enabled" == "true" ]]; then
+                log_info "Max retries hit — attempting automatic decomposition of story $story"
+                if decompose_story "$story" "$spec_path" "$reason"; then
+                    log_success "Story $story decomposed into sub-stories — continuing loop"
+                    return 0  # continue loop — stories_find_next picks up sub-stories
+                fi
+                log_warn "Decomposition failed — falling through to halt"
+            fi
+        fi
+
         box_header "MAX RETRIES EXCEEDED"
         echo "  Story $story failed $max_retries times."
         echo "  Human intervention required."
@@ -821,7 +835,7 @@ _run_summary() {
         echo -e "  ${CLR_DIM}Token Usage${CLR_RESET}"
         printf "    ${CLR_DIM}%-9s %10s %10s %8s %5s${CLR_RESET}\n" \
             "Story" "Tokens In" "Tokens Out" "Cost" "Turns"
-        for sid in $(echo "${!_STORY_TOKENS_IN[@]}" | tr ' ' '\n' | sort -t. -k1,1n -k2,2n); do
+        for sid in $(echo "${!_STORY_TOKENS_IN[@]}" | tr ' ' '\n' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n); do
             local tin="${_STORY_TOKENS_IN[$sid]:-0}"
             local tout="${_STORY_TOKENS_OUT[$sid]:-0}"
             local cost="${_STORY_COST[$sid]:-0}"
