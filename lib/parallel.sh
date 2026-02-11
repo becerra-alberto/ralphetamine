@@ -151,7 +151,13 @@ parallel_run() {
     done < <(stories_get_unbatched)
 
     if [[ ${#_unbatched[@]} -gt 0 ]]; then
+        phase_header "Unbatched Stories (sequential)"
         log_info "Running ${#_unbatched[@]} unbatched foundation stories sequentially"
+        for story in "${_unbatched[@]}"; do
+            local title
+            title=$(stories_get_title "$story" 2>/dev/null || echo "")
+            log_info "  $story | $title"
+        done
         for story in "${_unbatched[@]}"; do
             if [[ "$dry_run" == true ]]; then
                 echo "[DRY RUN] Unbatched story: $story"
@@ -184,7 +190,13 @@ parallel_run() {
 
         # Batch 0 = sequential foundation — always run one at a time
         if [[ "$current_batch" -eq 0 ]]; then
+            phase_header "Batch 0: Foundation (sequential)"
             log_info "Batch 0: running ${#batch_stories[@]} stories sequentially (foundation)"
+            for story in "${batch_stories[@]}"; do
+                local title
+                title=$(stories_get_title "$story" 2>/dev/null || echo "")
+                log_info "  $story | $title"
+            done
             for story in "${batch_stories[@]}"; do
                 if [[ "$dry_run" == true ]]; then
                     echo "[DRY RUN] Batch 0 story: $story"
@@ -196,7 +208,13 @@ parallel_run() {
             continue
         fi
 
+        phase_header "Batch $current_batch: Parallel Execution"
         log_info "Batch $current_batch: ${#batch_stories[@]} stories"
+        for story in "${batch_stories[@]}"; do
+            local title
+            title=$(stories_get_title "$story" 2>/dev/null || echo "")
+            log_info "  $story | $title"
+        done
 
         if [[ "$dry_run" == true ]]; then
             echo "[DRY RUN] Batch $current_batch would execute:"
@@ -209,7 +227,9 @@ parallel_run() {
 
         # Single story in batch — run in-place (no worktree needed)
         if [[ ${#batch_stories[@]} -eq 1 ]]; then
-            log_info "Single story in batch, running in-place"
+            local title
+            title=$(stories_get_title "${batch_stories[0]}" 2>/dev/null || echo "")
+            log_info "Single story in batch, running in-place: ${batch_stories[0]} | $title"
             # Stop parallel dashboard timer to prevent collision with sequential dashboard
             if type display_stop_live_timer &>/dev/null; then
                 display_stop_live_timer
@@ -401,22 +421,27 @@ _parallel_execute_batch() {
         display_start_live_timer
     fi
 
-    # Wait for all to complete
+    # Wait for all to complete, collecting exit codes
     log_info "Waiting for ${#pids[@]} parallel Claude instances..."
+
+    declare -A _pid_exit_codes
+    for pid in "${pids[@]}"; do
+        local ec=0
+        wait "$pid" || ec=$?
+        _pid_exit_codes["$pid"]=$ec
+    done
+
+    # Stop live dashboard timer before log-heavy result processing.
+    # This prevents the timer subshell from racing with log output.
+    if type display_stop_live_timer &>/dev/null; then
+        display_stop_live_timer
+    fi
 
     local successful=()
     local failed=()
 
     for pid in "${pids[@]}"; do
-        local exit_code=0
-        wait "$pid" || exit_code=$?
-
-        running=$((running - 1))
-        # Dashboard: update active worker count
-        if type display_update_workers &>/dev/null; then
-            display_update_workers "$running" "$max_concurrent"
-            display_refresh
-        fi
+        local exit_code="${_pid_exit_codes[$pid]:-0}"
 
         local story
         story=$(cat "${pid_dir}/pid_${pid}" 2>/dev/null)
@@ -519,11 +544,6 @@ _parallel_execute_batch() {
     log_info "Batch results: ${#successful[@]} succeeded, ${#failed[@]} failed"
     [[ ${#failed[@]} -gt 0 ]] && log_warn "Failed stories: ${failed[*]}"
 
-    # Stop live dashboard timer
-    if type display_stop_live_timer &>/dev/null; then
-        display_stop_live_timer
-    fi
-
     # Store results in module-scope arrays for merge step
     _PARALLEL_SUCCESSFUL=("${successful[@]}")
     _PARALLEL_FAILED+=("${failed[@]}")
@@ -541,6 +561,7 @@ _parallel_retry_failed() {
     local to_retry=("${_PARALLEL_FAILED[@]}")
     [[ ${#to_retry[@]} -eq 0 ]] && return 0
 
+    phase_header "Retry Phase"
     log_info "Retrying ${#to_retry[@]} failed stories sequentially (up to $max_retries attempts each)"
 
     local current_branch
@@ -567,6 +588,7 @@ _parallel_retry_failed() {
             git branch -D "$branch_name" 2>/dev/null || true
 
             # Create fresh worktree
+            log_info "Creating retry worktree: $worktree_dir (branch: $branch_name)"
             if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
                 log_error "Could not create worktree for retry of story $story"
                 attempt=$((attempt + 1))
@@ -678,6 +700,8 @@ _parallel_merge_batch() {
     local merge_failures=()
 
     if [[ ${#_PARALLEL_SUCCESSFUL[@]} -gt 0 ]]; then
+        phase_header "Merge Phase"
+
         # Sort by story ID for deterministic merge order. Without this,
         # merge order depends on worker completion order, which means
         # different runs of the same batch can produce different conflict

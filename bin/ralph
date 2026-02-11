@@ -69,7 +69,8 @@ usage() {
     echo "  -t, --timeout SECS    Timeout per iteration (default: 1800)"
     echo "  --parallel            Enable parallel execution"
     echo "  --no-dashboard        Disable live dashboard panel"
-    echo "  --no-tmux             Don't auto-wrap in tmux"
+    echo "  --tmux                Wrap in tmux session"
+    echo "  --no-tmux             (no-op, kept for backwards compatibility)"
     echo "  --no-interactive      Skip interactive startup prompts"
     echo ""
     echo "Stats Options:"
@@ -151,7 +152,7 @@ cmd_run() {
 
     # Parse run-specific flags
     local iterations verbose dry_run specific_story resume_from timeout_secs
-    local use_parallel=false no_tmux=false no_interactive=false no_dashboard=false
+    local use_parallel=false use_tmux=false no_interactive=false no_dashboard=false
 
     iterations=$(config_get '.loop.max_iterations' '0')
     timeout_secs=$(config_get '.loop.timeout_seconds' '1800')
@@ -170,7 +171,8 @@ cmd_run() {
             -t|--timeout)      timeout_secs="$2"; shift 2 ;;
             --parallel)        use_parallel=true; shift ;;
             --no-dashboard)    no_dashboard=true; shift ;;
-            --no-tmux)         no_tmux=true; shift ;;
+            --tmux)            use_tmux=true; shift ;;
+            --no-tmux)         shift ;;  # backwards compat (tmux already off by default)
             --no-interactive)  no_interactive=true; shift ;;
             *) log_error "Unknown option: $1"; exit 1 ;;
         esac
@@ -178,8 +180,8 @@ cmd_run() {
 
     export RALPH_VERBOSE="$verbose"
 
-    # Auto tmux — must happen before interactive prompt so user is only prompted once
-    if [[ "$no_tmux" == false ]]; then
+    # Tmux wrapper (opt-in) — must happen before interactive prompt so user is only prompted once
+    if [[ "$use_tmux" == true ]]; then
         tmux_ensure run "${original_args[@]+"${original_args[@]}"}"
     fi
 

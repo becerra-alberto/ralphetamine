@@ -143,6 +143,18 @@ divider() {
     echo "────────────────────────────────────────────────────────────────────"
 }
 
+# Phase header for parallel execution — visual divider with title
+# Usage: phase_header "Batch 1: Parallel Execution"
+phase_header() {
+    local title="$1"
+    local width=68
+    local pad=$(( width - ${#title} - 4 ))
+    [[ "$pad" -lt 2 ]] && pad=2
+    printf '\n── %s ' "$title"
+    printf '─%.0s' $(seq 1 "$pad")
+    printf '\n\n'
+}
+
 # ── Progress bar ─────────────────────────────────────────────────────
 # Renders a progress bar string: [████████░░░░] 5/12
 # Usage: ui_progress_bar <completed> <total> [width]

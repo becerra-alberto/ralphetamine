@@ -54,9 +54,23 @@ display_init() {
     # The buffer prevents log output from bleeding into the panel.
     printf '\033[1;%dr' "$((_DISPLAY_PANEL_ROW - 2))"
 
+    # Handle terminal resize — recalculate panel position
+    trap '_display_handle_resize' WINCH
+
     # Register cleanup to restore full scroll region on exit
     if type ralph_on_exit &>/dev/null; then
         ralph_on_exit _display_cleanup
+    fi
+}
+
+# Recalculate panel position on terminal resize
+_display_handle_resize() {
+    if [[ "$_DISPLAY_INITIALIZED" == true ]]; then
+        local rows
+        rows=$(tput lines 2>/dev/null) || rows=24
+        _DISPLAY_PANEL_ROW=$((rows - _DISPLAY_PANEL_LINES))
+        printf '\033[1;%dr' "$((_DISPLAY_PANEL_ROW - 2))"
+        display_refresh
     fi
 }
 
@@ -378,7 +392,7 @@ display_start_live_timer() {
         trap 'exit 0' TERM INT
         while true; do
             sleep 1
-            _display_render_panel 2>/dev/null || true
+            display_refresh_from_state 2>/dev/null || true
         done
     ) &
     _DISPLAY_TIMER_PID=$!
