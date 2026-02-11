@@ -133,6 +133,16 @@ parallel_run() {
         display_update_workers 0 "$max_concurrent"
     fi
 
+    # Initialize dashboard (sets RALPH_START_TIME, scroll region, _DISPLAY_INITIALIZED)
+    if type display_init &>/dev/null; then
+        display_init
+        local done_count
+        done_count=$(stories_count_completed)
+        display_update_stories "$total_stories" "$done_count"
+        display_update_retry 0 "$(config_get '.loop.max_retries' '3')"
+        display_refresh
+    fi
+
     # Run any unbatched stories (no [batch:N] annotation) sequentially first
     local _unbatched=()
     while IFS= read -r sid; do
@@ -223,6 +233,14 @@ parallel_run() {
         # Merge results
         if [[ "$auto_merge" == "true" ]]; then
             _parallel_merge_batch "${batch_stories[@]}"
+
+            # Dashboard: refresh story count after merge
+            if type display_update_stories &>/dev/null; then
+                local done_count
+                done_count=$(stories_count_completed)
+                display_update_stories "$total_stories" "$done_count"
+                display_refresh
+            fi
         else
             log_info "Auto-merge disabled. Worktrees left intact for manual review."
             # Mark successful stories as done — no merge phase, so persist state now
@@ -487,6 +505,13 @@ _parallel_execute_batch() {
         # Extract learnings regardless
         if type learnings_extract &>/dev/null && [[ -n "$result" ]]; then
             learnings_extract "$result" "$story"
+        fi
+
+        # Dashboard: update last-done story and learnings count
+        if type display_update_last_done &>/dev/null; then
+            display_update_last_done "$story"
+            display_update_learnings "$(_display_count_learnings 2>/dev/null || echo 0)"
+            display_refresh
         fi
     done
 
