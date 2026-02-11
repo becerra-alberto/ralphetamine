@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Ralph v2 — Parse structured <ralph> tags from Claude output
+# Story IDs are hierarchical: X.X, X.X.X, X.X.X.X, etc.
+
+# Shared story ID pattern for grep -oE (ERE)
+_RALPH_STORY_ID_RE='[0-9]+\.[0-9]+(\.[0-9]+)*'
 
 # Parse DONE signal: <ralph>DONE X.X</ralph>
 # Scans entire output and returns the LAST match (authoritative signal).
@@ -11,7 +15,7 @@ signals_parse_done() {
     local match
     while IFS= read -r match; do
         [[ -n "$match" ]] && last_id="$match"
-    done < <(echo "$output" | grep -oE '<ralph>DONE[[:space:]]+[0-9]+\.[0-9]+</ralph>' \
+    done < <(echo "$output" | grep -oE "<ralph>DONE[[:space:]]+${_RALPH_STORY_ID_RE}</ralph>" \
         | sed 's/<ralph>DONE[[:space:]]*//' | sed 's/<\/ralph>//')
 
     if [[ -n "$last_id" ]]; then
@@ -22,8 +26,8 @@ signals_parse_done() {
     # Legacy fallback: [DONE] Story X.X (last match)
     while IFS= read -r match; do
         [[ -n "$match" ]] && last_id="$match"
-    done < <(echo "$output" | grep -oE '\[DONE\][[:space:]]*Story[[:space:]]+[0-9]+\.[0-9]+' \
-        | grep -oE '[0-9]+\.[0-9]+')
+    done < <(echo "$output" | grep -oE "\[DONE\][[:space:]]*Story[[:space:]]+${_RALPH_STORY_ID_RE}" \
+        | grep -oE "${_RALPH_STORY_ID_RE}")
 
     if [[ -n "$last_id" ]]; then
         echo "$last_id"
@@ -45,12 +49,12 @@ signals_parse_fail() {
     while IFS= read -r match; do
         [[ -z "$match" ]] && continue
         # Extract ID and reason from the matched tag
-        if [[ "$match" =~ FAIL[[:space:]]+([0-9]+\.[0-9]+):[[:space:]]*(.*)\</ralph\> ]]; then
-            local fail_reason="${BASH_REMATCH[2]}"
+        if [[ "$match" =~ FAIL[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)*):[[:space:]]*(.*)\</ralph\> ]]; then
+            local fail_reason="${BASH_REMATCH[3]}"
             fail_reason="${fail_reason//|/-}"
             last_result="${BASH_REMATCH[1]}|${fail_reason}"
         fi
-    done < <(echo "$output" | grep -oE '<ralph>FAIL[[:space:]]+[0-9]+\.[0-9]+:[[:space:]]*[^<]+</ralph>')
+    done < <(echo "$output" | grep -oE "<ralph>FAIL[[:space:]]+${_RALPH_STORY_ID_RE}:[[:space:]]*[^<]+</ralph>")
 
     if [[ -n "$last_result" ]]; then
         echo "$last_result"
@@ -60,12 +64,12 @@ signals_parse_fail() {
     # Legacy fallback: [FAIL] Story X.X - reason (last match)
     while IFS= read -r match; do
         [[ -z "$match" ]] && continue
-        if [[ "$match" =~ \[FAIL\][[:space:]]*Story[[:space:]]+([0-9]+\.[0-9]+)[[:space:]]*-[[:space:]]*(.*) ]]; then
-            local fail_reason="${BASH_REMATCH[2]}"
+        if [[ "$match" =~ \[FAIL\][[:space:]]*Story[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)*)[[:space:]]*-[[:space:]]*(.*) ]]; then
+            local fail_reason="${BASH_REMATCH[3]}"
             fail_reason="${fail_reason//|/-}"
             last_result="${BASH_REMATCH[1]}|${fail_reason}"
         fi
-    done < <(echo "$output" | grep -oE '\[FAIL\][[:space:]]*Story[[:space:]]+[0-9]+\.[0-9]+ - .*')
+    done < <(echo "$output" | grep -oE "\[FAIL\][[:space:]]*Story[[:space:]]+${_RALPH_STORY_ID_RE} - .*")
 
     if [[ -n "$last_result" ]]; then
         echo "$last_result"
@@ -96,8 +100,8 @@ signals_parse_learnings() {
 signals_parse_test_review_done() {
     local output="$1"
 
-    if [[ "$output" =~ \<ralph\>TEST_REVIEW_DONE[[:space:]]+([0-9]+\.[0-9]+):[[:space:]]*([^\<]+)\</ralph\> ]]; then
-        echo "${BASH_REMATCH[1]}|${BASH_REMATCH[2]}"
+    if [[ "$output" =~ \<ralph\>TEST_REVIEW_DONE[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)*):[[:space:]]*([^\<]+)\</ralph\> ]]; then
+        echo "${BASH_REMATCH[1]}|${BASH_REMATCH[3]}"
         return 0
     fi
 
@@ -126,6 +130,82 @@ signals_parse_merge_fail() {
     fi
 
     return 1
+}
+
+# Parse TIMEOUT_POSTMORTEM_DONE signal: <ralph>TIMEOUT_POSTMORTEM_DONE X.X</ralph>
+signals_parse_timeout_postmortem_done() {
+    local output="$1"
+
+    if [[ "$output" =~ \<ralph\>TIMEOUT_POSTMORTEM_DONE[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)*)\</ralph\> ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+
+    return 1
+}
+
+# Parse DECOMPOSE_DONE signal: <ralph>DECOMPOSE_DONE X.X: N sub-stories</ralph>
+signals_parse_decompose_done() {
+    local output="$1"
+
+    if [[ "$output" =~ \<ralph\>DECOMPOSE_DONE[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)*):[[:space:]]*([^\<]+)\</ralph\> ]]; then
+        echo "${BASH_REMATCH[1]}|${BASH_REMATCH[3]}"
+        return 0
+    fi
+
+    return 1
+}
+
+# Parse DECOMPOSE_FAIL signal: <ralph>DECOMPOSE_FAIL X.X: reason</ralph>
+signals_parse_decompose_fail() {
+    local output="$1"
+
+    if [[ "$output" =~ \<ralph\>DECOMPOSE_FAIL[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)*):[[:space:]]*([^\<]+)\</ralph\> ]]; then
+        echo "${BASH_REMATCH[1]}|${BASH_REMATCH[3]}"
+        return 0
+    fi
+
+    return 1
+}
+
+# Parse SUBSTORY blocks from decomposition output
+# Each block: <ralph>SUBSTORY_START X.X.X</ralph> ... <ralph>SUBSTORY_END X.X.X</ralph>
+# Returns blocks on stdout, separated by a delimiter line.
+signals_parse_substories() {
+    local output="$1"
+    local in_block=false
+    local current_id=""
+    local block_content=""
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ \<ralph\>SUBSTORY_START[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)*)\</ralph\> ]]; then
+            in_block=true
+            current_id="${BASH_REMATCH[1]}"
+            block_content=""
+            continue
+        fi
+
+        if [[ "$line" =~ \<ralph\>SUBSTORY_END[[:space:]]+([0-9]+\.[0-9]+(\.[0-9]+)*)\</ralph\> ]]; then
+            if [[ "$in_block" == true && "${BASH_REMATCH[1]}" == "$current_id" ]]; then
+                echo "===SUBSTORY:${current_id}==="
+                echo "$block_content"
+                echo "===END_SUBSTORY==="
+            fi
+            in_block=false
+            current_id=""
+            block_content=""
+            continue
+        fi
+
+        if [[ "$in_block" == true ]]; then
+            if [[ -n "$block_content" ]]; then
+                block_content="${block_content}
+${line}"
+            else
+                block_content="$line"
+            fi
+        fi
+    done <<< "$output"
 }
 
 # Check if output contains any completion signal (DONE or FAIL)

@@ -44,6 +44,16 @@ _CONFIG_DEFAULTS='{
         "merge_review_timeout": 900,
         "stagger_seconds": 3
     },
+    "postmortem": {
+        "enabled": true,
+        "window_seconds": 300,
+        "max_output_chars": 50000
+    },
+    "decomposition": {
+        "enabled": true,
+        "max_depth": 2,
+        "timeout_seconds": 600
+    },
     "caffeine": false,
     "hooks": {
         "pre_iteration": "",
