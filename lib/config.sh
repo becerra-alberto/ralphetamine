@@ -22,7 +22,7 @@ _CONFIG_DEFAULTS='{
         "blocked_commands": []
     },
     "claude": {
-        "flags": ["--print", "--dangerously-skip-permissions"]
+        "flags": ["--print", "--dangerously-skip-permissions", "--output-format", "json"]
     },
     "commit": {
         "format": "feat(story-{{id}}): {{title}}",

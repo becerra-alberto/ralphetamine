@@ -53,6 +53,7 @@ usage() {
     echo "  run [options]         Run the implementation loop"
     echo "  reconcile [--apply]   Find/merge orphaned story branches"
     echo "  status                Show current progress"
+    echo "  stats [options]       Show run statistics and token usage"
     echo "  stories               List all stories and their status"
     echo "  verify                Verify PRD-to-spec provenance integrity"
     echo "  hitl [generate|feedback] Generate HITL review page or feedback PRD"
@@ -71,6 +72,10 @@ usage() {
     echo "  --no-tmux             Don't auto-wrap in tmux"
     echo "  --no-interactive      Skip interactive startup prompts"
     echo ""
+    echo "Stats Options:"
+    echo "  --last N              Show last N runs"
+    echo "  --story ID            Show stats for a specific story across runs"
+    echo ""
     echo "Examples:"
     echo "  ralph init"
     echo "  ralph run"
@@ -78,6 +83,9 @@ usage() {
     echo "  ralph run -n 5 -v"
     echo "  ralph run --parallel"
     echo "  ralph status"
+    echo "  ralph stats"
+    echo "  ralph stats --last 3"
+    echo "  ralph stats --story 29.1"
     exit 0
 }
 
@@ -128,6 +136,7 @@ cmd_run() {
     [[ -f "${RALPH_DIR}/lib/interactive.sh" ]] && source "${RALPH_DIR}/lib/interactive.sh"
     [[ -f "${RALPH_DIR}/lib/display.sh" ]] && source "${RALPH_DIR}/lib/display.sh"
     [[ -f "${RALPH_DIR}/lib/hitl.sh" ]] && source "${RALPH_DIR}/lib/hitl.sh"
+    [[ -f "${RALPH_DIR}/lib/metrics.sh" ]] && source "${RALPH_DIR}/lib/metrics.sh"
 
     # Check prerequisites
     prereqs_check || exit 1
@@ -256,6 +265,31 @@ cmd_status() {
         log_success "All stories complete!"
     fi
     echo ""
+}
+
+# ── Subcommand: stats ──────────────────────────────────────────────────────
+cmd_stats() {
+    source "${RALPH_DIR}/lib/config.sh"
+    source "${RALPH_DIR}/lib/metrics.sh"
+
+    prereqs_check_project || exit 1
+
+    local last_n=0
+    local story_id=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --last)     last_n="$2"; shift 2 ;;
+            --story)    story_id="$2"; shift 2 ;;
+            *) log_error "Unknown option: $1"; exit 1 ;;
+        esac
+    done
+
+    if [[ -n "$story_id" ]]; then
+        metrics_show_story "$story_id"
+    else
+        metrics_show "$last_n"
+    fi
 }
 
 # ── Subcommand: stories ────────────────────────────────────────────────────
@@ -399,6 +433,7 @@ case "${1:-}" in
     verify)    shift; cmd_verify "$@" ;;
     reconcile) shift; cmd_reconcile "$@" ;;
     status)    shift; cmd_status "$@" ;;
+    stats)     shift; cmd_stats "$@" ;;
     stories)   shift; cmd_stories "$@" ;;
     learnings) shift; cmd_learnings "$@" ;;
     reset)     shift; cmd_reset "$@" ;;

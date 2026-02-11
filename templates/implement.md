@@ -43,6 +43,7 @@ When this story involves independent work streams (e.g., separate components, te
 - If tests fail, fix them before committing
 - YOU MUST USE TOOLS (Read, Write, Edit, Bash) to accomplish this task
 - Do not just respond with text - you must take ACTION using tools
+- After completing implementation, reflect and emit at least one <ralph>LEARN: <insight></ralph> tag about patterns, gotchas, or techniques discovered during this story
 
 {{#if LEARNINGS}}
 ## LEARNINGS FROM PREVIOUS STORIES

@@ -76,13 +76,20 @@ signals_parse_fail() {
 }
 
 # Parse LEARN signals: <ralph>LEARN: text</ralph>
-# Returns each learning on a separate line
+# Returns each learning on a separate line.
+# Handles multi-line LEARN tags by collapsing newlines before matching.
 signals_parse_learnings() {
     local output="$1"
 
-    echo "$output" | grep -oE '<ralph>LEARN:[[:space:]]*[^<]+</ralph>' | \
+    # Use bash ANSI-C quoting ($'\x1f') to create the actual unit separator byte.
+    # BSD tr on macOS doesn't support \xNN hex escapes — it would interpret
+    # '\x1f' as the literal characters \, x, 1, f, eating 'f' from output.
+    local US=$'\x1f'
+    echo "$output" | tr '\n' "$US" | \
+        grep -oE '<ralph>LEARN:[[:space:]]*[^<]+</ralph>' | \
         sed 's/<ralph>LEARN:[[:space:]]*//' | \
-        sed 's/<\/ralph>//' || true
+        sed 's/<\/ralph>//' | \
+        tr "$US" '\n' || true
 }
 
 # Parse TEST_REVIEW_DONE signal: <ralph>TEST_REVIEW_DONE X.X: result</ralph>

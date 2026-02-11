@@ -7,8 +7,34 @@ RALPH_LOCK_FILE=".ralph/.lock"
 # ── Run-level timing data ──────────────────────────────────────────
 declare -A _STORY_TIMINGS=()       # story_id → seconds
 declare -A _STORY_OUTCOMES=()      # story_id → done|tentative|failed|absorbed
+declare -A _STORY_TOKENS_IN=()     # story_id → input token count
+declare -A _STORY_TOKENS_OUT=()    # story_id → output token count
+declare -A _STORY_COST=()          # story_id → cost in USD (string)
+declare -A _STORY_TURNS=()         # story_id → number of agentic turns
 _RALPH_RUN_START_COMMIT=""
 _RALPH_RUN_START_TIME=""
+_RALPH_LEARNINGS_EXTRACTED=0       # count of learnings extracted this run
+
+# Extract metrics from JSON-format Claude output.
+# If the output is a valid JSON result envelope, parses token usage/cost
+# and stores in _STORY_* arrays. Returns the text result on stdout for
+# signal parsing. Falls back to echoing raw output if not JSON.
+_extract_metrics() {
+    local json_output="$1" story_id="$2"
+
+    # Quick check: does it look like JSON result envelope?
+    if echo "$json_output" | jq -e '.type == "result"' &>/dev/null 2>&1; then
+        _STORY_TOKENS_IN["$story_id"]=$(echo "$json_output" | jq -r '.usage.input_tokens // 0')
+        _STORY_TOKENS_OUT["$story_id"]=$(echo "$json_output" | jq -r '.usage.output_tokens // 0')
+        _STORY_COST["$story_id"]=$(echo "$json_output" | jq -r '.total_cost_usd // 0')
+        _STORY_TURNS["$story_id"]=$(echo "$json_output" | jq -r '.num_turns // 0')
+        # Return the text result for signal parsing
+        echo "$json_output" | jq -r '.result // ""'
+    else
+        # Not JSON (e.g., timeout killed before JSON emitted) — pass through
+        echo "$json_output"
+    fi
+}
 
 # Acquire an exclusive run lock. Prevents concurrent ralph instances.
 # Writes PID to lock file. Detects stale locks via kill -0.
@@ -112,6 +138,9 @@ _run_sequential() {
         # Check iteration limit
         if [[ "$iterations" != "0" && $iteration -gt $iterations ]]; then
             box_header "Reached iteration limit ($iterations)"
+            if type _display_cleanup &>/dev/null; then
+                _display_cleanup
+            fi
             _run_summary "sequential"
             break
         fi
@@ -129,6 +158,9 @@ _run_sequential() {
             fi
             box_header "ALL STORIES COMPLETE!"
             log "All stories complete — Ralph loop finished"
+            if type _display_cleanup &>/dev/null; then
+                _display_cleanup
+            fi
             _run_summary "sequential"
             return 0
         fi
@@ -207,9 +239,11 @@ _run_sequential() {
                 < /dev/null 2>&1 | cat > "$output_file" || exit_code=$?
         fi
 
-        # Read captured output
+        # Read captured output and extract metrics from JSON envelope
+        local raw_output
+        raw_output=$(cat "$output_file" 2>/dev/null) || true
         local result
-        result=$(cat "$output_file" 2>/dev/null) || true
+        result=$(_extract_metrics "$raw_output" "$next_story")
         local result_len=${#result}
         log "Claude returned: exit_code=$exit_code output_length=$result_len"
 
@@ -222,6 +256,12 @@ _run_sequential() {
         local story_end
         story_end=$(date '+%s')
         _STORY_TIMINGS["$next_story"]=$(( story_end - story_start ))
+
+        # Extract learnings from whatever output exists, regardless of exit code.
+        # Claude often emits LEARN signals before timing out — capture them early.
+        if type learnings_extract &>/dev/null && [[ -n "$result" ]]; then
+            learnings_extract "$result" "$next_story" || true
+        fi
 
         # Handle timeout
         if [[ $exit_code -eq 124 ]]; then
@@ -245,11 +285,6 @@ _run_sequential() {
             _track_local_retry "$next_story" "$max_retries" && return 1
             hooks_run "post_story" "RALPH_STORY=$next_story" "RALPH_RESULT=error" || true
             continue
-        fi
-
-        # Extract learnings
-        if type learnings_extract &>/dev/null; then
-            learnings_extract "$result" "$next_story" || true
         fi
 
         # Parse signals
@@ -614,6 +649,40 @@ _run_summary() {
         echo ""
         divider
         echo -e "  ${CLR_DIM}→ Review what was built:${CLR_RESET} ralph hitl"
+    fi
+
+    # ── Token usage summary (if metrics available) ───────────────
+    local has_metrics=false
+    for sid in "${!_STORY_TOKENS_IN[@]}"; do
+        [[ "${_STORY_TOKENS_IN[$sid]:-0}" -gt 0 ]] && has_metrics=true && break
+    done
+
+    if [[ "$has_metrics" == true ]]; then
+        echo ""
+        divider
+        echo -e "  ${CLR_DIM}Token Usage${CLR_RESET}"
+        printf "    ${CLR_DIM}%-9s %10s %10s %8s %5s${CLR_RESET}\n" \
+            "Story" "Tokens In" "Tokens Out" "Cost" "Turns"
+        for sid in $(echo "${!_STORY_TOKENS_IN[@]}" | tr ' ' '\n' | sort -t. -k1,1n -k2,2n); do
+            local tin="${_STORY_TOKENS_IN[$sid]:-0}"
+            local tout="${_STORY_TOKENS_OUT[$sid]:-0}"
+            local cost="${_STORY_COST[$sid]:-0}"
+            local turns="${_STORY_TURNS[$sid]:-0}"
+            [[ "$tin" -eq 0 && "$tout" -eq 0 ]] && continue
+            local flag=""
+            [[ "$turns" -gt 6 ]] && flag=" ⚠"
+            local tin_fmt tout_fmt cost_fmt
+            tin_fmt=$(printf "%'d" "$tin" 2>/dev/null || echo "$tin")
+            tout_fmt=$(printf "%'d" "$tout" 2>/dev/null || echo "$tout")
+            cost_fmt=$(printf '$%.2f' "$cost" 2>/dev/null || echo "\$$cost")
+            printf "    %-9s %10s %10s %8s %3s%s\n" \
+                "$sid" "$tin_fmt" "$tout_fmt" "$cost_fmt" "$turns" "$flag"
+        done
+    fi
+
+    # ── Persist run stats to .ralph/runs/ ────────────────────────
+    if type _persist_run_stats &>/dev/null; then
+        _persist_run_stats "$mode" || true
     fi
 
     echo ""

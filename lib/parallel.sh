@@ -241,6 +241,9 @@ parallel_run() {
         current_batch=$((current_batch + 1))
     done
 
+    if type _display_cleanup &>/dev/null; then
+        _display_cleanup
+    fi
     _run_summary "parallel"
 }
 
@@ -409,8 +412,10 @@ _parallel_execute_batch() {
         fi
 
         local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
-        local result=""
-        [[ -f "$output_file" ]] && result=$(cat "$output_file")
+        local raw_output=""
+        [[ -f "$output_file" ]] && raw_output=$(cat "$output_file")
+        local result
+        result=$(_extract_metrics "$raw_output" "$story")
 
         # Classify result
         local classified=false
@@ -578,8 +583,16 @@ _parallel_retry_failed() {
                 _STORY_TIMINGS["$story"]=$(( story_end - _PARALLEL_STORY_START[$story] ))
             fi
 
-            local result=""
-            [[ -f "$output_file" ]] && result=$(cat "$output_file")
+            local raw_output=""
+            [[ -f "$output_file" ]] && raw_output=$(cat "$output_file")
+            local result
+            result=$(_extract_metrics "$raw_output" "$story")
+
+            # Extract learnings from this attempt before checking outcome.
+            # Each retry overwrites the output file, so extract per-iteration.
+            if type learnings_extract &>/dev/null && [[ -n "$result" ]]; then
+                learnings_extract "$result" "$story" || true
+            fi
 
             # Check for DONE signal
             local done_id
@@ -626,13 +639,6 @@ _parallel_retry_failed() {
             git branch -D "$branch_name" 2>/dev/null || true
         fi
 
-        # Extract learnings from last attempt
-        local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
-        if type learnings_extract &>/dev/null && [[ -f "$output_file" ]]; then
-            local result
-            result=$(cat "$output_file" 2>/dev/null) || true
-            [[ -n "$result" ]] && learnings_extract "$result" "$story"
-        fi
     done
 
     git worktree prune 2>/dev/null || true
@@ -797,6 +803,11 @@ _parallel_resolve_conflict() {
 
     local result exit_code=0
     result=$($timeout_cmd "$merge_timeout" claude "${claude_flags[@]}" "$template" 2>&1) || exit_code=$?
+
+    # Extract learnings from merge resolution output
+    if type learnings_extract &>/dev/null && [[ -n "$result" ]]; then
+        learnings_extract "$result" "$story" || true
+    fi
 
     if [[ $exit_code -ne 0 ]]; then
         log_error "Conflict resolution agent failed for story $story (exit $exit_code)"
