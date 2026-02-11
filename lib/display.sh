@@ -1,18 +1,13 @@
 #!/usr/bin/env bash
-# Ralph v2 — Real-time dashboard display (Level 2: structured panel)
-# Uses POSIX-standard tput for cursor positioning. Bash 3.2 compatible.
-# Degrades to single-line progress (Level 1) if terminal is too small.
+# Ralph v2 — Append-only display (event-driven status lines)
+# No scroll regions, no cursor manipulation. CI-safe.
 
 # ── Dashboard state ──────────────────────────────────────────────────
 RALPH_DASHBOARD="${RALPH_DASHBOARD:-true}"
 RALPH_START_TIME="${RALPH_START_TIME:-}"
 
-# Panel dimensions
-_DISPLAY_PANEL_LINES=6  # header(1) + data(4) + footer(1)
-_DISPLAY_MIN_WIDTH=68
-_DISPLAY_INITIALIZED=false
-_DISPLAY_TIMER_PID=""
-_DISPLAY_PANEL_ROW=""   # Absolute row where panel starts (1-indexed)
+_DISPLAY_HEARTBEAT_PID=""
+_DISPLAY_HEARTBEAT_INTERVAL="${RALPH_HEARTBEAT_INTERVAL:-300}"  # seconds (default 5 min)
 
 # Cached display data (updated via display_update_*)
 _DISPLAY_TOTAL_STORIES=0
@@ -31,51 +26,29 @@ _DISPLAY_LAST_DONE_AGO=""
 # ── Initialization ───────────────────────────────────────────────────
 
 display_init() {
-    if [[ "$RALPH_DASHBOARD" != "true" ]]; then
-        return 0
-    fi
-
     RALPH_START_TIME=$(date '+%s')
 
-    # Check terminal size for degradation
-    if ! _display_can_render_panel; then
-        _DISPLAY_INITIALIZED=false
-        return 0
-    fi
-
-    _DISPLAY_INITIALIZED=true
-
-    # Calculate panel position: pin to bottom of terminal
-    local rows
-    rows=$(tput lines 2>/dev/null) || rows=24
-    _DISPLAY_PANEL_ROW=$((rows - _DISPLAY_PANEL_LINES))
-
-    # Set scroll region to exclude bottom panel area + buffer rows.
-    # The buffer prevents log output from bleeding into the panel.
-    printf '\033[1;%dr' "$((_DISPLAY_PANEL_ROW - 2))"
-
-    # Handle terminal resize — recalculate panel position
-    trap '_display_handle_resize' WINCH
-
-    # Register cleanup to restore full scroll region on exit
+    # Register cleanup via centralized trap registry
     if type ralph_on_exit &>/dev/null; then
         ralph_on_exit _display_cleanup
     fi
 }
 
-# Recalculate panel position on terminal resize
-_display_handle_resize() {
-    if [[ "$_DISPLAY_INITIALIZED" == true ]]; then
-        local rows
-        rows=$(tput lines 2>/dev/null) || rows=24
-        _DISPLAY_PANEL_ROW=$((rows - _DISPLAY_PANEL_LINES))
-        printf '\033[1;%dr' "$((_DISPLAY_PANEL_ROW - 2))"
-        display_refresh
-    fi
+# ── Plain/CI detection ───────────────────────────────────────────────
+
+# Returns 0 if output should be plain (no ANSI colors).
+# Detects CI environments, non-TTY, NO_COLOR, TERM=dumb.
+_display_is_plain() {
+    [[ -n "${NO_COLOR:-}" ]] && return 0
+    [[ "${CI:-}" == "true" ]] && return 0
+    [[ "${TERM:-}" == "dumb" ]] && return 0
+    [[ ! -t 1 ]] && return 0
+    return 1
 }
 
 # ── Data update functions ────────────────────────────────────────────
-# Call these to update cached data, then call display_refresh to redraw.
+# Call these to update cached data. No immediate rendering — output is
+# emitted at story start/end events, not on every data change.
 
 display_update_stories() {
     local total="$1"
@@ -121,173 +94,182 @@ display_update_last_done() {
     _DISPLAY_LAST_DONE_AGO=$(date '+%s')
 }
 
-# ── Rendering ────────────────────────────────────────────────────────
+# ── Story status emitters (append-only lines) ────────────────────────
 
+# Emit a single line when a story completes successfully.
+# Usage: display_story_completed "3.1" "10m 35s" "42000" "$0.38"
+display_story_completed() {
+    local id="$1"
+    local duration="${2:-}"
+    local tokens="${3:-}"
+    local cost="${4:-}"
+
+    local detail=""
+    [[ -n "$duration" ]] && detail=" (${duration}"
+    [[ -n "$tokens" && "$tokens" != "0" ]] && detail="${detail}, ${tokens} tokens"
+    [[ -n "$cost" && "$cost" != "0" ]] && detail="${detail}, \$${cost}"
+    [[ -n "$detail" ]] && detail="${detail})"
+
+    if _display_is_plain; then
+        echo "[OK] Story ${id} completed!${detail}"
+    else
+        echo -e "${CLR_GREEN}[OK]${CLR_RESET} Story ${id} completed!${CLR_DIM}${detail}${CLR_RESET}"
+    fi
+}
+
+# Emit a single line when a story fails.
+# Usage: display_story_failed "3.1" "Timeout after 1800s" "10m 35s" "42000" "$0.38"
+display_story_failed() {
+    local id="$1"
+    local reason="${2:-}"
+    local duration="${3:-}"
+    local tokens="${4:-}"
+    local cost="${5:-}"
+
+    local detail=""
+    [[ -n "$reason" ]] && detail=": ${reason}"
+    local metrics=""
+    [[ -n "$duration" ]] && metrics=" (${duration}"
+    [[ -n "$tokens" && "$tokens" != "0" ]] && metrics="${metrics}, ${tokens} tokens"
+    [[ -n "$cost" && "$cost" != "0" ]] && metrics="${metrics}, \$${cost}"
+    [[ -n "$metrics" ]] && metrics="${metrics})"
+
+    if _display_is_plain; then
+        echo "[FAIL] Story ${id} failed${detail}${metrics}"
+    else
+        echo -e "${CLR_RED}[FAIL]${CLR_RESET} Story ${id} failed${detail}${CLR_DIM}${metrics}${CLR_RESET}"
+    fi
+}
+
+# Emit a batch results summary line.
+# Usage: display_batch_results 3 1
+display_batch_results() {
+    local succeeded="$1"
+    local failed="$2"
+
+    if _display_is_plain; then
+        echo "[INFO] Batch results: ${succeeded} succeeded, ${failed} failed"
+    else
+        echo -e "${CLR_CYAN}[INFO]${CLR_RESET} Batch results: ${succeeded} succeeded, ${failed} failed"
+    fi
+}
+
+# ── Heartbeat ─────────────────────────────────────────────────────────
+# Lightweight periodic status line during long-running Claude invocations.
+# Replaces the 1-second background timer + scroll-region refresh.
+
+# Start a heartbeat for a story. Prints a status line every N minutes.
+# Usage: _display_start_heartbeat "3.1"
+_display_start_heartbeat() {
+    [[ "$RALPH_DASHBOARD" != "true" ]] && return 0
+
+    local story_id="${1:-}"
+
+    # Kill any existing heartbeat first (exclusive resource)
+    _display_stop_heartbeat
+
+    (
+        trap 'exit 0' TERM INT
+        while true; do
+            sleep "$_DISPLAY_HEARTBEAT_INTERVAL"
+            local elapsed_str="??:??:??"
+            if [[ -n "$RALPH_START_TIME" ]]; then
+                elapsed_str=$(_display_format_elapsed "$RALPH_START_TIME")
+            fi
+            local msg="... running"
+            [[ -n "$story_id" ]] && msg="... running story ${story_id}"
+            if _display_is_plain; then
+                echo "[$(date '+%H:%M:%S')] ${msg} (elapsed: ${elapsed_str})"
+            else
+                echo -e "${CLR_DIM}[$(date '+%H:%M:%S')] ${msg} (elapsed: ${elapsed_str})${CLR_RESET}"
+            fi
+        done
+    ) &
+    _DISPLAY_HEARTBEAT_PID=$!
+}
+
+# Stop the heartbeat.
+_display_stop_heartbeat() {
+    if [[ -n "${_DISPLAY_HEARTBEAT_PID:-}" ]]; then
+        kill "$_DISPLAY_HEARTBEAT_PID" 2>/dev/null
+        wait "$_DISPLAY_HEARTBEAT_PID" 2>/dev/null || true
+        _DISPLAY_HEARTBEAT_PID=""
+    fi
+}
+
+# Start a batch heartbeat for parallel mode.
+# Usage: _display_start_batch_heartbeat
+_display_start_batch_heartbeat() {
+    [[ "$RALPH_DASHBOARD" != "true" ]] && return 0
+
+    _display_stop_heartbeat
+
+    (
+        trap 'exit 0' TERM INT
+        while true; do
+            sleep "$_DISPLAY_HEARTBEAT_INTERVAL"
+            local elapsed_str="??:??:??"
+            if [[ -n "$RALPH_START_TIME" ]]; then
+                elapsed_str=$(_display_format_elapsed "$RALPH_START_TIME")
+            fi
+            local workers_str=""
+            [[ "$_DISPLAY_WORKERS_MAX" -gt 0 ]] && workers_str="workers: ${_DISPLAY_WORKERS_ACTIVE}/${_DISPLAY_WORKERS_MAX}, "
+            if _display_is_plain; then
+                echo "[$(date '+%H:%M:%S')] ... parallel batch running (${workers_str}elapsed: ${elapsed_str})"
+            else
+                echo -e "${CLR_DIM}[$(date '+%H:%M:%S')] ... parallel batch running (${workers_str}elapsed: ${elapsed_str})${CLR_RESET}"
+            fi
+        done
+    ) &
+    _DISPLAY_HEARTBEAT_PID=$!
+}
+
+# ── Backward-compatible aliases ───────────────────────────────────────
+# Callers in runner.sh / parallel.sh use these names.
+
+display_start_live_timer() {
+    _display_start_heartbeat "${_DISPLAY_CURRENT_STORY:-}"
+}
+
+display_stop_live_timer() {
+    _display_stop_heartbeat
+}
+
+# No-op — there is no stateful panel to refresh.
 display_refresh() {
+    return 0
+}
+
+# Refresh from state: still updates cached data (used by summary), but no render.
+display_refresh_from_state() {
     if [[ "$RALPH_DASHBOARD" != "true" ]]; then
         return 0
     fi
 
-    if [[ "$_DISPLAY_INITIALIZED" == true ]] && _display_can_render_panel; then
-        _display_render_panel
-    else
-        _display_render_progress_line
+    local total=0 done_count=0
+    if type stories_count_total &>/dev/null; then
+        total=$(stories_count_total 2>/dev/null || echo "0")
     fi
-}
-
-# Level 1: Single progress line (fallback)
-_display_render_progress_line() {
-    local bar
-    bar=$(ui_progress_bar "$_DISPLAY_DONE_STORIES" "$_DISPLAY_TOTAL_STORIES" 16)
-
-    local current_label=""
-    if [[ -n "$_DISPLAY_CURRENT_STORY" ]]; then
-        current_label="$_DISPLAY_CURRENT_STORY"
-        [[ -n "$_DISPLAY_CURRENT_TITLE" ]] && current_label="$_DISPLAY_CURRENT_STORY $_DISPLAY_CURRENT_TITLE"
-        # Truncate to 30 chars
-        current_label="${current_label:0:30}"
+    if type stories_count_completed &>/dev/null; then
+        done_count=$(stories_count_completed 2>/dev/null || echo "0")
+    elif type state_completed_count &>/dev/null; then
+        done_count=$(state_completed_count 2>/dev/null || echo "0")
     fi
+    display_update_stories "$total" "$done_count"
 
-    # Use carriage return to overwrite the line
-    printf "\r${CLR_DIM}Stories${CLR_RESET} %s  ${CLR_DIM}|${CLR_RESET}  %s  ${CLR_DIM}|${CLR_RESET}  Retry: %d/%d  ${CLR_DIM}|${CLR_RESET}  Learnings: %d    " \
-        "$bar" "$current_label" "$_DISPLAY_RETRY_COUNT" "$_DISPLAY_MAX_RETRIES" "$_DISPLAY_LEARNINGS_COUNT"
-}
-
-# Level 2: Structured dashboard panel
-_display_render_panel() {
-    local cols
-    cols=$(_display_term_cols)
-    local width=$(( cols > 70 ? 70 : cols ))
-    local inner=$(( width - 2 ))  # Inside the box (excluding side borders)
-    local half=$(( inner / 2 ))
-
-    # Calculate elapsed time
-    local elapsed_str="00:00:00"
-    if [[ -n "$RALPH_START_TIME" ]]; then
-        elapsed_str=$(_display_format_elapsed "$RALPH_START_TIME")
+    if type state_get_current &>/dev/null; then
+        local current
+        current=$(state_get_current 2>/dev/null || echo "")
+        local retry
+        retry=$(state_get_retry_count 2>/dev/null || echo "0")
+        _DISPLAY_CURRENT_STORY="$current"
+        _DISPLAY_RETRY_COUNT="$retry"
     fi
 
-    # Calculate "last done ago" string
-    local last_done_str="--"
-    if [[ -n "$_DISPLAY_LAST_DONE" && -n "$_DISPLAY_LAST_DONE_AGO" ]]; then
-        local ago_str
-        ago_str=$(_display_format_elapsed "$_DISPLAY_LAST_DONE_AGO")
-        last_done_str="$_DISPLAY_LAST_DONE (${ago_str} ago)"
-    fi
-
-    # Build progress bar
-    local bar
-    bar=$(ui_progress_bar "$_DISPLAY_DONE_STORIES" "$_DISPLAY_TOTAL_STORIES" 12)
-
-    # Workers string
-    local workers_str="${_DISPLAY_WORKERS_ACTIVE}/${_DISPLAY_WORKERS_MAX} active"
-    if [[ "$_DISPLAY_WORKERS_MAX" -eq 0 ]]; then
-        workers_str="sequential"
-    fi
-
-    # Current story display
-    local current_str="$_DISPLAY_CURRENT_STORY"
-    if [[ -n "$_DISPLAY_CURRENT_TITLE" ]]; then
-        current_str="$_DISPLAY_CURRENT_STORY $_DISPLAY_CURRENT_TITLE"
-    fi
-    # Truncate if too long for left column
-    local max_current=$(( half - 14 ))
-    [[ "$max_current" -lt 5 ]] && max_current=5
-    current_str="${current_str:0:$max_current}"
-
-    # Save cursor, jump to fixed panel position, render, restore cursor
-    printf '\0337'                              # DEC save cursor
-    printf '\033[%d;1H' "$_DISPLAY_PANEL_ROW"   # absolute row, column 1
-
-    # Render panel lines
-    _display_box_top "$width"
-    _display_box_row "$inner" "$half" "Progress" "$bar" "Iteration" "$_DISPLAY_ITERATION"
-    _display_box_row "$inner" "$half" "Current" "$current_str" "Retries" "${_DISPLAY_RETRY_COUNT}/${_DISPLAY_MAX_RETRIES}"
-    _display_box_row "$inner" "$half" "Workers" "$workers_str" "Learnings" "$_DISPLAY_LEARNINGS_COUNT total"
-    _display_box_row "$inner" "$half" "Last Done" "$last_done_str" "Elapsed" "$elapsed_str"
-    _display_box_bottom "$width"
-
-    printf '\0338'                              # DEC restore cursor
-}
-
-# ── Box drawing helpers ──────────────────────────────────────────────
-
-_display_box_top() {
-    local width="$1"
-    local inner=$(( width - 2 ))
-    local title=" RALPH DASHBOARD "
-    local title_len=${#title}
-    local pad_left=$(( (inner - title_len) / 2 ))
-    local pad_right=$(( inner - title_len - pad_left ))
-
-    printf '\r'
-    printf "${CLR_CYAN}"
-    printf '%s' "$(printf '%.0s=' $(seq 1 "$pad_left"))"
-    printf "${CLR_BOLD}%s${CLR_RESET}${CLR_CYAN}" "$title"
-    printf '%s' "$(printf '%.0s=' $(seq 1 "$pad_right"))"
-    printf "${CLR_RESET}"
-    # Clear rest of line
-    tput el 2>/dev/null || printf '\033[K'
-    printf '\n'
-}
-
-_display_box_bottom() {
-    local width="$1"
-    local inner=$(( width - 2 ))
-    printf '\r'
-    printf "${CLR_CYAN}"
-    printf '%s' "$(printf '%.0s=' $(seq 1 "$inner"))"
-    printf "${CLR_RESET}"
-    tput el 2>/dev/null || printf '\033[K'
-    printf '\n'
-}
-
-_display_box_row() {
-    local inner="$1"
-    local half="$2"
-    local left_label="$3"
-    local left_value="$4"
-    local right_label="$5"
-    local right_value="$6"
-
-    local left_str
-    left_str=$(printf "  ${CLR_DIM}%-12s${CLR_RESET} %s" "$left_label" "$left_value")
-
-    local right_str
-    right_str=$(printf "${CLR_DIM}%-12s${CLR_RESET} %s" "$right_label" "$right_value")
-
-    # Print left side, then separator, then right side
-    # Use raw widths (without ANSI) for padding calculation
-    local left_raw
-    left_raw=$(printf "  %-12s %s" "$left_label" "$left_value")
-    local left_len=${#left_raw}
-    local pad_between=$(( half - left_len ))
-    [[ "$pad_between" -lt 1 ]] && pad_between=1
-
-    printf '\r'
-    printf '%b' "$left_str"
-    printf '%*s' "$pad_between" ""
-    printf "${CLR_DIM}|${CLR_RESET}  "
-    printf '%b' "$right_str"
-    tput el 2>/dev/null || printf '\033[K'
-    printf '\n'
+    _DISPLAY_LEARNINGS_COUNT=$(_display_count_learnings)
 }
 
 # ── Utility functions ────────────────────────────────────────────────
-
-# Check if terminal is wide enough for the panel
-_display_can_render_panel() {
-    local cols
-    cols=$(_display_term_cols)
-    [[ "$cols" -ge "$_DISPLAY_MIN_WIDTH" ]]
-}
-
-# Get terminal width (columns)
-_display_term_cols() {
-    local cols
-    cols=$(tput cols 2>/dev/null) || cols=80
-    echo "$cols"
-}
 
 # Format elapsed time from a start timestamp to now
 # Usage: _display_format_elapsed <start_epoch>
@@ -302,6 +284,20 @@ _display_format_elapsed() {
     local mins=$(( (diff % 3600) / 60 ))
     local secs=$(( diff % 60 ))
     printf '%02d:%02d:%02d' "$hours" "$mins" "$secs"
+}
+
+# Format seconds into human-readable duration string
+# Usage: _display_format_duration <seconds>
+_display_format_duration() {
+    local secs="$1"
+    [[ "$secs" -lt 0 ]] && secs=0
+    local m=$(( secs / 60 ))
+    local s=$(( secs % 60 ))
+    if [[ $m -gt 0 ]]; then
+        printf '%dm %02ds' "$m" "$s"
+    else
+        printf '%ds' "$s"
+    fi
 }
 
 # Count total learnings from .ralph/learnings/ directory
@@ -328,13 +324,11 @@ _display_count_active_workers() {
     local worktree_dir=".ralph/worktrees"
     local count=0
 
-    # Find pid directories matching current shell or any
     for pid_dir in "$worktree_dir"/.pids-*/; do
         [[ -d "$pid_dir" ]] || continue
         for pid_file in "$pid_dir"/pid_*; do
             [[ -f "$pid_file" ]] || continue
             local pid="${pid_file##*pid_}"
-            # Check if the process is still running
             if kill -0 "$pid" 2>/dev/null; then
                 count=$((count + 1))
             fi
@@ -343,71 +337,8 @@ _display_count_active_workers() {
     echo "$count"
 }
 
-# Refresh display data from state files, then redraw
-display_refresh_from_state() {
-    if [[ "$RALPH_DASHBOARD" != "true" ]]; then
-        return 0
-    fi
-
-    # Read stories count
-    local total=0 done_count=0
-    if type stories_count_total &>/dev/null; then
-        total=$(stories_count_total 2>/dev/null || echo "0")
-    fi
-    if type stories_count_completed &>/dev/null; then
-        done_count=$(stories_count_completed 2>/dev/null || echo "0")
-    elif type state_completed_count &>/dev/null; then
-        done_count=$(state_completed_count 2>/dev/null || echo "0")
-    fi
-    display_update_stories "$total" "$done_count"
-
-    # Read current story and retry count
-    if type state_get_current &>/dev/null; then
-        local current
-        current=$(state_get_current 2>/dev/null || echo "")
-        local retry
-        retry=$(state_get_retry_count 2>/dev/null || echo "0")
-        _DISPLAY_CURRENT_STORY="$current"
-        _DISPLAY_RETRY_COUNT="$retry"
-    fi
-
-    # Read learnings count
-    _DISPLAY_LEARNINGS_COUNT=$(_display_count_learnings)
-
-    display_refresh
-}
-
-# ── Live timer ─────────────────────────────────────────────────────
-# Background process that refreshes the dashboard every N seconds
-# so the elapsed timer ticks while Claude is running.
-
-display_start_live_timer() {
-    [[ "$RALPH_DASHBOARD" != "true" ]] && return 0
-    [[ "$_DISPLAY_INITIALIZED" != true ]] && return 0
-
-    # Kill any existing timer
-    display_stop_live_timer
-
-    (
-        trap 'exit 0' TERM INT
-        while true; do
-            sleep 1
-            display_refresh_from_state 2>/dev/null || true
-        done
-    ) &
-    _DISPLAY_TIMER_PID=$!
-}
-
-display_stop_live_timer() {
-    if [[ -n "${_DISPLAY_TIMER_PID:-}" ]]; then
-        kill "$_DISPLAY_TIMER_PID" 2>/dev/null
-        wait "$_DISPLAY_TIMER_PID" 2>/dev/null || true
-        _DISPLAY_TIMER_PID=""
-    fi
-}
+# ── Cleanup ──────────────────────────────────────────────────────────
 
 _display_cleanup() {
-    display_stop_live_timer
-    printf '\033[r'          # reset scroll region to full terminal
-    printf '\033[%d;1H' "$(tput lines 2>/dev/null || echo 24)"  # move cursor to bottom
+    _display_stop_heartbeat
 }

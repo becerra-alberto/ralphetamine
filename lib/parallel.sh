@@ -8,6 +8,7 @@ RALPH_WORKTREE_DIR=".ralph/worktrees"
 _PARALLEL_SUCCESSFUL=()
 _PARALLEL_FAILED=()
 _PARALLEL_PID_DIR=""
+_RALPH_PARALLEL_CONTEXT=false
 
 # Per-story start-time tracking (story → epoch) for duration calculation
 declare -A _PARALLEL_STORY_START
@@ -128,19 +129,18 @@ parallel_run() {
     log_info "Parallel mode: max_concurrent=$max_concurrent, stagger=${stagger_seconds}s"
     log_info "Stories: $remaining_stories remaining of $total_stories total"
 
-    # Dashboard: set worker max for parallel mode
+    # Set parallel context flag so _run_sequential suppresses its chrome
+    _RALPH_PARALLEL_CONTEXT=true
+
+    RALPH_START_TIME=$(date '+%s')
+
+    # Dashboard: set worker max and initial story count
     if type display_update_workers &>/dev/null; then
         display_update_workers 0 "$max_concurrent"
-    fi
-
-    # Initialize dashboard (sets RALPH_START_TIME, scroll region, _DISPLAY_INITIALIZED)
-    if type display_init &>/dev/null; then
-        display_init
         local done_count
         done_count=$(stories_count_completed)
         display_update_stories "$total_stories" "$done_count"
         display_update_retry 0 "$(config_get '.loop.max_retries' '3')"
-        display_refresh
     fi
 
     # Run any unbatched stories (no [batch:N] annotation) sequentially first
@@ -230,10 +230,6 @@ parallel_run() {
             local title
             title=$(stories_get_title "${batch_stories[0]}" 2>/dev/null || echo "")
             log_info "Single story in batch, running in-place: ${batch_stories[0]} | $title"
-            # Stop parallel dashboard timer to prevent collision with sequential dashboard
-            if type display_stop_live_timer &>/dev/null; then
-                display_stop_live_timer
-            fi
             _run_sequential "1" "$timeout_secs" "$verbose" false "${batch_stories[0]}" ""
             current_batch=$((current_batch + 1))
             continue
@@ -259,7 +255,6 @@ parallel_run() {
                 local done_count
                 done_count=$(stories_count_completed)
                 display_update_stories "$total_stories" "$done_count"
-                display_refresh
             fi
         else
             log_info "Auto-merge disabled. Worktrees left intact for manual review."
@@ -279,9 +274,6 @@ parallel_run() {
         current_batch=$((current_batch + 1))
     done
 
-    if type _display_cleanup &>/dev/null; then
-        _display_cleanup
-    fi
     _run_summary "parallel"
 }
 
@@ -339,12 +331,12 @@ _parallel_execute_batch() {
         local worktree_dir="${RALPH_WORKTREE_DIR}/story-${story}"
         local branch_name="ralph/story-${story}"
 
-        log_info "Creating worktree: $worktree_dir (branch: $branch_name)"
+        log_info "Creating worktree: story-${story} (branch: $branch_name)"
 
         # Create worktree on a new branch from current HEAD
         local wt_timeout_cmd
         wt_timeout_cmd=$(prereqs_timeout_cmd)
-        if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
+        if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" &>/dev/null; then
             # Stale worktree/branch from previous run — clean everything and retry
             log_debug "Cleaning stale worktree/branch for story $story"
             git worktree unlock "$worktree_dir" 2>/dev/null || true
@@ -352,7 +344,7 @@ _parallel_execute_batch() {
             rm -rf "$worktree_dir" 2>/dev/null || true
             git worktree prune 2>/dev/null || true
             git branch -D "$branch_name" 2>/dev/null || true
-            if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
+            if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" &>/dev/null; then
                 log_error "Failed to create worktree for story $story"
                 _PARALLEL_FAILED+=("$story")
                 continue
@@ -386,12 +378,16 @@ _parallel_execute_batch() {
         # because the subshell cd's into the worktree)
         local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
 
+        # Compute effective timeout (reserves time for postmortem if enabled)
+        local effective_timeout
+        effective_timeout=$(_compute_effective_timeout "$timeout_secs")
+
         # Record start time for duration calculation
         _PARALLEL_STORY_START["$story"]=$(date '+%s')
 
         (
             cd "$worktree_dir"
-            $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
+            $timeout_cmd "$effective_timeout" claude "${claude_flags[@]}" "$prompt" \
                 < /dev/null 2>&1 | cat > "$output_file"
         ) &
 
@@ -405,7 +401,6 @@ _parallel_execute_batch() {
         # Dashboard: update active worker count
         if type display_update_workers &>/dev/null; then
             display_update_workers "$running" "$max_concurrent"
-            display_refresh
         fi
 
         log_info "Spawned Claude for story $story (PID $pid)"
@@ -416,11 +411,6 @@ _parallel_execute_batch() {
         fi
     done
 
-    # Start live dashboard timer so elapsed clock ticks while waiting
-    if type display_start_live_timer &>/dev/null; then
-        display_start_live_timer
-    fi
-
     # Wait for all to complete, collecting exit codes
     log_info "Waiting for ${#pids[@]} parallel Claude instances..."
 
@@ -430,12 +420,6 @@ _parallel_execute_batch() {
         wait "$pid" || ec=$?
         _pid_exit_codes["$pid"]=$ec
     done
-
-    # Stop live dashboard timer before log-heavy result processing.
-    # This prevents the timer subshell from racing with log output.
-    if type display_stop_live_timer &>/dev/null; then
-        display_stop_live_timer
-    fi
 
     local successful=()
     local failed=()
@@ -510,6 +494,12 @@ _parallel_execute_batch() {
             else
                 if [[ $exit_code -eq 124 ]]; then
                     log_warn "Story $story: timed out (no commits)"
+                    # Run postmortem for timed-out stories
+                    local spec_path_pm
+                    spec_path_pm=$(spec_find "$story" 2>/dev/null) || true
+                    if [[ -n "$spec_path_pm" ]]; then
+                        _run_timeout_postmortem "$story" "$spec_path_pm" "$result" "$timeout_secs" || true
+                    fi
                 elif [[ $exit_code -ne 0 ]]; then
                     log_warn "Story $story: failed exit code $exit_code (no commits)"
                 else
@@ -536,12 +526,15 @@ _parallel_execute_batch() {
         if type display_update_last_done &>/dev/null; then
             display_update_last_done "$story"
             display_update_learnings "$(_display_count_learnings 2>/dev/null || echo 0)"
-            display_refresh
         fi
     done
 
     echo ""
-    log_info "Batch results: ${#successful[@]} succeeded, ${#failed[@]} failed"
+    if type display_batch_results &>/dev/null; then
+        display_batch_results "${#successful[@]}" "${#failed[@]}"
+    else
+        log_info "Batch results: ${#successful[@]} succeeded, ${#failed[@]} failed"
+    fi
     [[ ${#failed[@]} -gt 0 ]] && log_warn "Failed stories: ${failed[*]}"
 
     # Store results in module-scope arrays for merge step
@@ -588,8 +581,8 @@ _parallel_retry_failed() {
             git branch -D "$branch_name" 2>/dev/null || true
 
             # Create fresh worktree
-            log_info "Creating retry worktree: $worktree_dir (branch: $branch_name)"
-            if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" 2>/dev/null; then
+            log_info "Creating worktree: story-${story} (branch: $branch_name)"
+            if ! $wt_timeout_cmd 30 git worktree add "$worktree_dir" -b "$branch_name" &>/dev/null; then
                 log_error "Could not create worktree for retry of story $story"
                 attempt=$((attempt + 1))
                 continue
@@ -615,11 +608,15 @@ _parallel_retry_failed() {
             local output_file="${RALPH_WORKTREE_DIR}/output-${story}.txt"
             _PARALLEL_STORY_START["$story"]=$(date '+%s')
 
+            # Compute effective timeout for retry
+            local effective_timeout
+            effective_timeout=$(_compute_effective_timeout "$timeout_secs")
+
             # Run synchronously (sequential retry)
             local exit_code=0
             (
                 cd "$worktree_dir"
-                $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
+                $timeout_cmd "$effective_timeout" claude "${claude_flags[@]}" "$prompt" \
                     < /dev/null 2>&1 | cat > "$output_file"
             ) || exit_code=$?
 

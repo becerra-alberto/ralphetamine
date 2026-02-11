@@ -132,51 +132,93 @@ setup() {
     assert_output "01:01:01"
 }
 
-# ── Dashboard disabled behavior ──────────────────────────────────────
+# ── _display_format_duration tests ───────────────────────────────────
 
-@test "display_init: no-op when dashboard disabled" {
-    RALPH_DASHBOARD="false"
-    run display_init
+@test "_display_format_duration: 45 seconds shows 45s" {
+    run _display_format_duration 45
     assert_success
-    assert_output ""
+    assert_output "45s"
 }
 
-@test "display_refresh: no-op when dashboard disabled" {
+@test "_display_format_duration: 90 seconds shows 1m 30s" {
+    run _display_format_duration 90
+    assert_success
+    assert_output "1m 30s"
+}
+
+@test "_display_format_duration: 0 seconds shows 0s" {
+    run _display_format_duration 0
+    assert_success
+    assert_output "0s"
+}
+
+# ── _display_is_plain tests ─────────────────────────────────────────
+
+@test "_display_is_plain: returns 0 when NO_COLOR is set" {
+    NO_COLOR=1 run _display_is_plain
+    assert_success
+}
+
+@test "_display_is_plain: returns 0 when CI=true" {
+    CI=true run _display_is_plain
+    assert_success
+}
+
+@test "_display_is_plain: returns 0 when TERM=dumb" {
+    TERM=dumb run _display_is_plain
+    assert_success
+}
+
+# ── display_story_completed tests ────────────────────────────────────
+
+@test "display_story_completed: basic output" {
+    NO_COLOR=1 run display_story_completed "3.1"
+    assert_success
+    assert_output "[OK] Story 3.1 completed!"
+}
+
+@test "display_story_completed: with duration and tokens" {
+    NO_COLOR=1 run display_story_completed "3.1" "10m 35s" "42000" "0.38"
+    assert_success
+    assert_output --partial "3.1 completed!"
+    assert_output --partial "10m 35s"
+    assert_output --partial "42000 tokens"
+}
+
+# ── display_story_failed tests ──────────────────────────────────────
+
+@test "display_story_failed: basic output" {
+    NO_COLOR=1 run display_story_failed "3.1" "Timeout"
+    assert_success
+    assert_output "[FAIL] Story 3.1 failed: Timeout"
+}
+
+@test "display_story_failed: with metrics" {
+    NO_COLOR=1 run display_story_failed "3.1" "Exit code 1" "5m 00s" "10000" "0.15"
+    assert_success
+    assert_output --partial "3.1 failed"
+    assert_output --partial "Exit code 1"
+    assert_output --partial "5m 00s"
+}
+
+# ── display_batch_results tests ─────────────────────────────────────
+
+@test "display_batch_results: renders summary" {
+    NO_COLOR=1 run display_batch_results 3 1
+    assert_success
+    assert_output "[INFO] Batch results: 3 succeeded, 1 failed"
+}
+
+# ── Dashboard disabled behavior ──────────────────────────────────────
+
+@test "display_init: no-op when called" {
+    run display_init
+    assert_success
+}
+
+@test "display_refresh: always no-op" {
     RALPH_DASHBOARD="false"
     run display_refresh
     assert_success
     assert_output ""
-}
-
-# ── _display_render_progress_line (Level 1 fallback) ─────────────────
-
-@test "_display_render_progress_line: renders a status line" {
-    _DISPLAY_DONE_STORIES=5
-    _DISPLAY_TOTAL_STORIES=12
-    _DISPLAY_CURRENT_STORY="2.3"
-    _DISPLAY_CURRENT_TITLE="auth-middleware"
-    _DISPLAY_RETRY_COUNT=1
-    _DISPLAY_MAX_RETRIES=3
-    _DISPLAY_LEARNINGS_COUNT=14
-
-    run _display_render_progress_line
-    assert_success
-    assert_output --partial "5/12"
-    assert_output --partial "2.3"
-    assert_output --partial "1/3"
-    assert_output --partial "14"
-}
-
-# ── _display_box_top / _display_box_bottom ───────────────────────────
-
-@test "_display_box_top: contains RALPH DASHBOARD title" {
-    run _display_box_top 70
-    assert_success
-    assert_output --partial "RALPH DASHBOARD"
-}
-
-@test "_display_box_bottom: renders separator line" {
-    run _display_box_bottom 70
-    assert_success
-    assert_output --partial "="
 }

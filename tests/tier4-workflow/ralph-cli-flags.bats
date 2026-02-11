@@ -65,8 +65,7 @@ teardown() {
     run "$RALPH_BIN" run --no-dashboard --no-interactive --no-tmux -s 1.1
     assert_success
     assert_output --partial "DONE"
-    # Dashboard uses escape sequences for scroll region — verify they're absent
-    # CSI for scroll region is ESC[...r — should NOT appear with --no-dashboard
+    # Append-only display never emits scroll regions — verify clean output
     refute_output --partial $'\e[1;'
 }
 

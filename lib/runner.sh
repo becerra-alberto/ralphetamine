@@ -85,6 +85,139 @@ _track_local_retry() {
     return 1  # false — keep going
 }
 
+# Run a timeout postmortem analysis.
+# Launches a second Claude invocation to analyze why a story timed out.
+# Output: learnings extracted to .ralph/learnings/timeouts/<story>.md
+# Returns 0 on success (or if postmortem disabled), non-zero on error.
+_run_timeout_postmortem() {
+    local story_id="$1"
+    local spec_path="$2"
+    local partial_output="$3"
+    local timeout_secs="$4"
+
+    # Check if postmortem is enabled
+    local pm_enabled
+    pm_enabled=$(config_get '.postmortem.enabled' 'true')
+    if [[ "$pm_enabled" != "true" ]]; then
+        log_debug "Postmortem disabled by config"
+        return 0
+    fi
+
+    local pm_window
+    pm_window=$(config_get '.postmortem.window_seconds' '300')
+    local max_chars
+    max_chars=$(config_get '.postmortem.max_output_chars' '50000')
+
+    log_info "Running timeout postmortem for story $story_id (window: ${pm_window}s)"
+
+    # Truncate partial output to max_chars
+    local truncated_output="${partial_output:0:$max_chars}"
+
+    # Load spec content (truncate to 5000 chars for prompt)
+    local spec_content=""
+    if [[ -f "$spec_path" ]]; then
+        spec_content=$(head -c 5000 "$spec_path" 2>/dev/null) || true
+    fi
+
+    # Load and populate template
+    local template
+    if ! template=$(prompt_load_template "timeout-postmortem" 2>/dev/null); then
+        log_warn "No timeout-postmortem template found. Skipping postmortem."
+        return 0
+    fi
+
+    template=$(prompt_substitute "$template" \
+        "STORY_ID=$story_id" \
+        "SPEC_CONTENT=$spec_content" \
+        "PARTIAL_OUTPUT=$truncated_output"
+    )
+
+    # Build claude command
+    local claude_flags=()
+    while IFS= read -r flag; do
+        [[ -n "$flag" ]] && claude_flags+=("$flag")
+    done < <(config_get_claude_flags)
+
+    local timeout_cmd
+    timeout_cmd=$(prereqs_timeout_cmd)
+
+    local pm_output_file=".ralph/last-postmortem-output.txt"
+
+    # Invoke Claude for postmortem (pipe-through-cat pattern)
+    local pm_exit=0
+    $timeout_cmd "$pm_window" claude "${claude_flags[@]}" "$template" \
+        < /dev/null 2>&1 | cat > "$pm_output_file" || pm_exit=$?
+
+    local pm_result
+    pm_result=$(cat "$pm_output_file" 2>/dev/null) || true
+
+    # Extract text from JSON envelope if needed
+    if echo "$pm_result" | jq -e '.type == "result"' &>/dev/null 2>&1; then
+        pm_result=$(echo "$pm_result" | jq -r '.result // ""')
+    fi
+
+    # Extract learnings from postmortem output
+    if type learnings_extract &>/dev/null && [[ -n "$pm_result" ]]; then
+        learnings_extract "$pm_result" "$story_id" || true
+    fi
+
+    # Persist full postmortem to .ralph/learnings/timeouts/
+    mkdir -p ".ralph/learnings/timeouts"
+    {
+        echo "# Timeout Postmortem: Story $story_id"
+        echo "Date: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        echo "Timeout: ${timeout_secs}s"
+        echo ""
+        echo "$pm_result"
+    } > ".ralph/learnings/timeouts/${story_id}.md"
+
+    # Log result
+    local timestamp
+    timestamp=$(date '+%a %d %b %Y %H:%M:%S %Z')
+    echo "[TIMEOUT_POSTMORTEM] Story $story_id - $timestamp" >> progress.txt 2>/dev/null || true
+
+    if [[ $pm_exit -eq 124 ]]; then
+        log_warn "Postmortem itself timed out after ${pm_window}s (partial output persisted)"
+    elif [[ $pm_exit -ne 0 ]]; then
+        log_warn "Postmortem exited with code $pm_exit"
+    else
+        # Check for completion signal
+        if signals_parse_timeout_postmortem_done "$pm_result" &>/dev/null; then
+            log_info "Postmortem completed for story $story_id"
+        else
+            log_warn "Postmortem completed without signal (output persisted)"
+        fi
+    fi
+
+    return 0
+}
+
+# Compute effective timeout: total_timeout - postmortem_window
+# Returns the effective timeout on stdout. If the remaining time after
+# subtracting the window is less than 60s, returns the full timeout
+# (postmortem is skipped when there isn't enough time).
+_compute_effective_timeout() {
+    local total_timeout="$1"
+
+    local pm_enabled
+    pm_enabled=$(config_get '.postmortem.enabled' 'true')
+    if [[ "$pm_enabled" != "true" ]]; then
+        echo "$total_timeout"
+        return
+    fi
+
+    local pm_window
+    pm_window=$(config_get '.postmortem.window_seconds' '300')
+
+    local effective=$(( total_timeout - pm_window ))
+    if [[ $effective -lt 60 ]]; then
+        # Not enough time for postmortem — use full timeout
+        echo "$total_timeout"
+    else
+        echo "$effective"
+    fi
+}
+
 _run_sequential() {
     local iterations="$1"
     local timeout_secs="$2"
@@ -104,24 +237,26 @@ _run_sequential() {
     local max_retries
     max_retries=$(config_get '.loop.max_retries' '3')
 
-    # Initialize dashboard FIRST (sets scroll region before any output)
-    if type display_init &>/dev/null; then
-        display_init
-        display_update_stories "$total_stories" "$done_count"
-        display_update_retry 0 "$max_retries"
-        display_refresh
+    # Initialize dashboard
+    # Skip in parallel context — parallel.sh uses inline display mode
+    if [[ "${_RALPH_PARALLEL_CONTEXT:-}" != true ]]; then
+        if type display_init &>/dev/null; then
+            display_init
+            display_update_stories "$total_stories" "$done_count"
+            display_update_retry 0 "$max_retries"
+        fi
+
+        box_header "RALPH IMPLEMENTATION LOOP"
+        box_kv "Project" "$(config_get '.project.name' '(unnamed)')"
+        box_kv "Stories" "$done_count / $total_stories completed"
+        box_kv "Iterations" "$( [[ "$iterations" == "0" ]] && echo "unlimited" || echo "$iterations" )"
+        box_kv "Timeout" "${timeout_secs}s per story"
+        [[ -n "$specific_story" ]] && box_kv "Story" "$specific_story (specific)"
+        [[ -n "$resume_from" ]] && box_kv "Resume" "from $resume_from"
+        echo ""
+
+        log "Ralph loop starting"
     fi
-
-    box_header "RALPH IMPLEMENTATION LOOP"
-    box_kv "Project" "$(config_get '.project.name' '(unnamed)')"
-    box_kv "Stories" "$done_count / $total_stories completed"
-    box_kv "Iterations" "$( [[ "$iterations" == "0" ]] && echo "unlimited" || echo "$iterations" )"
-    box_kv "Timeout" "${timeout_secs}s per story"
-    [[ -n "$specific_story" ]] && box_kv "Story" "$specific_story (specific)"
-    [[ -n "$resume_from" ]] && box_kv "Resume" "from $resume_from"
-    echo ""
-
-    log "Ralph loop starting"
 
     local timeout_cmd
     timeout_cmd=$(prereqs_timeout_cmd)
@@ -137,15 +272,16 @@ _run_sequential() {
 
         # Check iteration limit
         if [[ "$iterations" != "0" && $iteration -gt $iterations ]]; then
-            box_header "Reached iteration limit ($iterations)"
-            if type _display_cleanup &>/dev/null; then
-                _display_cleanup
+            if [[ "${_RALPH_PARALLEL_CONTEXT:-}" != true ]]; then
+                box_header "Reached iteration limit ($iterations)"
             fi
             _run_summary "sequential"
             break
         fi
 
-        iteration_header "$iteration" "$( [[ "$iterations" == "0" ]] && echo "inf" || echo "$iterations" )"
+        if [[ "${_RALPH_PARALLEL_CONTEXT:-}" != true ]]; then
+            iteration_header "$iteration" "$( [[ "$iterations" == "0" ]] && echo "inf" || echo "$iterations" )"
+        fi
 
         # Find next story
         local next_story
@@ -156,10 +292,9 @@ _run_sequential() {
                 log_error "No stories found in stories.txt"
                 return 1
             fi
-            box_header "ALL STORIES COMPLETE!"
-            log "All stories complete — Ralph loop finished"
-            if type _display_cleanup &>/dev/null; then
-                _display_cleanup
+            if [[ "${_RALPH_PARALLEL_CONTEXT:-}" != true ]]; then
+                box_header "ALL STORIES COMPLETE!"
+                log "All stories complete — Ralph loop finished"
             fi
             _run_summary "sequential"
             return 0
@@ -185,7 +320,6 @@ _run_sequential() {
         if type display_update_current &>/dev/null; then
             display_update_current "$next_story" "$title"
             display_update_iteration "$iteration"
-            display_refresh
         fi
 
         # Build prompt
@@ -220,22 +354,26 @@ _run_sequential() {
         local exit_code=0
 
         # Start live dashboard timer so elapsed clock ticks during execution
-        if type display_start_live_timer &>/dev/null; then
+        if [[ "${_RALPH_PARALLEL_CONTEXT:-}" != true ]] && type display_start_live_timer &>/dev/null; then
             display_start_live_timer
         fi
 
         local story_start
         story_start=$(date '+%s')
 
-        log "Invoking Claude (timeout: ${timeout_secs}s)"
+        # Compute effective timeout (reserves time for postmortem if enabled)
+        local effective_timeout
+        effective_timeout=$(_compute_effective_timeout "$timeout_secs")
+
+        log "Invoking Claude (timeout: ${effective_timeout}s of ${timeout_secs}s)"
 
         if [[ "$verbose" == true ]]; then
             # Verbose: tee to terminal AND file
-            $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
+            $timeout_cmd "$effective_timeout" claude "${claude_flags[@]}" "$prompt" \
                 < /dev/null 2>&1 | tee "$output_file" || exit_code=$?
         else
             # Silent: pipe-based capture (Claude CLI doesn't flush with file redirects)
-            $timeout_cmd "$timeout_secs" claude "${claude_flags[@]}" "$prompt" \
+            $timeout_cmd "$effective_timeout" claude "${claude_flags[@]}" "$prompt" \
                 < /dev/null 2>&1 | cat > "$output_file" || exit_code=$?
         fi
 
@@ -248,7 +386,7 @@ _run_sequential() {
         log "Claude returned: exit_code=$exit_code output_length=$result_len"
 
         # Stop live timer now that Claude has returned
-        if type display_stop_live_timer &>/dev/null; then
+        if [[ "${_RALPH_PARALLEL_CONTEXT:-}" != true ]] && type display_stop_live_timer &>/dev/null; then
             display_stop_live_timer
         fi
 
@@ -265,9 +403,17 @@ _run_sequential() {
 
         # Handle timeout
         if [[ $exit_code -eq 124 ]]; then
-            log_warn "Story $next_story timed out after ${timeout_secs}s"
+            log_warn "Story $next_story timed out after ${effective_timeout}s"
             _STORY_OUTCOMES["$next_story"]="failed"
-            if ! _handle_failure "$next_story" "Timeout after ${timeout_secs}s" "$spec_path" "$max_retries"; then
+            if type display_story_failed &>/dev/null; then
+                local dur_str=""
+                [[ -n "${_STORY_TIMINGS[$next_story]:-}" ]] && \
+                    dur_str=$(_display_format_duration "${_STORY_TIMINGS[$next_story]}")
+                display_story_failed "$next_story" "Timeout after ${effective_timeout}s" "$dur_str"
+            fi
+            # Run postmortem analysis on the partial output
+            _run_timeout_postmortem "$next_story" "$spec_path" "$result" "$timeout_secs" || true
+            if ! _handle_failure "$next_story" "Timeout after ${effective_timeout}s" "$spec_path" "$max_retries"; then
                 return 1
             fi
             _track_local_retry "$next_story" "$max_retries" && return 1
@@ -279,6 +425,12 @@ _run_sequential() {
         if [[ $exit_code -ne 0 ]]; then
             log_error "Story $next_story failed (exit code: $exit_code)"
             _STORY_OUTCOMES["$next_story"]="failed"
+            if type display_story_failed &>/dev/null; then
+                local dur_str=""
+                [[ -n "${_STORY_TIMINGS[$next_story]:-}" ]] && \
+                    dur_str=$(_display_format_duration "${_STORY_TIMINGS[$next_story]}")
+                display_story_failed "$next_story" "Exit code $exit_code" "$dur_str"
+            fi
             if ! _handle_failure "$next_story" "Exit code $exit_code" "$spec_path" "$max_retries"; then
                 return 1
             fi
@@ -296,14 +448,21 @@ _run_sequential() {
                 state_mark_done "$next_story"
                 spec_update_status "$spec_path" "done"
 
-                # Dashboard: update completion
+                # Dashboard: update completion and emit status line
                 if type display_update_stories &>/dev/null; then
                     done_count=$(stories_count_completed)
                     display_update_stories "$total_stories" "$done_count"
                     display_update_last_done "$next_story"
                     display_update_retry 0 "$max_retries"
                     display_update_learnings "$(_display_count_learnings 2>/dev/null || echo 0)"
-                    display_refresh
+                fi
+                if type display_story_completed &>/dev/null; then
+                    local dur_str=""
+                    [[ -n "${_STORY_TIMINGS[$next_story]:-}" ]] && \
+                        dur_str=$(_display_format_duration "${_STORY_TIMINGS[$next_story]}")
+                    local tokens="${_STORY_TOKENS_IN[$next_story]:-0}"
+                    local cost="${_STORY_COST[$next_story]:-0}"
+                    display_story_completed "$next_story" "$dur_str" "$tokens" "$cost"
                 fi
 
                 # Append to progress.txt
@@ -376,7 +535,6 @@ _handle_failure() {
     # Dashboard: update retry count
     if type display_update_retry &>/dev/null; then
         display_update_retry "$retry_count" "$max_retries"
-        display_refresh
     fi
 
     if [[ $retry_count -ge $max_retries ]]; then
