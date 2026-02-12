@@ -59,7 +59,9 @@ _CONFIG_DEFAULTS='{
         "pre_iteration": "",
         "post_iteration": "",
         "pre_story": "",
-        "post_story": ""
+        "post_story": "",
+        "pre_worktree": "",
+        "pre_worktree_timeout": 120
     }
 }'
 
@@ -97,7 +99,7 @@ config_get() {
     fi
 
     local value
-    value=$(echo "$_CONFIG" | jq -r "$path // empty" 2>/dev/null)
+    value=$(echo "$_CONFIG" | jq -r "$path" 2>/dev/null)
 
     if [[ -z "$value" || "$value" == "null" ]]; then
         echo "$default"

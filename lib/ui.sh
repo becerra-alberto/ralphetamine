@@ -18,7 +18,9 @@ _ralph_run_exit_handlers() {
         done
     fi
 }
-trap _ralph_run_exit_handlers EXIT
+if [[ -z "${BATS_TEST_FILENAME:-}" ]]; then
+    trap _ralph_run_exit_handlers EXIT
+fi
 
 # ── ERR trap for crash diagnostics ────────────────────────────────────────
 _ralph_err_handler() {
@@ -36,7 +38,9 @@ _ralph_err_handler() {
     } >> "${RALPH_LOG_FILE:-ralph.log}" 2>/dev/null
     echo "[RALPH CRASH] exit=$exit_code cmd='$command' func=$func_name line=$line_no" >&2
 }
-trap '_ralph_err_handler "$LINENO"' ERR
+if [[ -z "${BATS_TEST_FILENAME:-}" ]]; then
+    trap '_ralph_err_handler "$LINENO"' ERR
+fi
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 readonly CLR_RESET='\033[0m'
