@@ -55,6 +55,26 @@ fi
 cp "${RALPH_DIR}/skills/SKILL.md" "${SKILL_DIR}/SKILL.md"
 echo "Installed: ${SKILL_DIR}/SKILL.md (v2)"
 
+# Install /ralph-pipeline-interactive skill
+INTERACTIVE_SKILL_DIR="${HOME}/.claude/skills/ralph-pipeline-interactive"
+mkdir -p "$INTERACTIVE_SKILL_DIR"
+if [[ -f "${INTERACTIVE_SKILL_DIR}/SKILL.md" ]]; then
+    cp "${INTERACTIVE_SKILL_DIR}/SKILL.md" "${INTERACTIVE_SKILL_DIR}/SKILL.md.bak"
+    echo "Backed up: ${INTERACTIVE_SKILL_DIR}/SKILL.md -> SKILL.md.bak"
+fi
+cp "${RALPH_DIR}/skills/ralph-pipeline-interactive/SKILL.md" "${INTERACTIVE_SKILL_DIR}/SKILL.md"
+echo "Installed: ${INTERACTIVE_SKILL_DIR}/SKILL.md (interactive pipeline)"
+
+# Install /ralph-pipeline-full-auto skill
+FULLAUTO_SKILL_DIR="${HOME}/.claude/skills/ralph-pipeline-full-auto"
+mkdir -p "$FULLAUTO_SKILL_DIR"
+if [[ -f "${FULLAUTO_SKILL_DIR}/SKILL.md" ]]; then
+    cp "${FULLAUTO_SKILL_DIR}/SKILL.md" "${FULLAUTO_SKILL_DIR}/SKILL.md.bak"
+    echo "Backed up: ${FULLAUTO_SKILL_DIR}/SKILL.md -> SKILL.md.bak"
+fi
+cp "${RALPH_DIR}/skills/ralph-pipeline-full-auto/SKILL.md" "${FULLAUTO_SKILL_DIR}/SKILL.md"
+echo "Installed: ${FULLAUTO_SKILL_DIR}/SKILL.md (full-auto pipeline)"
+
 # Check if INSTALL_DIR is in PATH
 if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
     echo ""
@@ -74,5 +94,7 @@ echo "  cd your-project"
 echo "  ralph init          # Initialize Ralph in project"
 echo "  /prd                # Create a PRD in Claude Code"
 echo "  /ralph              # Convert PRD to specs + story queue"
+echo "  /ralph-pipeline-interactive  # Guided pipeline with user checkpoints"
+echo "  /ralph-pipeline-full-auto    # Fully autonomous pipeline (zero input)"
 echo "  ralph run           # Run autonomous implementation loop"
 echo ""
