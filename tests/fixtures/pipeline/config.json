@@ -20,10 +20,11 @@
         "blocked_commands": []
     },
     "claude": {
-        "flags": ["--print", "--dangerously-skip-permissions"]
+        "flags": ["--print", "--dangerously-skip-permissions", "--output-format", "json"]
     },
     "commit": {
         "format": "feat(story-{{id}}): {{title}}",
+        "stage_paths": [],
         "auto_commit": true
     },
     "testing_phase": {

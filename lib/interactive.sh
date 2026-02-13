@@ -78,8 +78,8 @@ interactive_init() {
             },
             loop: { max_iterations: 0, timeout_seconds: 1800, max_retries: 3 },
             validation: { commands: $validation, blocked_commands: $blocked },
-            claude: { flags: ["--print", "--dangerously-skip-permissions"] },
-            commit: { format: "feat(story-{{id}}): {{title}}", auto_commit: true },
+            claude: { flags: ["--print", "--dangerously-skip-permissions", "--output-format", "json"] },
+            commit: { format: "feat(story-{{id}}): {{title}}", stage_paths: [], auto_commit: true },
             testing_phase: { enabled: false, timeout_seconds: 600 },
             learnings: { enabled: true, max_inject_count: 5 },
             parallel: {
@@ -104,12 +104,26 @@ interactive_init() {
     # Create empty learnings index
     echo '{}' > ".ralph/learnings/_index.json"
 
-    # Create empty progress.txt if it doesn't exist
-    [[ -f "progress.txt" ]] || touch "progress.txt"
-
     # Install Claude Code commands
     mkdir -p ".claude/commands"
-    cp "${RALPH_DIR}/commands/create-spec.md" ".claude/commands/create-spec.md"
+    local create_spec_source="${RALPH_DIR}/commands/create-spec.md"
+    if [[ ! -f "$create_spec_source" ]]; then
+        create_spec_source="${RALPH_DIR}/commands/ralph-v2/step_3-add-ad-hoc-spec.md"
+    fi
+    cp "$create_spec_source" ".claude/commands/create-spec.md"
+
+    local reconcile_claude_source="${RALPH_DIR}/commands/ralph-reconcile-claude-code.md"
+    local reconcile_codex_source="${RALPH_DIR}/commands/ralph-reconcile-codex.md"
+    local installed_reconcile_claude=false
+    local installed_reconcile_codex=false
+    if [[ -f "$reconcile_claude_source" ]]; then
+        cp "$reconcile_claude_source" ".claude/commands/ralph-reconcile-claude-code.md"
+        installed_reconcile_claude=true
+    fi
+    if [[ -f "$reconcile_codex_source" ]]; then
+        cp "$reconcile_codex_source" ".claude/commands/ralph-reconcile-codex.md"
+        installed_reconcile_codex=true
+    fi
 
     echo ""
     log_success "Created .ralph/config.json"
@@ -117,8 +131,15 @@ interactive_init() {
     log_success "Created .ralph/templates/"
     log_success "Created .ralph/learnings/"
     log_success "Installed .claude/commands/create-spec.md"
+    if [[ "$installed_reconcile_claude" == true ]]; then
+        log_success "Installed .claude/commands/ralph-reconcile-claude-code.md"
+    fi
+    if [[ "$installed_reconcile_codex" == true ]]; then
+        log_success "Installed .claude/commands/ralph-reconcile-codex.md"
+    fi
     echo ""
     echo "Commands installed. After creating a PRD with /prd, run /ralph to generate specs."
+    echo "After a run completes, use /ralph-reconcile-claude-code or /ralph-reconcile-codex."
 }
 
 # ── Run startup prompts ────────────────────────────────────────────────────

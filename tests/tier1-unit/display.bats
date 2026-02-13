@@ -11,6 +11,10 @@ setup() {
     source_ralph_lib "display"
 }
 
+teardown() {
+    _display_stop_heartbeat 2>/dev/null || true
+}
+
 # ── ui_progress_bar tests ────────────────────────────────────────────
 
 @test "ui_progress_bar: 0/10 shows all empty" {
@@ -207,6 +211,16 @@ setup() {
     NO_COLOR=1 run display_batch_results 3 1
     assert_success
     assert_output "[INFO] Batch results: 3 succeeded, 1 failed"
+}
+
+@test "_display_stop_heartbeat: returns promptly without waiting full interval" {
+    _DISPLAY_HEARTBEAT_INTERVAL=6
+    _display_start_heartbeat "3.1"
+    sleep 1
+
+    SECONDS=0
+    _display_stop_heartbeat
+    [[ "$SECONDS" -lt 3 ]]
 }
 
 # ── Dashboard disabled behavior ──────────────────────────────────────

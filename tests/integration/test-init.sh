@@ -91,6 +91,19 @@ else
     FAILURES=$((FAILURES + 1))
 fi
 
+# 5b. claude flags include JSON output envelope required for metrics parsing
+HAS_JSON_FLAGS=$(jq -r '
+    (.claude.flags // []) as $f |
+    ($f | index("--print")) != null and
+    ([range(0; ($f | length) - 1) | select($f[.] == "--output-format" and $f[. + 1] == "json")] | length) > 0
+' .ralph/config.json 2>/dev/null || echo "false")
+if [[ "$HAS_JSON_FLAGS" == "true" ]]; then
+    echo "  PASS: claude flags include --print and --output-format json"
+else
+    echo "  FAIL: claude flags missing required JSON output flags"
+    FAILURES=$((FAILURES + 1))
+fi
+
 # 6. stories.txt exists
 if [[ -f ".ralph/stories.txt" ]]; then
     echo "  PASS: .ralph/stories.txt exists"
@@ -123,11 +136,11 @@ else
     FAILURES=$((FAILURES + 1))
 fi
 
-# 10. progress.txt created
-if [[ -f "progress.txt" ]]; then
-    echo "  PASS: progress.txt exists"
+# 10. progress.txt should not be created by init alone
+if [[ ! -f "progress.txt" ]]; then
+    echo "  PASS: progress.txt not created by init"
 else
-    echo "  FAIL: progress.txt missing"
+    echo "  FAIL: progress.txt should not be created by init"
     FAILURES=$((FAILURES + 1))
 fi
 

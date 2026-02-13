@@ -64,3 +64,24 @@ teardown() {
     # With no learnings, the LEARNINGS conditional block should be removed
     refute_output --partial "LEARNINGS FROM PREVIOUS STORIES"
 }
+
+@test "prompt_build: output enforces scoped staging from spec targets" {
+    run prompt_build "1.1" "specs/epic-1/story-1.1-initialize-project.md"
+    assert_success
+    assert_output --partial "never use \`git add -A\`"
+    assert_output --partial "src/main.ts"
+    assert_output --partial "src-tauri/src/main.rs"
+    assert_output --partial "git add -- src/main.ts src-tauri/src/main.rs"
+}
+
+@test "prompt_build: commit.stage_paths overrides inferred spec targets" {
+    jq '.commit.stage_paths = ["SKILL.md"]' .ralph/config.json > .ralph/config.json.tmp
+    mv .ralph/config.json.tmp .ralph/config.json
+    _CONFIG=""
+    config_load
+
+    run prompt_build "1.1" "specs/epic-1/story-1.1-initialize-project.md"
+    assert_success
+    assert_output --partial "git add -- SKILL.md"
+    refute_output --partial "git add -- src/main.ts src-tauri/src/main.rs"
+}

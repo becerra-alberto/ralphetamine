@@ -42,8 +42,24 @@ echo "Symlinked: ${INSTALL_DIR}/ralph -> ${RALPH_BIN}"
 # Install global Claude Code command (fallback for projects without ralph init)
 CLAUDE_COMMANDS_DIR="${HOME}/.claude/commands"
 mkdir -p "$CLAUDE_COMMANDS_DIR"
-cp "${RALPH_DIR}/commands/create-spec.md" "${CLAUDE_COMMANDS_DIR}/ralph-create-spec.md"
+CREATE_SPEC_SOURCE="${RALPH_DIR}/commands/create-spec.md"
+if [[ ! -f "$CREATE_SPEC_SOURCE" ]]; then
+    CREATE_SPEC_SOURCE="${RALPH_DIR}/commands/ralph-v2/step_3-add-ad-hoc-spec.md"
+fi
+cp "$CREATE_SPEC_SOURCE" "${CLAUDE_COMMANDS_DIR}/ralph-create-spec.md"
 echo "Installed: ${CLAUDE_COMMANDS_DIR}/ralph-create-spec.md"
+
+RECONCILE_CLAUDE_COMMAND_SOURCE="${RALPH_DIR}/commands/ralph-reconcile-claude-code.md"
+if [[ -f "$RECONCILE_CLAUDE_COMMAND_SOURCE" ]]; then
+    cp "$RECONCILE_CLAUDE_COMMAND_SOURCE" "${CLAUDE_COMMANDS_DIR}/ralph-reconcile-claude-code.md"
+    echo "Installed: ${CLAUDE_COMMANDS_DIR}/ralph-reconcile-claude-code.md"
+fi
+
+RECONCILE_CODEX_COMMAND_SOURCE="${RALPH_DIR}/commands/ralph-reconcile-codex.md"
+if [[ -f "$RECONCILE_CODEX_COMMAND_SOURCE" ]]; then
+    cp "$RECONCILE_CODEX_COMMAND_SOURCE" "${CLAUDE_COMMANDS_DIR}/ralph-reconcile-codex.md"
+    echo "Installed: ${CLAUDE_COMMANDS_DIR}/ralph-reconcile-codex.md"
+fi
 
 # Install /ralph skill (backup old one if it exists)
 SKILL_DIR="${HOME}/.claude/skills/ralph"
@@ -75,6 +91,26 @@ fi
 cp "${RALPH_DIR}/skills/ralph-pipeline-full-auto/SKILL.md" "${FULLAUTO_SKILL_DIR}/SKILL.md"
 echo "Installed: ${FULLAUTO_SKILL_DIR}/SKILL.md (full-auto pipeline)"
 
+# Install /ralph-run-reconcile-claude-code skill (with references)
+RECONCILE_CLAUDE_SKILL_DIR="${HOME}/.claude/skills/ralph-run-reconcile-claude-code"
+mkdir -p "$RECONCILE_CLAUDE_SKILL_DIR"
+if [[ -f "${RECONCILE_CLAUDE_SKILL_DIR}/SKILL.md" ]]; then
+    cp "${RECONCILE_CLAUDE_SKILL_DIR}/SKILL.md" "${RECONCILE_CLAUDE_SKILL_DIR}/SKILL.md.bak"
+    echo "Backed up: ${RECONCILE_CLAUDE_SKILL_DIR}/SKILL.md -> SKILL.md.bak"
+fi
+cp -R "${RALPH_DIR}/skills/ralph-run-reconcile-claude-code/." "$RECONCILE_CLAUDE_SKILL_DIR/"
+echo "Installed: ${RECONCILE_CLAUDE_SKILL_DIR}/SKILL.md (reconcile for Claude Code)"
+
+# Install /ralph-run-reconcile-codex skill (with references)
+RECONCILE_CODEX_SKILL_DIR="${HOME}/.claude/skills/ralph-run-reconcile-codex"
+mkdir -p "$RECONCILE_CODEX_SKILL_DIR"
+if [[ -f "${RECONCILE_CODEX_SKILL_DIR}/SKILL.md" ]]; then
+    cp "${RECONCILE_CODEX_SKILL_DIR}/SKILL.md" "${RECONCILE_CODEX_SKILL_DIR}/SKILL.md.bak"
+    echo "Backed up: ${RECONCILE_CODEX_SKILL_DIR}/SKILL.md -> SKILL.md.bak"
+fi
+cp -R "${RALPH_DIR}/skills/ralph-run-reconcile-codex/." "$RECONCILE_CODEX_SKILL_DIR/"
+echo "Installed: ${RECONCILE_CODEX_SKILL_DIR}/SKILL.md (reconcile for Codex)"
+
 # Check if INSTALL_DIR is in PATH
 if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
     echo ""
@@ -96,5 +132,7 @@ echo "  /prd                # Create a PRD in Claude Code"
 echo "  /ralph              # Convert PRD to specs + story queue"
 echo "  /ralph-pipeline-interactive  # Guided pipeline with user checkpoints"
 echo "  /ralph-pipeline-full-auto    # Fully autonomous pipeline (zero input)"
+echo "  /ralph-reconcile-claude-code # Reconcile the latest run (Claude Code mode)"
+echo "  /ralph-reconcile-codex       # Reconcile the latest run (Codex mode)"
 echo "  ralph run           # Run autonomous implementation loop"
 echo ""

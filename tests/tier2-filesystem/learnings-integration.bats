@@ -42,6 +42,20 @@ teardown() {
     assert_file_contains "progress.txt" "LEARN"
 }
 
+@test "learnings_extract: extracts LEARN from JSONL assistant event" {
+    learnings_init
+    local output
+    output="$(cat <<'EOF'
+{"type":"assistant","message":{"content":[{"type":"text","text":"<ralph>LEARN: streamed learning from assistant event</ralph>"}]}}
+{"type":"result","result":"<ralph>DONE 4.2</ralph>","usage":{"input_tokens":12,"output_tokens":4}}
+EOF
+)"
+    run learnings_extract "$output" "4.2"
+    assert_success
+    [[ -f ".ralph/learnings/uncategorized.md" ]]
+    assert_file_contains ".ralph/learnings/uncategorized.md" "streamed learning from assistant event"
+}
+
 @test "learnings_select_relevant: returns top-scored entries" {
     # Set up learnings directory with content
     mkdir -p .ralph/learnings

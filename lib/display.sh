@@ -171,7 +171,7 @@ _display_start_heartbeat() {
     (
         trap 'exit 0' TERM INT
         while true; do
-            sleep "$_DISPLAY_HEARTBEAT_INTERVAL"
+            _display_wait_heartbeat_interval "$_DISPLAY_HEARTBEAT_INTERVAL"
             local elapsed_str="??:??:??"
             if [[ -n "$RALPH_START_TIME" ]]; then
                 elapsed_str=$(_display_format_elapsed "$RALPH_START_TIME")
@@ -207,7 +207,7 @@ _display_start_batch_heartbeat() {
     (
         trap 'exit 0' TERM INT
         while true; do
-            sleep "$_DISPLAY_HEARTBEAT_INTERVAL"
+            _display_wait_heartbeat_interval "$_DISPLAY_HEARTBEAT_INTERVAL"
             local elapsed_str="??:??:??"
             if [[ -n "$RALPH_START_TIME" ]]; then
                 elapsed_str=$(_display_format_elapsed "$RALPH_START_TIME")
@@ -270,6 +270,21 @@ display_refresh_from_state() {
 }
 
 # ── Utility functions ────────────────────────────────────────────────
+
+# Sleep heartbeat intervals in 1s slices so stop requests are responsive.
+# Long, single sleeps can delay `wait` by minutes when shutting down.
+_display_wait_heartbeat_interval() {
+    local interval="${1:-1}"
+    if ! [[ "$interval" =~ ^[0-9]+$ ]] || [[ "$interval" -lt 1 ]]; then
+        interval=1
+    fi
+
+    local slept=0
+    while [[ "$slept" -lt "$interval" ]]; do
+        sleep 1
+        slept=$((slept + 1))
+    done
+}
 
 # Format elapsed time from a start timestamp to now
 # Usage: _display_format_elapsed <start_epoch>

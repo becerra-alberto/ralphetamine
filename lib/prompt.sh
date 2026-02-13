@@ -119,6 +119,34 @@ prompt_process_conditionals() {
     echo "$result"
 }
 
+# Extract unique file targets from a spec's "Files to Create/Modify" section.
+# Prefers fenced paths like: - `path/to/file.ext` — description
+prompt_extract_spec_target_paths() {
+    local spec_path="$1"
+    [[ -f "$spec_path" ]] || return 0
+
+    awk '
+        BEGIN { in_files=0 }
+        {
+            lower = tolower($0)
+        }
+        lower ~ /^#{2,6}[[:space:]]+files to create\/modify([[:space:]:].*)?$/ {
+            in_files=1
+            next
+        }
+        in_files && /^#{1,6}[[:space:]]+/ {
+            in_files=0
+        }
+        in_files {
+            if (match($0, /`[^`]+`/)) {
+                path = substr($0, RSTART + 1, RLENGTH - 2)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", path)
+                if (length(path) > 0) print path
+            }
+        }
+    ' "$spec_path" | awk '!seen[$0]++'
+}
+
 # Build the full implementation prompt for a story
 prompt_build() {
     local story_id="$1"
@@ -154,6 +182,35 @@ prompt_build() {
     commit_format="${commit_format//\{\{id\}\}/$story_id}"
     commit_format="${commit_format//\{\{title\}\}/$title}"
 
+    # Build commit staging guidance (scope staging to story files only).
+    local commit_stage_instructions=""
+    local commit_stage_paths=()
+    local commit_stage_paths_json
+    commit_stage_paths_json=$(config_get_json '.commit.stage_paths')
+
+    if [[ "$commit_stage_paths_json" != "null" && "$commit_stage_paths_json" != "[]" ]]; then
+        mapfile -t commit_stage_paths < <(
+            echo "$commit_stage_paths_json" | jq -r '.[]' 2>/dev/null | sed '/^$/d'
+        )
+    fi
+
+    if [[ ${#commit_stage_paths[@]} -eq 0 ]]; then
+        mapfile -t commit_stage_paths < <(prompt_extract_spec_target_paths "$spec_path")
+    fi
+
+    if [[ ${#commit_stage_paths[@]} -gt 0 ]]; then
+        local stage_cmd="git add --"
+        local stage_path
+        local stage_path_lines=""
+        for stage_path in "${commit_stage_paths[@]}"; do
+            stage_cmd+=" $(printf '%q' "$stage_path")"
+            stage_path_lines+="     - \`$stage_path\`"$'\n'
+        done
+        commit_stage_instructions="   - Stage ONLY story target files (never use \`git add -A\` or \`git add .\`):"$'\n'"$stage_path_lines""   - Run: \`$stage_cmd\`"
+    else
+        commit_stage_instructions="   - Never use \`git add -A\` or \`git add .\`. Stage only story-related files by naming each path explicitly with \`git add -- <path>\`."
+    fi
+
     # Collect learnings if enabled
     local learnings=""
     if [[ "$(config_get '.learnings.enabled' 'true')" == "true" ]]; then
@@ -175,6 +232,7 @@ prompt_build() {
         "VALIDATION_COMMANDS=$validation_cmds" \
         "BLOCKED_COMMANDS=$blocked_cmds" \
         "COMMIT_MESSAGE=$commit_format" \
+        "COMMIT_STAGE_INSTRUCTIONS=$commit_stage_instructions" \
         "LEARNINGS=$learnings"
     )
 
@@ -182,6 +240,7 @@ prompt_build() {
     template=$(prompt_process_conditionals "$template" \
         "VALIDATION_COMMANDS=$validation_cmds" \
         "BLOCKED_COMMANDS=$blocked_cmds" \
+        "COMMIT_STAGE_INSTRUCTIONS=$commit_stage_instructions" \
         "LEARNINGS=$learnings"
     )
 

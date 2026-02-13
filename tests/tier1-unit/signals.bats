@@ -100,6 +100,25 @@ retried...
     assert_output ""
 }
 
+@test "parse_learnings: extracts LEARN from JSON result envelope" {
+    local output='{"type":"result","result":"<ralph>LEARN: JSON envelope learning</ralph>","usage":{"input_tokens":1,"output_tokens":1}}'
+    run signals_parse_learnings "$output"
+    assert_success
+    assert_output "JSON envelope learning"
+}
+
+@test "parse_learnings: extracts LEARN from JSONL assistant event" {
+    local output
+    output="$(cat <<'EOF'
+{"type":"assistant","message":{"content":[{"type":"text","text":"<ralph>LEARN: streamed assistant learning</ralph>"}]}}
+{"type":"result","result":"<ralph>DONE 1.1</ralph>","usage":{"input_tokens":9,"output_tokens":2}}
+EOF
+)"
+    run signals_parse_learnings "$output"
+    assert_success
+    assert_output "streamed assistant learning"
+}
+
 # ── parse_test_review_done ──────────────────────────────────────────────────
 
 @test "parse_test_review_done: standard format" {

@@ -157,9 +157,13 @@ decompose_story() {
         result=$(echo "$raw_result" | jq -r '.result // ""')
     fi
 
-    # Extract learnings
-    if type learnings_extract &>/dev/null && [[ -n "$result" ]]; then
-        learnings_extract "$result" "$story_id" || true
+    # Extract learnings from both raw JSON and extracted result.
+    local learnings_input="$result"
+    if [[ -n "$raw_result" && "$raw_result" != "$result" ]]; then
+        learnings_input="${raw_result}"$'\n'"${result}"
+    fi
+    if type learnings_extract &>/dev/null && [[ -n "$learnings_input" ]]; then
+        learnings_extract "$learnings_input" "$story_id" || true
     fi
 
     # Check for DECOMPOSE_FAIL

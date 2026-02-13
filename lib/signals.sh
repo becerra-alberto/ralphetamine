@@ -89,7 +89,54 @@ signals_parse_learnings() {
     # BSD tr on macOS doesn't support \xNN hex escapes — it would interpret
     # '\x1f' as the literal characters \, x, 1, f, eating 'f' from output.
     local US=$'\x1f'
-    echo "$output" | tr '\n' "$US" | \
+    local extracted=""
+
+    extracted=$(echo "$output" | tr '\n' "$US" | \
+        grep -oE '<ralph>LEARN:[[:space:]]*[^<]+</ralph>' | \
+        sed 's/<ralph>LEARN:[[:space:]]*//' | \
+        sed 's/<\/ralph>//' | \
+        tr "$US" '\n' || true)
+
+    if [[ -n "$extracted" ]]; then
+        printf '%s\n' "$extracted"
+        return 0
+    fi
+
+    # Fallback: when Claude is run with --output-format json, LEARN tags may be
+    # present in streamed JSON events rather than the final .result payload.
+    local json_strings
+    json_strings=$(echo "$output" | jq -r '
+        select((.type? // "") != "user" and (.role? // "") != "user")
+        | [
+            .result?,
+            .message.content[]?.text?,
+            .content[]?.text?,
+            .delta?.text?,
+            .text?
+        ]
+        | .[]
+        | strings
+    ' 2>/dev/null || true)
+
+    if [[ -z "$json_strings" ]]; then
+        json_strings=$(echo "$output" | jq -Rr '
+            fromjson?
+            | select((.type? // "") != "user" and (.role? // "") != "user")
+            | [
+                .result?,
+                .message.content[]?.text?,
+                .content[]?.text?,
+                .delta?.text?,
+                .text?
+            ]
+            | .[]
+            | strings
+        ' 2>/dev/null || true)
+    fi
+
+    [[ -z "$json_strings" ]] && return 0
+
+    echo "$json_strings" | tr '\n' "$US" | \
         grep -oE '<ralph>LEARN:[[:space:]]*[^<]+</ralph>' | \
         sed 's/<ralph>LEARN:[[:space:]]*//' | \
         sed 's/<\/ralph>//' | \

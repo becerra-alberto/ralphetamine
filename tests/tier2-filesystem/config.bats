@@ -73,4 +73,26 @@ teardown() {
     assert_success
     assert_line --index 0 "--print"
     assert_line --index 1 "--dangerously-skip-permissions"
+    assert_line --index 2 "--output-format"
+    assert_line --index 3 "json"
+}
+
+@test "config_get_claude_flags: appends required JSON output flags for legacy config" {
+    mkdir -p .ralph
+    cat > .ralph/config.json <<'EOF'
+{
+  "version": "2.0.0",
+  "project": { "name": "legacy" },
+  "claude": {
+    "flags": ["--dangerously-skip-permissions"]
+  }
+}
+EOF
+    config_load
+    run config_get_claude_flags
+    assert_success
+    assert_line --index 0 "--dangerously-skip-permissions"
+    assert_line --index 1 "--print"
+    assert_line --index 2 "--output-format"
+    assert_line --index 3 "json"
 }

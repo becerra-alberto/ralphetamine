@@ -148,17 +148,23 @@ _run_timeout_postmortem() {
     $timeout_cmd "$pm_window" claude "${claude_flags[@]}" "$template" \
         < /dev/null 2>&1 | cat > "$pm_output_file" || pm_exit=$?
 
-    local pm_result
-    pm_result=$(cat "$pm_output_file" 2>/dev/null) || true
+    local pm_raw_output
+    pm_raw_output=$(cat "$pm_output_file" 2>/dev/null) || true
+    local pm_result="$pm_raw_output"
 
     # Extract text from JSON envelope if needed
     if echo "$pm_result" | jq -e '.type == "result"' &>/dev/null 2>&1; then
         pm_result=$(echo "$pm_result" | jq -r '.result // ""')
     fi
 
+    local pm_learnings_input="$pm_result"
+    if [[ -n "$pm_raw_output" && "$pm_raw_output" != "$pm_result" ]]; then
+        pm_learnings_input="${pm_raw_output}"$'\n'"${pm_result}"
+    fi
+
     # Extract learnings from postmortem output
-    if type learnings_extract &>/dev/null && [[ -n "$pm_result" ]]; then
-        learnings_extract "$pm_result" "$story_id" || true
+    if type learnings_extract &>/dev/null && [[ -n "$pm_learnings_input" ]]; then
+        learnings_extract "$pm_learnings_input" "$story_id" || true
     fi
 
     # Persist full postmortem to .ralph/learnings/timeouts/
@@ -377,6 +383,12 @@ _run_sequential() {
                 < /dev/null 2>&1 | cat > "$output_file" || exit_code=$?
         fi
 
+        # Record per-story duration immediately after Claude exits.
+        # Keep this independent from display heartbeat shutdown latency.
+        local story_end
+        story_end=$(date '+%s')
+        _STORY_TIMINGS["$next_story"]=$(( story_end - story_start ))
+
         # Read captured output and extract metrics from JSON envelope
         local raw_output
         raw_output=$(cat "$output_file" 2>/dev/null) || true
@@ -390,15 +402,15 @@ _run_sequential() {
             display_stop_live_timer
         fi
 
-        # Record per-story duration
-        local story_end
-        story_end=$(date '+%s')
-        _STORY_TIMINGS["$next_story"]=$(( story_end - story_start ))
-
         # Extract learnings from whatever output exists, regardless of exit code.
-        # Claude often emits LEARN signals before timing out — capture them early.
-        if type learnings_extract &>/dev/null && [[ -n "$result" ]]; then
-            learnings_extract "$result" "$next_story" || true
+        # Combine raw JSON output + extracted result because LEARN tags may appear
+        # in streamed events outside the final .result payload.
+        local learnings_input="$result"
+        if [[ -n "$raw_output" && "$raw_output" != "$result" ]]; then
+            learnings_input="${raw_output}"$'\n'"${result}"
+        fi
+        if type learnings_extract &>/dev/null && [[ -n "$learnings_input" ]]; then
+            learnings_extract "$learnings_input" "$next_story" || true
         fi
 
         # Handle timeout

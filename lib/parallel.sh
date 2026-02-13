@@ -90,6 +90,30 @@ _parallel_validate_worktree() {
     return 0
 }
 
+# Run the pre_worktree hook for a freshly created worktree.
+# On failure: removes worktree + branch, returns 1.
+_parallel_setup_worktree() {
+    local story="$1"
+    local worktree_dir="$2"
+    local branch_name="$3"
+    local project_dir
+    project_dir=$(pwd)
+
+    if ! hooks_run_strict "pre_worktree" \
+        "RALPH_STORY=$story" \
+        "RALPH_WORKTREE=$worktree_dir" \
+        "RALPH_BRANCH=$branch_name" \
+        "RALPH_PROJECT_DIR=$project_dir"; then
+
+        log_error "pre_worktree hook failed for story $story — skipping"
+        git worktree unlock "$worktree_dir" 2>/dev/null || true
+        git worktree remove "$worktree_dir" --force 2>/dev/null || true
+        rm -rf "$worktree_dir" 2>/dev/null || true
+        git branch -D "$branch_name" 2>/dev/null || true
+        return 1
+    fi
+}
+
 # Main parallel execution entry point
 parallel_run() {
     prereqs_require_bash4 || return 1
@@ -351,6 +375,12 @@ _parallel_execute_batch() {
             fi
         fi
 
+        # Run pre_worktree hook (setup: symlinks, deps, etc.)
+        if ! _parallel_setup_worktree "$story" "$worktree_dir" "$branch_name"; then
+            _PARALLEL_FAILED+=("$story")
+            continue
+        fi
+
         # Find spec and build prompt
         local spec_path
         spec_path=$(spec_find "$story") || {
@@ -517,9 +547,15 @@ _parallel_execute_batch() {
             fi
         fi
 
-        # Extract learnings regardless
-        if type learnings_extract &>/dev/null && [[ -n "$result" ]]; then
-            learnings_extract "$result" "$story"
+        # Extract learnings regardless of completion status.
+        # Include raw JSON output because LEARN tags may be emitted in
+        # streamed events outside the final result field.
+        local learnings_input="$result"
+        if [[ -n "$raw_output" && "$raw_output" != "$result" ]]; then
+            learnings_input="${raw_output}"$'\n'"${result}"
+        fi
+        if type learnings_extract &>/dev/null && [[ -n "$learnings_input" ]]; then
+            learnings_extract "$learnings_input" "$story"
         fi
 
         # Dashboard: update last-done story and learnings count
@@ -588,6 +624,12 @@ _parallel_retry_failed() {
                 continue
             fi
 
+            # Run pre_worktree hook for retry worktree
+            if ! _parallel_setup_worktree "$story" "$worktree_dir" "$branch_name"; then
+                attempt=$((attempt + 1))
+                continue
+            fi
+
             # Build prompt
             local spec_path
             spec_path=$(spec_find "$story") || {
@@ -634,8 +676,12 @@ _parallel_retry_failed() {
 
             # Extract learnings from this attempt before checking outcome.
             # Each retry overwrites the output file, so extract per-iteration.
-            if type learnings_extract &>/dev/null && [[ -n "$result" ]]; then
-                learnings_extract "$result" "$story" || true
+            local learnings_input="$result"
+            if [[ -n "$raw_output" && "$raw_output" != "$result" ]]; then
+                learnings_input="${raw_output}"$'\n'"${result}"
+            fi
+            if type learnings_extract &>/dev/null && [[ -n "$learnings_input" ]]; then
+                learnings_extract "$learnings_input" "$story" || true
             fi
 
             # Check for DONE signal

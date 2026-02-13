@@ -20,6 +20,9 @@ You are Ralph, an autonomous implementation agent. Your task is to implement Sto
 {{/if}}
 4. On SUCCESS:
    - Use Bash tool to stage and commit with message: {{COMMIT_MESSAGE}}
+{{#if COMMIT_STAGE_INSTRUCTIONS}}
+{{COMMIT_STAGE_INSTRUCTIONS}}
+{{/if}}
    - Output the exact text: <ralph>DONE {{STORY_ID}}</ralph>
 5. On FAILURE:
    - Use Bash tool to run 'git checkout .' to revert changes

@@ -26,6 +26,7 @@ _CONFIG_DEFAULTS='{
     },
     "commit": {
         "format": "feat(story-{{id}}): {{title}}",
+        "stage_paths": [],
         "auto_commit": true
     },
     "testing_phase": {
@@ -135,5 +136,25 @@ config_get_claude_flags() {
         config_load || return 1
     fi
 
-    echo "$_CONFIG" | jq -r '.claude.flags[]' 2>/dev/null
+    local flags=()
+    mapfile -t flags < <(echo "$_CONFIG" | jq -r '.claude.flags[]?' 2>/dev/null)
+
+    local has_print=false
+    local has_output_json=false
+    local i
+    for (( i=0; i<${#flags[@]}; i++ )); do
+        if [[ "${flags[$i]}" == "--print" ]]; then
+            has_print=true
+        fi
+        if [[ "${flags[$i]}" == "--output-format" && $((i + 1)) -lt ${#flags[@]} && "${flags[$((i + 1))]}" == "json" ]]; then
+            has_output_json=true
+        fi
+    done
+
+    # Ralph parses usage/cost/turn metrics from Claude's JSON result envelope.
+    # Ensure required flags are present even in older project configs.
+    [[ "$has_print" == false ]] && flags+=("--print")
+    [[ "$has_output_json" == false ]] && flags+=("--output-format" "json")
+
+    printf '%s\n' "${flags[@]}"
 }
