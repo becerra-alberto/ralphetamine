@@ -20,6 +20,27 @@ This variant includes a **double premortem** — a second review pass that accou
 3. **Pass forward only summaries.** When a sub-agent returns, extract the minimal information needed for the next phase (file paths, story count, issue list) — not the full content.
 4. **Parallelize independent sub-agents.** Spec writers, premortem analyzers, and validation checks that don't depend on each other should run concurrently in a single message.
 
+## Core Directive: Non-Interactive File Writes
+
+This pipeline is fully autonomous. **Do not pause to request write approval from the user.**
+
+1. **Create missing paths proactively.** Before writing any new artifact, ensure parent directories exist (`mkdir -p` behavior).
+2. **Use a create-capable write path for new files.** If a file does not exist (for example `skills/oss-prep/SKILL.md`), create it directly instead of attempting edit-only operations.
+3. **Retry with an alternate write method once.** If first write attempt fails, retry using a different mechanism (for example: write tool then patch tool, or patch tool then write tool).
+4. **Never ask "Could you approve this write?"** in full-auto mode. If the runtime hard-blocks all writes after retries, log a structured blocker and continue as far as possible.
+5. **Record blocked writes** in `.ralph/write-blockers.md` using:
+   - target path
+   - reason/error text
+   - whether content was generated
+   - next command for manual recovery
+
+## Core Directive: Ralph Runtime Compatibility
+
+1. **Generate artifacts for `ralph run` only.** Do not generate custom per-story loops that call `claude` directly.
+2. **Do not treat model prose as completion.** Story completion is determined by Ralph state/signal flow, not by freeform "done" text.
+3. **Normalize file paths to the current project root.** If cwd is `.../skills/oss-prep`, target `SKILL.md` (not `skills/oss-prep/SKILL.md`).
+4. **Queue must be runnable before commit.** `.ralph/stories.txt` must include at least one active `N.M | Title` entry.
+
 ---
 
 ## Pipeline Overview
@@ -158,6 +179,11 @@ As a [role], I want [capability] so that [benefit].
 - `path/to/file` — [what changes] (create|modify)
 ```
 
+**Path normalization rule (critical):**
+- Every `Files to Create/Modify` path must be relative to the current project root.
+- Never prepend the current project directory name.
+- Example: when project root is `skills/oss-prep/`, use `SKILL.md`, not `skills/oss-prep/SKILL.md`.
+
 ### stories.txt Format
 
 ```
@@ -183,6 +209,8 @@ After all specs are written, the consistency review sub-agent must verify:
 - All spec files have valid YAML frontmatter
 - File path references are consistent across specs
 - No scope overlap between stories in the same batch
+- Every `Files to Create/Modify` path is project-root-relative (no duplicated root prefix)
+- `.ralph/stories.txt` has at least one active story line (`N.M | Title`)
 
 Report: "Created X specs across Y epics (Z consistency issues auto-fixed)"
 
@@ -337,23 +365,72 @@ cd "$SCRIPT_DIR"
 
 # Preflight checks
 command -v ralph >/dev/null 2>&1 || { echo "Error: ralph not found on PATH. Run install.sh first."; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "Error: jq not found on PATH."; exit 1; }
+[[ -f .ralph/config.json ]] || { echo "Error: .ralph/config.json not found."; exit 1; }
 [[ -f .ralph/stories.txt ]] || { echo "Error: .ralph/stories.txt not found."; exit 1; }
 
+active_stories=$(grep -cE '^[[:space:]]*[0-9]+(\.[0-9]+)+[[:space:]]*\|' .ralph/stories.txt || true)
+if [[ "$active_stories" -eq 0 ]]; then
+    echo "Error: .ralph/stories.txt has no active stories."
+    echo "Regenerate the queue before running Ralph."
+    exit 1
+fi
+
+spec_pattern=$(jq -r '.specs.pattern // ""' .ralph/config.json 2>/dev/null || echo "")
+if [[ "$spec_pattern" != *"{{epic}}"* || "$spec_pattern" != *"{{id}}"* ]]; then
+    echo "Error: invalid .ralph/config.json specs.pattern: $spec_pattern"
+    echo "Expected: specs/epic-{{epic}}/story-{{id}}-*.md"
+    exit 1
+fi
+
 # Count stories and batches
-total_stories=$(grep -c '^[0-9]' .ralph/stories.txt || true)
-total_batches=$(grep -c '^\# \[batch:' .ralph/stories.txt || true)
+total_stories=$(grep -cE '^[[:space:]]*[0-9]+(\.[0-9]+)+[[:space:]]*\|' .ralph/stories.txt || true)
+total_batches=$(grep -c '^[[:space:]]*# \[batch:' .ralph/stories.txt || true)
+
+# Infer conflict risk from Files to Create/Modify sections.
+target_count=$(
+  {
+    while IFS= read -r spec; do
+      awk '
+        /^## Files to Create\/Modify/ {in_files=1; next}
+        /^## / {in_files=0}
+        in_files && /^- `/ {
+          line=$0
+          sub(/^- `/, "", line)
+          sub(/`.*/, "", line)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+          if (length(line) > 0) print line
+        }
+      ' "$spec"
+    done < <(find specs -type f -name 'story-*.md' 2>/dev/null)
+  } | sort -u | sed '/^$/d' | wc -l | tr -d ' '
+)
+
+run_mode="${RALPH_RUN_MODE:-auto}"
+if [[ "$run_mode" == "auto" ]]; then
+    if [[ "${target_count:-0}" -le 1 ]]; then
+        run_mode="sequential"
+    else
+        run_mode="parallel"
+    fi
+fi
 
 echo "Ralph v2 — Autonomous Implementation"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Stories: ${total_stories}"
 echo "Batches: ${total_batches}"
-echo "Mode:    parallel"
+echo "Targets: ${target_count:-0} unique file paths"
+echo "Mode:    ${run_mode}"
 echo ""
 echo "Starting in 3 seconds... (Ctrl+C to cancel)"
 sleep 3
 
 # Run Ralph
-ralph run --parallel --no-interactive "$@"
+if [[ "$run_mode" == "parallel" ]]; then
+    ralph run --parallel --no-interactive "$@"
+else
+    ralph run --no-interactive "$@"
+fi
 ```
 
 Save and `chmod +x run-ralph.sh`.
@@ -419,6 +496,7 @@ If any phase fails:
 3. **Spec generation sub-agent fails:** Retry that specific story's spec sequentially. Do not re-run all agents.
 4. **Premortem finds critical issues:** Always fix them. Never skip Premortem 2 even if Premortem 1 was clean.
 5. **Run script creation fails:** Output the script content inline.
+6. **Write permission/file-creation failure:** Retry with alternate write method and explicit directory creation. If still blocked, add an entry to `.ralph/write-blockers.md` and continue without asking for interactive approval.
 
 ---
 

@@ -30,7 +30,7 @@ The problem: Ralph captures Claude's text output to check for a "DONE" signal. I
 - **Project:** Ralph-Pure-Stacks-ralph-parallel-trial (git worktree)
 - **Branch:** ralph-parallel-trial
 - **Config:** max_concurrent=8, stagger=3s, timeout=1800s
-- **Claude flags:** `--print --dangerously-skip-permissions`
+- **Claude flags:** `--print --dangerously-skip-permissions --output-format json`
 - **Stories queue:** 17 stories across batches 1-4
 
 ### Timeline of Events
