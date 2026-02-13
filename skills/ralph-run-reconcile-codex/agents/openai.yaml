@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ralph Reconcile (Codex)"
+  short_description: "Review and reconcile Ralph runs in Codex projects"
+  default_prompt: "Use $ralph-run-reconcile-codex to audit the latest Ralph run and execute safe fixes."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ralph Reconcile (Claude Code)"
+  short_description: "Review and reconcile Ralph runs in Claude Code"
+  default_prompt: "Use $ralph-run-reconcile-claude-code to audit the last Ralph run and produce an execution plan."
