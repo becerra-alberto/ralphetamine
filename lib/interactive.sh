@@ -69,7 +69,7 @@ interactive_init() {
         --argjson validation "$validation_cmds" \
         --argjson blocked "$blocked_cmds" \
         '{
-            version: "2.0.0",
+            version: "2.4.0",
             project: { name: $name },
             specs: {
                 pattern: $pattern,

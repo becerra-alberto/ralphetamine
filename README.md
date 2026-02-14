@@ -1,4 +1,4 @@
-# Ralph v2
+# Ralphetamine
 
 > v2.4.0 (2026-02-13)
 
@@ -17,17 +17,16 @@ Autonomous implementation loop for Claude Code. Ralph reads story specs, sends t
 
 ## Installation
 
-### 1. Clone ralph-v2
+### 1. Clone
 
 ```bash
-cd ~/Desktop/Tools  # or wherever you keep tools
-git clone git@github.com:becerra-alberto/Ralphetamine.git Ralphetamine
+git clone git@github.com:becerra-alberto/Ralphetamine.git
 ```
 
 ### 2. Install to PATH
 
 ```bash
-cd ralph-v2
+cd Ralphetamine
 ./install.sh
 ```
 
@@ -42,7 +41,7 @@ source ~/.zshrc
 
 ```bash
 ralph --version
-# Ralph v2.0.0
+# Ralphetamine v2.4.0
 ```
 
 ## Quick Start — New Project
@@ -224,7 +223,7 @@ Each iteration of the loop:
 
 ```json
 {
-  "version": "2.0.0",
+  "version": "2.4.0",
   "project": { "name": "my-project" },
   "specs": { "pattern": "specs/epic-{{epic}}/story-{{id}}-*.md" },
   "loop": {
@@ -329,7 +328,7 @@ As a developer, I want ...
 ## Project Structure
 
 ```
-ralph-v2/
+Ralphetamine/
 ├── bin/ralph              # CLI entry point (486 lines)
 ├── lib/                   # 22 modular bash libraries (6,112 lines)
 │   ├── ui.sh              # Logging, colors, exit trap registry

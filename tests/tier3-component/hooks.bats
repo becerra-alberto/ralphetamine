@@ -20,7 +20,7 @@ _setup_hook_config() {
     local hook_cmd="$1"
     mkdir -p .ralph
     # Use printf to avoid heredoc escaping issues with special chars
-    printf '{"version":"2.0.0","project":{"name":"test"},"hooks":{"pre_story":"%s"}}\n' "$hook_cmd" > .ralph/config.json
+    printf '{"version":"2.4.0","project":{"name":"test"},"hooks":{"pre_story":"%s"}}\n' "$hook_cmd" > .ralph/config.json
     config_load
     source_ralph_lib "hooks"
 }
@@ -65,7 +65,7 @@ _setup_strict_hook_config() {
     local hook_cmd="$1"
     local timeout="${2:-120}"
     mkdir -p .ralph
-    printf '{"version":"2.0.0","project":{"name":"test"},"hooks":{"pre_worktree":"%s","pre_worktree_timeout":%s}}\n' "$hook_cmd" "$timeout" > .ralph/config.json
+    printf '{"version":"2.4.0","project":{"name":"test"},"hooks":{"pre_worktree":"%s","pre_worktree_timeout":%s}}\n' "$hook_cmd" "$timeout" > .ralph/config.json
     config_load
     source_ralph_lib "prereqs"
     source_ralph_lib "hooks"

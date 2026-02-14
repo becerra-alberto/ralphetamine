@@ -40,7 +40,7 @@ source "${RALPH_DIR}/lib/ui.sh"
 source "${RALPH_DIR}/lib/prereqs.sh"
 
 # ── Version ─────────────────────────────────────────────────────────────────
-RALPH_VERSION="2.0.0"
+RALPH_VERSION="2.4.0"
 
 # ── Usage ───────────────────────────────────────────────────────────────────
 usage() {

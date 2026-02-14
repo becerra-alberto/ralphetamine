@@ -6,4 +6,5 @@ ralph-run-terminal-logs/
 *.bak
 sandbox/**/*.log
 sandbox/ralphgraph-mega*.json
+.env*
 .github/.DS_Store

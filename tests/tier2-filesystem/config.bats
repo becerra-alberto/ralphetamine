@@ -81,7 +81,7 @@ teardown() {
     mkdir -p .ralph
     cat > .ralph/config.json <<'EOF'
 {
-  "version": "2.0.0",
+  "version": "2.4.0",
   "project": { "name": "legacy" },
   "claude": {
     "flags": ["--dangerously-skip-permissions"]

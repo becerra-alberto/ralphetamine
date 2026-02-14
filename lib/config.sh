@@ -5,7 +5,7 @@ RALPH_CONFIG_FILE=".ralph/config.json"
 
 # Default configuration (used when keys are missing from config.json)
 _CONFIG_DEFAULTS='{
-    "version": "2.0.0",
+    "version": "2.4.0",
     "project": { "name": "" },
     "specs": {
         "pattern": "specs/epic-{{epic}}/story-{{id}}-*.md",
@@ -80,12 +80,12 @@ config_load() {
     user_config=$(cat "$RALPH_CONFIG_FILE")
 
     # Deep merge: defaults * user config (user wins)
-    _CONFIG=$(echo "$_CONFIG_DEFAULTS" "$user_config" | jq -s '.[0] * .[1]')
-
-    if [[ $? -ne 0 ]]; then
+    local merged
+    if ! merged=$(echo "$_CONFIG_DEFAULTS" "$user_config" | jq -s '.[0] * .[1]'); then
         log_error "Failed to parse config.json"
         return 1
     fi
+    _CONFIG="$merged"
 
     log_debug "Config loaded from $RALPH_CONFIG_FILE"
 }
