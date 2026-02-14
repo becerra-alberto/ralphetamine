@@ -11,8 +11,8 @@ Run the complete Ralph v2 pipeline from idea to execution-ready project in one s
 
 1. **Generate artifacts for `ralph run` only.** Do not generate custom per-story loops that call `claude` directly.
 2. **Do not treat model prose as completion.** Story completion is determined by Ralph's state/signal flow, not by freeform "done" text.
-3. **Normalize file paths to the current project root.** If cwd is `.../skills/oss-prep`, target `SKILL.md` (not `skills/oss-prep/SKILL.md`).
-4. **Queue must be runnable before Phase 4.** `.ralph/stories.txt` must include at least one active `N.M | Title` entry.
+3. **Normalize file paths to the worktree project root.** All file paths are relative to the worktree working directory, not the original repo.
+4. **Queue must be runnable before Phase 5.** `.ralph/stories.txt` must include at least one active `N.M | Title` entry.
 
 ---
 
@@ -20,6 +20,7 @@ Run the complete Ralph v2 pipeline from idea to execution-ready project in one s
 
 | Phase | What Happens | User Input? |
 |-------|-------------|-------------|
+| 0. Worktree | Create an isolated git worktree for the feature | Yes — confirm feature slug |
 | 1. PRD | Generate a Product Requirements Document | Yes — clarifying questions |
 | 2. Commit PRD | Commit the PRD to git | No |
 | 3. Specs | Convert PRD into epics, stories, batch queue | Yes — confirm breakdown |
@@ -29,6 +30,69 @@ Run the complete Ralph v2 pipeline from idea to execution-ready project in one s
 | 7. Run Script | Generate `run-ralph.sh` for autonomous execution | No |
 
 **Important:** Complete each phase fully before moving to the next. Announce each phase transition clearly so the user knows where they are in the pipeline.
+
+---
+
+## Phase 0: Worktree Setup
+
+Create an isolated git worktree so all feature work happens on a dedicated branch, keeping the main branch clean.
+
+### Step 0.1: Derive Feature Slug
+
+After getting the feature description (from the user's initial message or by asking), derive a kebab-case slug. For example:
+- "Add user authentication" → `user-authentication`
+- "Budget tracking dashboard" → `budget-tracking-dashboard`
+
+Show the user the proposed slug and branch name:
+
+```
+Feature branch: ralph/feature-<slug>
+Worktree path:  .ralph/worktrees/feature-<slug>
+```
+
+**WAIT for the user to confirm or provide a different slug.**
+
+### Step 0.2: Create the Worktree
+
+Run the following steps using the Bash tool:
+
+1. **Clean stale state:**
+   ```bash
+   rm -f .git/index.lock .git/HEAD.lock 2>/dev/null || true
+   git worktree prune 2>/dev/null || true
+   ```
+
+2. **Create the worktree:**
+   ```bash
+   git worktree add .ralph/worktrees/feature-<slug> -b ralph/feature-<slug>
+   ```
+   If the branch or worktree already exists (from a previous run), clean up and retry:
+   ```bash
+   git worktree unlock .ralph/worktrees/feature-<slug> 2>/dev/null || true
+   git worktree remove .ralph/worktrees/feature-<slug> --force 2>/dev/null || true
+   rm -rf .ralph/worktrees/feature-<slug> 2>/dev/null || true
+   git worktree prune 2>/dev/null || true
+   git branch -D ralph/feature-<slug> 2>/dev/null || true
+   git worktree add .ralph/worktrees/feature-<slug> -b ralph/feature-<slug>
+   ```
+
+3. **Resolve the absolute worktree path** and store it for all subsequent phases:
+   ```bash
+   WORKTREE_DIR="$(cd .ralph/worktrees/feature-<slug> && pwd)"
+   ```
+
+### Step 0.3: Set Working Context
+
+**All subsequent phases (1-7) operate inside the worktree directory.** When using the Bash tool, prefix commands with `cd "$WORKTREE_DIR" &&` or use absolute paths within the worktree. When using Read/Write/Edit tools, use the absolute worktree path.
+
+Create the `.ralph/` directory and initialize `ralph init` inside the worktree if `.ralph/config.json` does not already exist:
+```bash
+cd "$WORKTREE_DIR" && ralph init
+```
+
+If the user's project has a `CLAUDE.md` or other config files in the repo root, they are already available in the worktree (it shares the same git content).
+
+Announce: **"Phase 0 complete — Worktree created at `.ralph/worktrees/feature-<slug>` on branch `ralph/feature-<slug>`. All work will happen in this isolated environment. Moving to Phase 1: PRD Creation."**
 
 ---
 
@@ -444,7 +508,7 @@ Save to `run-ralph.sh` in the project root and make it executable.
 
 ### Step 7.2: Launch in iTerm2
 
-After generating the script, **automatically launch it in a new iTerm2 window** so Ralph runs in its own dedicated terminal session, separate from the Claude Code conversation.
+After generating the script, **automatically launch it in a new iTerm2 window** so Ralph runs in its own dedicated terminal session inside the worktree.
 
 Use the Bash tool to run this AppleScript via `osascript`:
 
@@ -454,21 +518,21 @@ tell application "iTerm2"
     activate
     set newWindow to (create window with default profile)
     tell current session of newWindow
-        write text "cd \"'"$PROJECT_DIR"'\" && ./run-ralph.sh"
+        write text "cd \"'"$WORKTREE_DIR"'\" && ./run-ralph.sh"
     end tell
 end tell
 '
 ```
 
-Where `$PROJECT_DIR` is the absolute path to the current project root (resolve it via `pwd` before the osascript call).
+Where `$WORKTREE_DIR` is the absolute path to the worktree directory (resolved in Phase 0).
 
 **Fallback:** If iTerm2 is not installed or the AppleScript fails, fall back to:
 ```bash
-open -a Terminal.app "$(pwd)/run-ralph.sh"
+cd "$WORKTREE_DIR" && open -a Terminal.app "./run-ralph.sh"
 ```
-If both fail, tell the user: "Could not auto-launch. Run `./run-ralph.sh` manually."
+If both fail, tell the user: "Could not auto-launch. Run `./run-ralph.sh` from the worktree directory manually."
 
-Announce: **"Phase 7 complete — Ralph is now running in a new iTerm2 window."**
+Announce: **"Phase 7 complete — Ralph is now running in a new iTerm2 window (worktree: `feature-<slug>`)."**
 
 ---
 
@@ -479,13 +543,21 @@ After all phases, print the final summary:
 ```
 Ralph v2 Pipeline Complete
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Worktree:   .ralph/worktrees/feature-<slug>
+Branch:     ralph/feature-<slug>
 PRD:        tasks/prd-[name].md
 Specs:      N stories across M epics
 Premortem:  X issues found, Y fixed
 Run script: ./run-ralph.sh
 Execution:  Launched in iTerm2 window
 
-Ralph is running autonomously. Check the iTerm2 window for progress.
+Ralph is running autonomously in an isolated worktree.
+Check the iTerm2 window for progress.
+
+When complete, merge back to your main branch:
+  cd <project-root>
+  git merge ralph/feature-<slug>
+  git worktree remove .ralph/worktrees/feature-<slug>
 ```
 
 ---
@@ -494,11 +566,12 @@ Ralph is running autonomously. Check the iTerm2 window for progress.
 
 If any phase fails:
 
-1. **PRD creation fails:** Ask user to clarify their feature description and retry Phase 1.
-2. **Git commit fails:** Warn and continue — files are on disk. The user can commit manually.
-3. **Spec generation fails:** Show what was generated, ask user if they want to continue with partial specs or retry.
-4. **Premortem finds critical issues:** Do NOT skip Phase 5.4 — always fix critical issues before generating the run script.
-5. **Run script creation fails:** Provide the script content inline so the user can copy it manually.
+1. **Worktree creation fails:** Check for stale locks (`rm -f .git/index.lock`), prune worktrees (`git worktree prune`), and retry. If the branch already exists, ask the user if they want to reuse it or start fresh.
+2. **PRD creation fails:** Ask user to clarify their feature description and retry Phase 1.
+3. **Git commit fails:** Warn and continue — files are on disk. The user can commit manually.
+4. **Spec generation fails:** Show what was generated, ask user if they want to continue with partial specs or retry.
+5. **Premortem finds critical issues:** Do NOT skip Phase 5.4 — always fix critical issues before generating the run script.
+6. **Run script creation fails:** Provide the script content inline so the user can copy it manually.
 
 ---
 
@@ -506,10 +579,11 @@ If any phase fails:
 
 Before completing the pipeline:
 
-- [ ] PRD saved and committed
+- [ ] Worktree created and working context set
+- [ ] PRD saved and committed (in worktree branch)
 - [ ] All specs follow the standard format with YAML frontmatter
 - [ ] stories.txt has correct batch annotations
 - [ ] Premortem review completed (even if no issues found)
 - [ ] All premortem fixes committed
-- [ ] run-ralph.sh is executable and has correct project path
-- [ ] Final summary printed with next steps
+- [ ] run-ralph.sh is executable and has correct worktree path
+- [ ] Final summary printed with merge instructions
