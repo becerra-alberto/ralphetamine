@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> Last updated: v2.4.0 (2026-02-13)
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
@@ -15,9 +17,9 @@ Ralph v2 is an autonomous implementation loop for Claude Code. It reads story sp
 ```
 ralph-v2/
 ├── bin/ralph              # CLI entry point
-├── lib/                   # 16 modular bash libraries
+├── lib/                   # 22 modular bash libraries
 ├── templates/             # Default prompt templates
-├── tests/                 # 5-tier BATS test suite
+├── tests/                 # 4-tier BATS test suite (265+ tests) + integration tests
 ├── commands/              # Claude Code slash command skills
 ├── skills/                # Skill definitions
 ├── install.sh             # Symlink installer
@@ -27,8 +29,8 @@ ralph-v2/
 ## Running Tests
 
 ```bash
-# All tiers
-tests/libs/bats-core/bin/bats tests/tier1-unit/ tests/tier2-filesystem/ tests/tier3-component/ tests/tier4-workflow/ tests/tier5-e2e/
+# All BATS tiers
+tests/libs/bats-core/bin/bats tests/tier1-unit/ tests/tier2-filesystem/ tests/tier3-component/ tests/tier4-workflow/
 
 # Individual tier
 tests/libs/bats-core/bin/bats tests/tier1-unit/

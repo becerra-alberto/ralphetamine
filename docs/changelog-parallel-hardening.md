@@ -1,5 +1,7 @@
 # Parallel Engine Hardening — Changelog
 
+> Last updated: v2.4.0 (2026-02-13)
+
 ## Background
 
 Ralph v2's parallel engine (`lib/parallel.sh`) was tested in production on the Ralph-Pure-Stacks project, executing 14 security remediation stories (epics 19–24) across 4 batches on 2026-02-06. Three anomalies emerged:
@@ -30,41 +32,39 @@ Test coverage: `tests/tier4-workflow/engine-fixes-sequential.bats`, `tests/tier4
 
 ---
 
-## Phase 2: Structural Improvements (Planned)
+## Phase 2: Structural Improvements (Completed)
+
+All Phase 2 items were implemented across v2.3.0 and v2.4.0.
 
 ### Fix 1: Process Lockfile
-**Status:** Planned
+**Status:** Completed (v2.3.0)
 **Files:** `lib/runner.sh`, `bin/ralph`
 
-Prevent concurrent `parallel_run()` or `_run_sequential()` instances against the same `.ralph/` state directory. PID-based lock file at `.ralph/.lock` with `kill -0` liveness check. Registered via `ralph_on_exit` (not raw `trap EXIT`).
+PID-based lock file at `.ralph/.lock` with `kill -0` stale detection. Registered via `ralph_on_exit` (not raw `trap EXIT`). Prevents concurrent instances against the same state directory.
 
 ### Fix 2: Commit-Based Fallback Detection
-**Status:** Planned
+**Status:** Completed (v2.3.0)
 **File:** `lib/parallel.sh`
 
-When a story's output lacks a DONE signal, check if the worktree branch has commits ahead of the integration branch before classifying as failed. If commits exist, mark as "tentative success" and merge. This prevents the 22.3/24.1 data loss scenario.
-
-Helper: `_parallel_has_new_commits(story, base_branch)` using `git rev-list --count`.
-
-Applied to all three failure paths: timeout (exit 124), non-zero exit, and missing signal.
+`_parallel_has_new_commits(story, base_branch)` uses `git rev-list --count` to detect work without DONE signal. Applied to all three failure paths: timeout, non-zero exit, and missing signal. Marks as "tentative success" and merges.
 
 ### Fix 3: Progress.txt + Spec Status Sync
-**Status:** Planned
+**Status:** Completed (v2.3.0)
 **File:** `lib/parallel.sh`
 
-Parallel mode currently calls `state_mark_done()` but never writes to `progress.txt` or updates spec YAML frontmatter. Sequential mode does both (`runner.sh:218`, `runner.sh:203`). Add parity writes after story completion in `_parallel_execute_batch()`.
+Parallel mode now writes to `progress.txt` and updates spec YAML frontmatter, matching sequential mode behavior.
 
 ### Fix 4: Extended State Schema
-**Status:** Planned
+**Status:** Completed (v2.3.0)
 **File:** `lib/state.sh`
 
-Add `absorbed_stories` (map: absorbed → absorber), `merged_stories` (array), and corresponding functions: `state_mark_absorbed()`, `state_mark_merged()`, `state_is_absorbed()`, `state_absorbed_by()`, `state_get_merged()`. All using `_state_safe_write` for crash safety.
+Added `absorbed_stories`, `merged_stories`, `decomposed_stories` fields with corresponding functions. All using `_state_safe_write` for crash safety. Schema upgrades handled by `_state_ensure_schema()`.
 
 ### Fix 5: Reconcile Subcommand
-**Status:** Planned
-**Files:** `lib/reconcile.sh` (new), `bin/ralph`
+**Status:** Completed (v2.3.0)
+**Files:** `lib/reconcile.sh`, `bin/ralph`
 
-`ralph reconcile` scans for orphaned `ralph/story-*` branches with unmerged commits. Dry-run by default, `--apply` to merge. Shows commit count, last commit, and conflict status per branch. Updates state, spec frontmatter, and progress.txt on successful merge.
+`ralph reconcile` scans for orphaned `ralph/story-*` branches with unmerged commits. Dry-run by default, `--apply` to merge. Shows commit count, last commit, and conflict status per branch.
 
 ---
 

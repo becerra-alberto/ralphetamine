@@ -1,5 +1,7 @@
 # Ralph v2
 
+> v2.4.0 (2026-02-13)
+
 [![CI](https://github.com/bettos12/ralph-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/bettos12/ralph-v2/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/bettos12/ralph-v2)](https://opensource.org/licenses/MIT)
 
@@ -7,7 +9,7 @@ Autonomous implementation loop for Claude Code. Ralph reads story specs, sends t
 
 ## Prerequisites
 
-- **Bash** 3.2+ (macOS default works)
+- **Bash** 4.0+ (auto-detected on macOS via Homebrew; `brew install bash`)
 - **Claude Code CLI** (`claude`) installed and authenticated
 - **jq** — `brew install jq`
 - **git** — for state tracking and parallel mode worktrees
@@ -145,6 +147,20 @@ Audits and reconciles the latest Ralph run using
 Audits and reconciles the latest Ralph run using
 `skills/ralph-run-reconcile-codex/SKILL.md`.
 
+```
+/ralph-v2:pipeline-interactive
+```
+
+Runs the full Ralph pipeline interactively: PRD creation, spec generation,
+premortem review, and run script generation — with user input at decision points.
+
+```
+/ralph-v2:pipeline-full-auto
+```
+
+Runs the full Ralph pipeline autonomously with zero user input: PRD, specs,
+double premortem, and run script generation.
+
 If a slash command isn't recognized, restart Claude Code and ensure the repo
 contains `skills/` and `commands/`.
 
@@ -159,9 +175,15 @@ ralph run -d                # Dry run — preview prompts without executing
 ralph run -r 4.1            # Resume from story 4.1
 ralph run --parallel        # Enable parallel execution (Bash 4.0+)
 ralph status                # Show progress summary
+ralph stats                 # Show run statistics and token usage
+ralph stats --last 3        # Show last 3 runs
 ralph stories               # List all stories with completion status
 ralph learnings             # Show extracted learnings
 ralph learnings testing     # Show learnings for a specific topic
+ralph verify                # Verify PRD-to-spec provenance integrity
+ralph reconcile             # Find orphaned story branches (dry-run)
+ralph reconcile --apply     # Find and merge orphaned branches
+ralph decompose 3.4         # Manually decompose a story into sub-stories
 ralph reset                 # Reset all state (completed stories, retries)
 ```
 
@@ -310,8 +332,8 @@ As a developer, I want ...
 
 ```
 ralph-v2/
-├── bin/ralph              # CLI entry point
-├── lib/                   # 16 modular bash libraries
+├── bin/ralph              # CLI entry point (486 lines)
+├── lib/                   # 22 modular bash libraries (6,112 lines)
 │   ├── ui.sh              # Logging, colors, exit trap registry
 │   ├── prereqs.sh         # Environment checks
 │   ├── config.sh          # Config loading with defaults
@@ -322,9 +344,15 @@ ralph-v2/
 │   ├── signals.sh         # Parse Claude output signals
 │   ├── runner.sh          # Sequential execution loop
 │   ├── parallel.sh        # Git worktree parallelization
+│   ├── display.sh         # Append-only dashboard and progress
 │   ├── learnings.sh       # Learning extraction and injection
-│   ├── testing.sh         # Optional test review phase
+│   ├── decompose.sh       # Story decomposition into sub-stories
+│   ├── metrics.sh         # Token tracking and cost analysis
+│   ├── provenance.sh      # PRD-to-spec traceability
+│   ├── hitl.sh            # HITL review and feedback PRD
+│   ├── reconcile.sh       # Orphaned branch recovery
 │   ├── hooks.sh           # Pre/post lifecycle hooks
+│   ├── testing.sh         # Optional test review phase
 │   ├── interactive.sh     # Init wizard and startup prompts
 │   ├── caffeine.sh        # macOS sleep prevention
 │   └── tmux.sh            # Auto-wrap in tmux session
@@ -332,24 +360,30 @@ ralph-v2/
 │   ├── implement.md       # Main story implementation prompt
 │   ├── test-review.md     # Test review phase prompt
 │   ├── merge-review.md    # Parallel merge review prompt
+│   ├── timeout-postmortem.md  # Diagnostic prompt after timeout
+│   ├── decompose.md       # Story decomposition prompt
+│   ├── hitl-feedback.md   # HITL remediation PRD prompt
 │   └── init/              # Templates for ralph init
-├── tests/                 # 5-tier BATS test suite (132 tests)
+├── tests/                 # 4-tier BATS test suite (265+ tests) + 25 integration tests
 │   ├── tier1-unit/        # Pure unit tests
 │   ├── tier2-filesystem/  # Filesystem integration
 │   ├── tier3-component/   # Component integration
 │   ├── tier4-workflow/    # CLI command tests
-│   └── tier5-e2e/         # Full pipeline E2E
+│   └── integration/       # Real binary integration tests
 └── install.sh             # Symlink installer
 ```
 
 ## Running Tests
 
 ```bash
-# All tiers
-tests/libs/bats-core/bin/bats tests/tier1-unit/ tests/tier2-filesystem/ tests/tier3-component/ tests/tier4-workflow/ tests/tier5-e2e/
+# All BATS tiers
+tests/libs/bats-core/bin/bats tests/tier1-unit/ tests/tier2-filesystem/ tests/tier3-component/ tests/tier4-workflow/
 
 # Individual tier
 tests/libs/bats-core/bin/bats tests/tier1-unit/
+
+# Integration tests (real ralph binary, real sandbox data)
+bash tests/integration/test-retry-termination.sh
 ```
 
 ## Signals

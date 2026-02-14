@@ -1,5 +1,7 @@
 # Contributing
 
+> Last updated: v2.4.0 (2026-02-13)
+
 Thanks for your interest in Ralph v2.
 
 We accept GitHub issues for tracking and discussion. **PRs are by invitation only.**
@@ -33,7 +35,7 @@ git submodule update --init --recursive
 Run tests:
 
 ```bash
-tests/libs/bats-core/bin/bats tests/tier1-unit/ tests/tier2-filesystem/ tests/tier3-component/ tests/tier4-workflow/ tests/tier5-e2e/
+tests/libs/bats-core/bin/bats tests/tier1-unit/ tests/tier2-filesystem/ tests/tier3-component/ tests/tier4-workflow/
 ```
 
 For security issues, follow `SECURITY.md`.

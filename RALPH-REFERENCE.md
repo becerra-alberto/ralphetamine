@@ -1,553 +1,523 @@
-# Ralph Loop: Complete System Reference
+# Ralph v2: Complete System Reference
 
-Ralph is a bash script that runs Claude Code in a loop, one story at a time, without human intervention. It picks a story, sends the full spec to Claude, waits for Claude to implement it, checks whether Claude succeeded or failed, and moves on to the next story. If Claude fails, Ralph retries up to 3 times before stopping and asking for help.
+> Last updated: v2.4.0 (2026-02-13)
+
+Ralph v2 is a modular autonomous implementation loop for Claude Code. It reads story specs, sends them to Claude one at a time (or in parallel batches), tracks success/failure, manages retries with automatic decomposition, and accumulates learnings — all without human intervention.
 
 ---
 
 ## Component Map
 
-ralph.sh is a single 613-line bash script organized into four sections:
+Ralph v2 is organized as a 486-line CLI entry point (`bin/ralph`) that dispatches to 22 bash libraries in `lib/`. Each library owns a single concern.
 
 ```
-ralph.sh (613 lines)
-├── CONFIGURATION (lines 10-41)
-│   ├── ITERATIONS=45           How many stories to attempt in one run
-│   ├── VERBOSE=false           Whether to show Claude's full output in real-time
-│   ├── DRY_RUN=false           Whether to preview prompts without actually running Claude
-│   ├── TIMEOUT=1800            Max seconds per story (1800 = 30 minutes)
-│   ├── MAX_RETRIES=3           How many times to retry a failing story before giving up
-│   └── STORY_ORDER=(...)       The ordered list of every story ID Ralph will attempt
-│
-├── ARGUMENT PARSER (lines 43-112)
-│   Reads command-line flags when you run ./ralph.sh.
-│   Each flag overrides a default from the configuration section above.
-│   ├── -n NUM       Override ITERATIONS (e.g., -n 10 to only do 10 stories)
-│   ├── -v           Turn on VERBOSE mode (see all Claude output live)
-│   ├── -d           Turn on DRY_RUN mode (show the prompt but don't run Claude)
-│   ├── -s STORY     Run only one specific story (e.g., -s 8.4)
-│   ├── -r STORY     Skip all stories before this one, then run normally
-│   ├── -t SECS      Override TIMEOUT (e.g., -t 3600 for 1 hour)
-│   ├── -l FILE      Change the log file path (default: ralph.log)
-│   └── -h           Print usage instructions and exit
-│
-├── HELPER FUNCTIONS (lines 114-427)
-│   These are the building blocks. The main loop calls them as needed.
-│   Each one is explained in detail in later sections.
-│   ├── log()                  Prints a timestamped message to both the terminal and ralph.log
-│   ├── check_prerequisites()  Runs at startup to verify the environment is ready
-│   ├── init_state()           Creates state.json from progress.txt on first run
-│   ├── get_completed_stories()Returns the list of stories already finished
-│   ├── is_story_completed()   Checks if one specific story is in the completed list
-│   ├── find_next_story()      Walks through STORY_ORDER to find the first unfinished story
-│   ├── get_story_spec_path()  Locates the markdown file for a given story ID
-│   ├── get_story_title()      Extracts the human-readable title from the spec filename
-│   ├── mark_story_done()      Records a successful story in all tracking files
-│   ├── handle_failure()       Records a failed attempt, retries or exits
-│   ├── update_spec_status()   Edits the YAML frontmatter in a spec file to change its status
-│   ├── append_learnings()     Extracts learning notes from Claude's output
-│   └── build_story_prompt()   Constructs the full text prompt sent to Claude
-│
-└── MAIN LOOP (lines 429-613)
-    The heart of the script. For each iteration:
-    1. Find the next unfinished story
-    2. Locate its spec file
-    3. Build a prompt containing the full spec
-    4. Call Claude with that prompt
-    5. Read Claude's output to determine success or failure
-    6. Update tracking files accordingly
+bin/ralph                (486 lines)  CLI entry point, Bash 4+ detection, subcommand dispatch
+lib/
+├── ui.sh                (185 lines)  Logging, colors, box headers, exit trap registry (ralph_on_exit)
+├── prereqs.sh            (91 lines)  Environment checks (claude, jq, git, timeout/gtimeout)
+├── config.sh            (160 lines)  Config loading with deep-merge defaults (.ralph/config.json)
+├── state.sh             (246 lines)  State persistence via atomic JSON writes (_state_safe_write)
+├── stories.sh           (188 lines)  Story queue parsing, batch annotations, skip markers
+├── specs.sh             (138 lines)  Spec file discovery and YAML frontmatter parsing
+├── prompt.sh            (273 lines)  Template loading, variable substitution, learnings injection
+├── signals.sh           (265 lines)  Parse all 10 signal types from Claude output
+├── runner.sh            (879 lines)  Sequential execution loop, retry logic, postmortem
+├── parallel.sh          (950 lines)  Git worktree parallelization, batch orchestration, merge
+├── display.sh           (359 lines)  Append-only dashboard, progress display, live timer
+├── learnings.sh         (233 lines)  Learning extraction, storage, and injection into prompts
+├── decompose.sh         (309 lines)  Story decomposition into 2-4 sub-stories via Claude
+├── metrics.sh           (339 lines)  Token tracking, cost analysis, per-run statistics
+├── provenance.sh        (404 lines)  PRD-to-spec traceability with sha256 hashes
+├── hitl.sh              (505 lines)  HITL review HTML generation and feedback PRD workflow
+├── reconcile.sh         (131 lines)  Orphaned branch detection and merge recovery
+├── hooks.sh              (90 lines)  Pre/post lifecycle hooks (pre_iteration, post_story, etc.)
+├── testing.sh            (76 lines)  Optional test review phase after story completion
+├── interactive.sh       (228 lines)  Init wizard, startup prompts, config generation
+├── caffeine.sh           (33 lines)  macOS sleep prevention (caffeinate wrapper)
+└── tmux.sh               (30 lines)  Auto-wrap in tmux session
+                        ──────
+                        6,112 lines total
 ```
 
 ---
 
-## Everything It Reads
+## CLI Reference
 
-These are all the files ralph.sh opens and reads during execution:
+```
+ralph <command> [options]
+```
 
-| What | Path | When | How | Why |
-|------|------|------|-----|-----|
-| Story spec | `specs/epic-{N}/story-{N.M}-*.md` | Each iteration | Reads entire file contents | The spec is embedded directly into the prompt sent to Claude |
-| State file | `.ralph/state.json` | Each iteration | Reads JSON fields | To know which stories are done and what's currently running |
-| Progress log | `progress.txt` | First run only | Scans for `[DONE]` lines | To bootstrap state.json if it doesn't exist yet |
-| CLAUDE.md | `CLAUDE.md` | Startup only | Checks if file exists | Ensures the project has context docs (ralph.sh doesn't read the contents) |
-| specs dir | `specs/` | Startup only | Checks if directory exists | Ensures story specs are available |
+### Commands
 
-**About CLAUDE.md:** Ralph.sh only checks that CLAUDE.md exists — it never reads its contents. However, when Claude Code runs (`claude --print`), it automatically discovers and loads CLAUDE.md as project-level instructions. So CLAUDE.md content does reach Claude, just not through ralph.sh.
+| Command | Description |
+|---------|-------------|
+| `init` | Initialize Ralph in the current project (config, templates, stories) |
+| `run [options]` | Run the implementation loop (sequential or parallel) |
+| `status` | Show current progress summary |
+| `stats [options]` | Show run statistics and token usage |
+| `stories` | List all stories and their completion status |
+| `learnings [topic]` | Show extracted learnings, optionally filtered by topic |
+| `reset` | Reset all state (completed stories, retries, current_story) |
+| `verify [--list]` | Verify PRD-to-spec provenance integrity via sha256 hashes |
+| `reconcile [--apply]` | Find orphaned story branches; `--apply` to merge them |
+| `decompose <story-id>` | Manually decompose a story into 2-4 sub-stories |
+| `hitl generate` | Generate an interactive HITL review HTML page |
+| `hitl feedback <file>` | Generate a remediation PRD from HITL evaluation JSON |
+
+### Run Options
+
+| Flag | Description |
+|------|-------------|
+| `-n, --iterations NUM` | Number of iterations (0 = run until all done) |
+| `-s, --story ID` | Run a specific story only |
+| `-r, --resume ID` | Resume from a specific story |
+| `-v, --verbose` | Show full Claude output in real-time |
+| `-d, --dry-run` | Preview prompt without executing Claude |
+| `-t, --timeout SECS` | Timeout per iteration (default: 1800 = 30 min) |
+| `--parallel` | Enable parallel batch execution via git worktrees |
+| `--no-dashboard` | Disable live dashboard panel |
+| `--tmux` | Wrap in tmux session |
+| `--no-interactive` | Skip interactive startup prompts |
+
+### Stats Options
+
+| Flag | Description |
+|------|-------------|
+| `--last N` | Show last N runs |
+| `--story ID` | Show stats for a specific story across all runs |
 
 ---
 
-## Everything It Writes
+## Execution Paths
 
-These are all the files ralph.sh creates or modifies:
+Ralph has three execution paths. All share the same state machine (`.ralph/state.json`) and signal protocol.
 
-| What | Path | When | How | Why |
-|------|------|------|-----|-----|
-| State file | `.ralph/state.json` | Every state change | Writes JSON via jq (a command-line JSON processor) | Tracks which stories are done, what's running, retry count |
-| Progress log | `progress.txt` | Every DONE/FAIL/LEARN | Appends a new line to the end of the file | Human-readable log of what happened and when |
-| Execution log | `ralph.log` | Every log() call | Appends timestamped messages | Detailed technical log for debugging |
-| Spec YAML | `specs/epic-N/story-*.md` | When a story is completed | Uses sed (a text replacement tool) to change `status: pending` to `status: done` | Marks the spec file itself as done |
-| State dir | `.ralph/` | First run only | Creates the directory | Houses the state.json file |
+### Sequential (default)
+
+`_run_sequential()` in `lib/runner.sh` — one story at a time, in-process.
+
+```
+for each story in stories.txt:
+  1. Skip if completed, absorbed, or x-prefixed
+  2. Load spec file → build prompt (template + spec + learnings)
+  3. Invoke Claude with timeout
+  4. Parse signals from output (last match wins)
+  5. On DONE → state_mark_done, extract learnings
+  6. On FAIL → increment retry, check max_retries
+     → If exhausted and decomposition enabled → decompose into sub-stories
+     → If decomposition disabled or max_depth reached → halt
+  7. On timeout → run postmortem diagnostic (if enabled), then treat as FAIL
+```
+
+### Parallel (`--parallel`)
+
+`parallel_run()` in `lib/parallel.sh` — batched worktree execution.
+
+```
+1. Parse batch annotations from stories.txt: [batch:0], [batch:1], etc.
+2. Run batch-0 and unbatched stories sequentially first
+3. For each remaining batch:
+   a. Create git worktrees (one per story)
+   b. Launch Claude in each worktree concurrently
+   c. Wait for all workers, collect results
+   d. Retry failed stories sequentially
+   e. Merge successful worktree branches in deterministic order
+   f. Clean up worktrees and branches
+4. On Ctrl+C → kill workers, prune worktrees, clean orphaned branches
+```
+
+### Dry-run (`-d`)
+
+Prints the prompt that would be sent to Claude without invoking it. Works in both sequential and parallel modes.
 
 ---
 
-## External Dependencies
+## State Machine
 
-Programs that must be installed on the system for ralph.sh to work:
-
-| Program | What It Does | Where Used | What Happens If Missing |
-|---------|-------------|-----------|------------------------|
-| `claude` | The Claude Code CLI tool | Main invocation — sends prompt, gets response | Script exits immediately with error |
-| `jq` | A command-line tool for reading and writing JSON files | All state.json operations | State tracking silently breaks — completions won't be recorded |
-| `timeout` | Wraps a command with a time limit; kills it if it runs too long | Wrapping the Claude invocation | Stories could run forever without being stopped |
-| `find` | Searches for files matching a pattern | Locating spec files by story ID | Cannot find spec files |
-| `sed` | A text stream editor; used here to replace text in a file | Updating the `status:` line in spec YAML frontmatter | Spec files won't be marked as done |
-| `git` | Version control | **Not used by ralph.sh directly.** The prompt tells Claude to run git commands (commit on success, checkout on failure). | Claude can't commit or revert |
-| `tee` | Copies output to both the terminal and a file simultaneously | The log() function writes to both stdout and ralph.log | Logging to file won't work |
-
----
-
-## Main Loop Flow (per iteration)
-
-This is what happens each time ralph.sh goes through one cycle of the loop. Each numbered step is described in plain English with what can go wrong.
+Each story follows this lifecycle in `.ralph/state.json`:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ ITERATION i                                                  │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. FIND NEXT STORY                                          │
-│     Look through the STORY_ORDER list from top to bottom.    │
-│     Skip any story that's already in the "completed" list.   │
-│     Return the first one that isn't completed yet.           │
-│                                                              │
-│     Special cases:                                           │
-│     - If -s flag was given: use that exact story, ignore the │
-│       list entirely                                          │
-│     - If -r flag was given: start scanning from that story   │
-│       instead of the beginning                               │
-│     - If everything is done: print "ALL COMPLETE!" and exit  │
-│                                                              │
-│  2. FIND THE SPEC FILE                                       │
-│     Given story ID "8.3", extract the epic number "8",       │
-│     then search for: specs/epic-8/story-8.3-*.md             │
-│     The wildcard (*) matches the slug part of the filename.  │
-│                                                              │
-│     If no file is found: log an error and skip to the next   │
-│     iteration (this story is effectively orphaned).          │
-│                                                              │
-│  3. RECORD THAT WE'RE STARTING THIS STORY                   │
-│     Write to state.json: current_story = "8.3"               │
-│     This lets you see what Ralph is working on if you check  │
-│     state.json while it's running.                           │
-│                                                              │
-│  4. BUILD THE PROMPT                                         │
-│     Read the entire spec file into memory.                   │
-│     Wrap it in a template that tells Claude:                 │
-│     - "You are Ralph, an autonomous implementation agent"    │
-│     - Here is the full story specification (the spec file)   │
-│     - Here is your workflow (read → implement → test → done) │
-│     - Here are the critical rules (one story, integer cents, │
-│       follow ACs exactly, write all tests, USE TOOLS)        │
-│                                                              │
-│  5. DRY RUN CHECK                                            │
-│     If -d flag was given: print the first 20 lines of the   │
-│     prompt so you can preview it, then skip to next          │
-│     iteration without calling Claude.                        │
-│                                                              │
-│  6. CALL CLAUDE                                              │
-│     Run this command:                                        │
-│       timeout 1800 claude --print                            │
-│         --dangerously-skip-permissions "$prompt"             │
-│                                                              │
-│     What each part means:                                    │
-│     - timeout 1800: Kill the process if it runs longer than  │
-│       30 minutes. Returns exit code 124 on timeout.          │
-│     - claude --print: Run Claude Code in non-interactive     │
-│       mode — it processes the prompt and prints the result   │
-│       to stdout instead of opening an interactive session.   │
-│     - --dangerously-skip-permissions: Allow Claude to use    │
-│       all tools (Read, Write, Edit, Bash) without asking     │
-│       for permission each time. This is what makes it        │
-│       autonomous — no human approval needed per action.      │
-│     - "$prompt": The full prompt text from step 4.           │
-│                                                              │
-│     In verbose mode: output streams to the terminal in       │
-│     real-time AND is captured for parsing.                   │
-│     In quiet mode: output is captured silently.              │
-│                                                              │
-│  7. CHECK THE EXIT CODE                                      │
-│     After Claude finishes, check how it exited:              │
-│     - Exit code 124: The timeout command killed it because   │
-│       it ran too long. Treat as a failure.                   │
-│     - Any non-zero exit code: Something went wrong (Claude   │
-│       crashed, network error, etc.). Treat as a failure.     │
-│     - Exit code 0: Claude ran to completion. Proceed to      │
-│       parse the output.                                      │
-│                                                              │
-│  8. PARSE CLAUDE'S OUTPUT                                    │
-│     Ralph looks for specific tags in Claude's text output.   │
-│     These tags are how Claude communicates back to ralph.sh. │
-│                                                              │
-│     Always first: extract any LEARN tags (useful insights    │
-│     that Claude discovered while working).                   │
-│                                                              │
-│     Then check for completion signals:                       │
-│                                                              │
-│     a) <ralph>DONE 8.3</ralph>                               │
-│        Claude says it finished successfully.                 │
-│        Verify the story ID matches what we asked for.        │
-│        If it matches: mark story as done.                    │
-│        If it doesn't match: treat as failure (mismatched).   │
-│                                                              │
-│     b) <ralph>FAIL 8.3: reason text</ralph>                  │
-│        Claude says it couldn't complete the story.           │
-│        Extract the reason and record the failure.            │
-│                                                              │
-│     c) No <ralph> tags found at all:                         │
-│        Fall back to looking for legacy signals:              │
-│        - [DONE] anywhere in output → treat as success        │
-│        - [FAIL] anywhere in output → treat as failure        │
-│        - Neither found → treat as failure with message       │
-│          "No completion signal in output"                    │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+                        ┌─────────┐
+                        │ PENDING │
+                        └────┬────┘
+                             │ next unfinished story selected
+                             ▼
+                        ┌─────────┐
+                   ┌───>│ CURRENT │ (current_story = ID)
+                   │    └────┬────┘
+                   │         │ Claude output parsed
+                   │         ▼
+                   │   ┌───────────┐
+                   │   │  Result?  │
+                   │   └──┬───┬───┬──┘
+                   │      │   │   │
+              DONE │   FAIL   │   TIMEOUT
+                   │      │   │   │
+                   │      ▼   │   ▼
+                   │  ┌───────┴──────┐
+                   │  │ retries < max│
+                   │  └──┬───────┬───┘
+                   │  YES│       │NO
+                   │     │       ▼
+                   │     │  ┌──────────────┐
+                   │     │  │ decomposition│
+                   │     │  │ enabled?     │
+                   │     │  └──┬───────┬───┘
+                   │     │  YES│       │NO
+                   │     │     ▼       ▼
+    ┌──────┐       │     │ ┌────────┐ ┌────────┐
+    │ DONE │<──────┘     │ │DECOMP. │ │ HALTED │
+    └──────┘             │ └────────┘ └────────┘
+       │                 │     │
+       │                 │     │ generates 2-4 sub-stories
+       │                 │     ▼
+       │                 │ sub-stories enter PENDING
+       │                 │
+       └──── retry ──────┘
 ```
 
----
+### State Fields
 
-## State Machine (per story)
+| Field | Type | Description |
+|-------|------|-------------|
+| `completed_stories` | array | Story IDs that finished successfully |
+| `absorbed_stories` | object | Map of absorbed → absorber story IDs |
+| `merged_stories` | array | Stories merged from worktrees |
+| `decomposed_stories` | object | Map of parent → sub-story ID arrays |
+| `current_story` | string/null | Story currently being executed |
+| `retry_count` | number | Current retry attempt for active story |
+| `run_metadata` | object | Start time, run count, timing info |
 
-Each story goes through a simple lifecycle. This diagram shows all possible transitions:
-
-```
-                    ┌─────────┐
-                    │ PENDING │
-                    │         │  The story is in STORY_ORDER but hasn't been
-                    │         │  attempted yet (not in completed_stories).
-                    └────┬────┘
-                         │
-                         │ find_next_story() picks it as the next to run
-                         ▼
-                    ┌──────────┐
-              ┌────>│ RUNNING  │  current_story is set to this story ID.
-              │     │          │  Claude is working on it.
-              │     └────┬─────┘
-              │          │
-              │          │ Claude's output is parsed
-              │          ▼
-              │    ┌─────────────┐
-              │    │ Parse output│
-              │    └──┬───┬───┬──┘
-              │       │   │   │
-              │  DONE │   │   │ FAIL or no signal
-              │       │   │   │
-              │       ▼   │   ▼
-              │  ┌──────┐ │ ┌───────────────────────┐
-              │  │ DONE │ │ │ Have we retried fewer  │
-              │  │      │ │ │ than 3 times?          │
-              │  │ Story│ │ └───┬───────────────┬───┘
-              │  │ added│ │     │               │
-              │  │ to   │ │     │ YES           │ NO
-              │  │ comp-│ │     │               │
-              │  │ leted│ │     ▼               ▼
-              │  │ list │ │  Retry count     ┌──────────┐
-              │  └──────┘ │  goes up by 1.   │ HALTED   │
-              │           │  Main loop       │          │
-              │           │  continues.      │ Script   │
-              │           │  Same story      │ prints   │
-              │           │  will be picked  │ "Human   │
-              └───────────┘  again next      │ needed"  │
-                             iteration       │ and      │
-                             since it's      │ exits    │
-                             still not in    │ with     │
-                             completed_stories│ code 1  │
-                                             └──────────┘
-```
-
-What changes in `.ralph/state.json` at each transition:
+### State Transitions
 
 | Transition | completed_stories | current_story | retry_count |
 |-----------|-------------------|---------------|-------------|
-| PENDING → RUNNING | unchanged | set to story ID | unchanged |
-| RUNNING → DONE | story ID added to array | set to null | reset to 0 |
-| RUNNING → RETRY | unchanged | stays as story ID | incremented by 1 |
-| RUNNING → HALTED | unchanged | stays as story ID | equals MAX_RETRIES |
-
----
-
-## Prompt Architecture
-
-This is what Claude actually receives when ralph.sh calls it. There are two layers — one automatic (CLAUDE.md) and one explicit (the prompt):
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ What Claude sees during each story iteration                  │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│ LAYER 1: SYSTEM CONTEXT (automatic)                          │
-│ ┌──────────────────────────────────────────┐                 │
-│ │ Contents of CLAUDE.md                    │                 │
-│ │                                          │                 │
-│ │ Claude Code automatically finds and      │                 │
-│ │ loads this file from the project root.   │                 │
-│ │ ralph.sh doesn't send it — Claude Code   │                 │
-│ │ does this on its own for any project     │                 │
-│ │ that has a CLAUDE.md file.               │                 │
-│ │                                          │                 │
-│ │ Contains: project architecture, data     │                 │
-│ │ model, design tokens, build commands,    │                 │
-│ │ conventions (integer cents, etc.)        │                 │
-│ └──────────────────────────────────────────┘                 │
-│                                                              │
-│ LAYER 2: THE PROMPT (built by ralph.sh)                      │
-│ ┌──────────────────────────────────────────┐                 │
-│ │ "You are Ralph, an autonomous agent..."  │                 │
-│ │                                          │                 │
-│ │ ## STORY SPECIFICATION                   │                 │
-│ │ The entire spec file is pasted here —    │                 │
-│ │ YAML frontmatter and all markdown        │                 │
-│ │ sections. Claude reads this to know      │                 │
-│ │ exactly what to build.                   │                 │
-│ │                                          │                 │
-│ │ ## WORKFLOW                              │                 │
-│ │ Step-by-step instructions telling Claude │                 │
-│ │ what to do:                              │                 │
-│ │ 1. Read existing code first              │                 │
-│ │ 2. Implement by writing/editing files    │                 │
-│ │ 3. Validate with npm run check + test    │                 │
-│ │ 4. On success: git commit and output     │                 │
-│ │    the DONE signal tag                   │                 │
-│ │ 5. On failure: git checkout . (revert)   │                 │
-│ │    and output the FAIL signal tag        │                 │
-│ │ 6. Output LEARN tags for useful insights │                 │
-│ │                                          │                 │
-│ │ ## CRITICAL RULES                        │                 │
-│ │ Hard constraints Claude must follow:     │                 │
-│ │ - Complete one story fully before done   │                 │
-│ │ - Use integer cents for money            │                 │
-│ │ - Follow acceptance criteria exactly     │                 │
-│ │ - Write all specified tests              │                 │
-│ │ - Must use tools (not just output text)  │                 │
-│ └──────────────────────────────────────────┘                 │
-│                                                              │
-│ AVAILABLE TOOLS                                              │
-│ Because --dangerously-skip-permissions is set, Claude can    │
-│ use all tools without asking for human approval:             │
-│ Read, Write, Edit, Bash, Glob, Grep                          │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
+| PENDING → CURRENT | unchanged | set to story ID | unchanged |
+| CURRENT → DONE | story ID added | set to null | reset to 0 |
+| CURRENT → RETRY | unchanged | stays set | incremented |
+| CURRENT → DECOMPOSED | parent added to decomposed_stories | set to null | reset to 0 |
+| CURRENT → HALTED | unchanged | stays set | equals max_retries |
 
 ---
 
 ## Signal Protocol
 
-The signal protocol is how Claude communicates results back to ralph.sh. Since Claude runs in `--print` mode (non-interactive), its only way to send structured information back is by including specific tags in its text output.
+Claude communicates results back to Ralph through structured XML tags in its text output. The parser (`lib/signals.sh`) scans the full output using "last match wins" semantics.
 
-Ralph.sh scans the output text using bash regular expressions:
+### All Signal Types
 
-**Primary signals** (the ones Claude is told to use):
+| Signal | Format | Emitted By |
+|--------|--------|------------|
+| DONE | `<ralph>DONE X.X</ralph>` | Claude after successful story |
+| FAIL | `<ralph>FAIL X.X: reason</ralph>` | Claude after failed story |
+| LEARN | `<ralph>LEARN: text</ralph>` | Claude when discovering patterns |
+| TEST_REVIEW_DONE | `<ralph>TEST_REVIEW_DONE X.X: result</ralph>` | Test review phase |
+| MERGE_DONE | `<ralph>MERGE_DONE: resolved N conflicts</ralph>` | Merge resolution agent |
+| MERGE_FAIL | `<ralph>MERGE_FAIL: reason</ralph>` | Merge resolution agent |
+| TIMEOUT_POSTMORTEM_DONE | `<ralph>TIMEOUT_POSTMORTEM_DONE X.X</ralph>` | Postmortem diagnostic |
+| DECOMPOSE_DONE | `<ralph>DECOMPOSE_DONE X.X: N sub-stories</ralph>` | Decomposition agent |
+
+### Legacy Fallback
+
+For backwards compatibility, these patterns are also recognized:
 ```
-<ralph>DONE 8.3</ralph>         "I successfully implemented story 8.3"
-<ralph>FAIL 8.3: reason</ralph> "I failed on story 8.3, here's why"
-<ralph>LEARN: insight</ralph>   "I discovered something useful"
+[DONE] Story X.X     → treated as success
+[FAIL] Story X.X - reason → treated as failure
 ```
 
-**Legacy fallback** (older format, still recognized):
-```
-[DONE]                          Anywhere in output = success
-[FAIL]                          Anywhere in output = failure
-```
-
-**No signal at all:**
-If neither primary nor legacy signals are found in the output, ralph.sh treats it as a failure with the reason "No completion signal in output." This handles cases where Claude ran but didn't produce structured output (e.g., got confused, hit a token limit, etc.).
+If neither primary nor legacy signals are found, the story is treated as a failure with reason "No completion signal in output."
 
 ---
 
-## Failure Handling
+## Configuration
 
-When a story fails (FAIL signal, timeout, crash, or no signal), here's what happens step by step:
+`.ralph/config.json` is deep-merged with built-in defaults. All keys are optional — defaults apply when absent.
 
+```json
+{
+    "version": "2.4.0",
+    "project": { "name": "my-project" },
+    "specs": {
+        "pattern": "specs/epic-{{epic}}/story-{{id}}-*.md",
+        "id_format": "epic.story",
+        "frontmatter_status_field": "status"
+    },
+    "loop": {
+        "max_iterations": 0,
+        "timeout_seconds": 1800,
+        "max_retries": 3
+    },
+    "validation": {
+        "commands": [],
+        "blocked_commands": []
+    },
+    "claude": {
+        "flags": ["--print", "--dangerously-skip-permissions", "--output-format", "json"]
+    },
+    "commit": {
+        "format": "feat(story-{{id}}): {{title}}",
+        "stage_paths": [],
+        "auto_commit": true
+    },
+    "testing_phase": {
+        "enabled": false,
+        "timeout_seconds": 600
+    },
+    "learnings": {
+        "enabled": true,
+        "max_inject_count": 5
+    },
+    "parallel": {
+        "enabled": false,
+        "max_concurrent": 8,
+        "strategy": "worktree",
+        "auto_merge": true,
+        "merge_review_timeout": 900,
+        "stagger_seconds": 3
+    },
+    "postmortem": {
+        "enabled": true,
+        "window_seconds": 300,
+        "max_output_chars": 50000
+    },
+    "decomposition": {
+        "enabled": true,
+        "max_depth": 2,
+        "timeout_seconds": 600
+    },
+    "caffeine": false,
+    "hooks": {
+        "pre_iteration": "",
+        "post_iteration": "",
+        "pre_story": "",
+        "post_story": "",
+        "pre_worktree": "",
+        "pre_worktree_timeout": 120
+    }
+}
 ```
-1. Read the current retry_count from state.json
-   (starts at 0 for each new story)
 
-2. Add 1 to retry_count
+### Key Settings
 
-3. Write the new retry_count back to state.json
-   (current_story stays set to this story)
-
-4. Append a [FAIL] line to progress.txt:
-   "[FAIL] Story 8.3 - Reason - timestamp (attempt 2/3)"
-
-5. Is retry_count now >= MAX_RETRIES (default: 3)?
-
-   NO: Return normally. The main loop continues to the next
-       iteration. Since this story is still not in completed_stories,
-       find_next_story() will pick it again, effectively retrying it.
-
-   YES: Print a large "MAX RETRIES EXCEEDED" banner.
-        Print "Human intervention required."
-        Print a hint: "./ralph.sh -s 8.3"
-        Exit the entire script with code 1.
-```
-
-**Important gap:** ralph.sh does NOT clean up dirty git state before retrying. The prompt tells Claude to run `git checkout .` on failure, but if Claude crashed or timed out, it may not have done that. This means the next retry attempt could start with leftover uncommitted changes from the previous attempt.
+| Path | Default | Description |
+|------|---------|-------------|
+| `loop.max_iterations` | 0 | Stories to attempt (0 = all remaining) |
+| `loop.timeout_seconds` | 1800 | Max time per story (30 min) |
+| `loop.max_retries` | 3 | Retry attempts before decomposition/halt |
+| `validation.commands` | `[]` | Commands Claude must run after each story |
+| `validation.blocked_commands` | `[]` | Forbidden commands |
+| `commit.stage_paths` | `[]` | Explicit files to stage (empty = broad staging) |
+| `commit.auto_commit` | true | Auto-commit on story success |
+| `parallel.max_concurrent` | 8 | Max concurrent worktree workers |
+| `parallel.stagger_seconds` | 3 | Delay between worker launches |
+| `postmortem.enabled` | true | Run diagnostic after timeouts |
+| `postmortem.window_seconds` | 300 | Time reserved for postmortem Claude call |
+| `decomposition.enabled` | true | Auto-decompose after max retries |
+| `decomposition.max_depth` | 2 | Maximum nesting depth for sub-stories |
 
 ---
 
-## mark_story_done
+## Template System
 
-When a story succeeds, here's what happens:
+Ralph uses markdown templates stored in `.ralph/templates/` (project-local) or `templates/` (installation defaults). Templates are populated at runtime via `{{variable}}` substitution.
+
+### Runtime Templates
+
+| Template | Used By | Purpose |
+|----------|---------|---------|
+| `implement.md` | Runner | Main story implementation prompt sent to Claude |
+| `test-review.md` | Testing | Post-implementation test review prompt |
+| `merge-review.md` | Parallel | Merge conflict resolution prompt |
+| `timeout-postmortem.md` | Runner | Diagnostic prompt after story timeout |
+| `decompose.md` | Decomposition | Prompt to break a failed story into sub-stories |
+| `hitl-feedback.md` | HITL | Remediation PRD generation from review feedback |
+
+### Init Templates
+
+| Template | Purpose |
+|----------|---------|
+| `init/config.json` | Default config for `ralph init` |
+| `init/stories.txt` | Starter story queue template |
+| `init/implement.md` | Default implementation prompt template |
+
+### Template Variables
+
+| Variable | Replaced With |
+|----------|---------------|
+| `{{id}}` | Story ID (e.g., "3.4") |
+| `{{epic}}` | Epic number extracted from ID |
+| `{{title}}` | Story title from spec frontmatter |
+| `{{spec_content}}` | Full spec file contents |
+| `{{learnings}}` | Relevant learnings injected for context |
+| `{{validation_commands}}` | Commands from config.validation |
+| `{{blocked_commands}}` | Forbidden commands from config |
+
+---
+
+## Failure Handling Pipeline
+
+When a story fails, Ralph follows this escalation:
 
 ```
-1. Add the story ID to the completed_stories array in state.json
-2. Set current_story to null (nothing running)
-3. Reset retry_count to 0
-4. Write all of the above to .ralph/state.json
-   (writes to a temp file first, then renames it — this prevents
-   corruption if the script is interrupted mid-write)
-5. Open the spec file and change "status: pending" to "status: done"
-   in the YAML frontmatter (using the sed text replacement tool)
-6. Append a [DONE] line to progress.txt with a timestamp
-7. Write a log message to ralph.log
+FAIL (or timeout, crash, no signal)
+  │
+  ├── retry_count < max_retries?
+  │     YES → increment retry, re-run same story
+  │     NO  ↓
+  │
+  ├── decomposition.enabled and depth < max_depth?
+  │     YES → invoke Claude to break story into 2-4 sub-stories
+  │           → parent marked as decomposed
+  │           → sub-stories (N.M.1, N.M.2, ...) inserted into queue
+  │           → continue with next story
+  │     NO  ↓
+  │
+  └── HALT — print "Human intervention required", exit 1
+```
+
+### Timeout Handling
+
+When a story times out (exit code 124):
+
+1. Ralph checks if `postmortem.enabled` is true
+2. If enabled, computes an effective timeout that reserves `window_seconds` for a diagnostic Claude call
+3. Runs a postmortem prompt with the truncated output to identify the root cause
+4. Records the postmortem findings, then proceeds to retry/decompose/halt as above
+
+### Story Decomposition
+
+When decomposition triggers (`lib/decompose.sh`):
+
+1. Claude receives the failed story spec, error output, and decomposition template
+2. Claude generates 2-4 sub-stories with hierarchical IDs (e.g., 3.1 → 3.1.1, 3.1.2)
+3. Sub-story spec files are written to `specs/`
+4. Sub-story IDs are inserted into `.ralph/stories.txt` after the parent
+5. Parent is recorded in `state.decomposed_stories`
+6. Maximum nesting depth is configurable (default: 2 levels)
+
+---
+
+## Runtime Artifacts
+
+```
+.ralph/                          # Runtime state directory
+├── config.json                  # Project configuration
+├── state.json                   # Execution state (atomic JSON writes)
+├── stories.txt                  # Ordered story queue with batch annotations
+├── .lock                        # PID-based process lock
+├── templates/                   # Project-local prompt templates
+│   └── implement.md
+├── learnings/                   # Extracted learnings by topic
+│   └── *.md
+├── metrics/                     # Per-run token usage and cost data
+│   └── run-*.json
+├── provenance/                  # PRD-to-spec traceability hashes
+│   └── manifest.json
+└── output/                      # Claude output captures
+    └── story-*.txt
+progress.txt                     # Human-readable [DONE]/[FAIL]/[LEARN] log
+ralph.log                        # Timestamped technical debug log
 ```
 
 ---
 
-## Startup Sequence
-
-When you run `./ralph.sh`, this happens before any stories are attempted:
+## Inter-Module Dependencies
 
 ```
-1. CHECK PREREQUISITES
-   The script verifies the environment is set up correctly.
-   Any failure here stops the script immediately.
-
-   a) Is 'claude' installed and in the PATH?
-      If not: print error, exit 1
-   b) Does CLAUDE.md exist in the current directory?
-      If not: print error, exit 1
-   c) Does the specs/ directory exist?
-      If not: print error, exit 1
-   d) Does .ralph/ directory exist?
-      If not: create it (mkdir -p)
-   e) Does progress.txt exist?
-      If not: create an empty one (touch)
-
-2. INITIALIZE STATE
-   If .ralph/state.json already exists, skip this step entirely.
-   If it doesn't exist (first run, or someone deleted it):
-
-   a) Read progress.txt line by line
-   b) Find all lines matching "[DONE] Story X.Y ..."
-   c) Extract the story IDs (e.g., "1.1", "2.3")
-   d) Remove duplicates
-   e) Build a new state.json with those IDs as completed_stories,
-      current_story = null, retry_count = 0
-
-   This means you can recover state by keeping progress.txt —
-   state.json is rebuilt from it automatically.
-
-3. PRINT BANNER
-   Show a box with: iterations count, timeout, log file path,
-   and whether a specific story or resume point was requested.
-
-4. ENTER MAIN LOOP
-   Begin iterating through stories.
+bin/ralph
+  ├── ui.sh (always loaded)
+  ├── prereqs.sh (always loaded)
+  │
+  ├── cmd_run:
+  │   ├── config.sh → state.sh → stories.sh → specs.sh
+  │   ├── prompt.sh → learnings.sh → signals.sh
+  │   ├── runner.sh → display.sh → hooks.sh → testing.sh
+  │   ├── decompose.sh → metrics.sh
+  │   ├── parallel.sh (if --parallel)
+  │   ├── tmux.sh (if --tmux)
+  │   └── caffeine.sh (if caffeine=true)
+  │
+  ├── cmd_init:
+  │   ├── config.sh → state.sh → provenance.sh
+  │   └── interactive.sh
+  │
+  ├── cmd_hitl:
+  │   └── config.sh → state.sh → hitl.sh
+  │
+  ├── cmd_reconcile:
+  │   └── config.sh → state.sh → stories.sh → reconcile.sh
+  │
+  ├── cmd_verify:
+  │   └── config.sh → state.sh → stories.sh → provenance.sh
+  │
+  └── cmd_stats:
+      └── config.sh → state.sh → metrics.sh
 ```
 
 ---
 
-## File Relationships
+## Story ID Format
 
-This shows how all the files connect — what reads what, what writes what:
+Ralph supports hierarchical story IDs using the pattern `[0-9]+\.[0-9]+(\.[0-9]+)*`:
+
+| Level | Example | Origin |
+|-------|---------|--------|
+| Base story | `3.1` | PRD-generated spec |
+| First decomposition | `3.1.1`, `3.1.2` | Auto-decomposed from 3.1 |
+| Second decomposition | `3.1.1.1`, `3.1.1.2` | Auto-decomposed from 3.1.1 |
+
+N-level nesting is supported in parsing, but `decomposition.max_depth` (default: 2) limits how deep auto-decomposition goes.
+
+---
+
+## Story Queue Format
+
+`.ralph/stories.txt`:
 
 ```
-                     ┌──────────────────────────┐
-                     │                          │
-        reads on     │      ralph.sh            │    writes to
-        startup      │                          │    every iteration
-   ┌─────────────────┤  STORY_ORDER array       ├───────────────────┐
-   │                 │  ITERATIONS count         │                   │
-   │                 │  TIMEOUT / MAX_RETRIES    │                   │
-   │                 └─────────┬────────────────┘                   │
-   │                           │                                     │
-   ▼                           │ invokes per story                   ▼
-┌──────────┐                   │                          ┌─────────────────┐
-│ CLAUDE.md│                   ▼                          │ .ralph/         │
-│ (checked │        ┌─────────────────────┐               │   state.json    │
-│ for      │        │ claude --print      │               │                 │
-│ existence│        │ (Claude Code CLI)   │               │ Tracks:         │
-│ only)    │        │                     │               │ - completed IDs │
-└──────────┘        │ Receives the prompt │               │ - current story │
-                    │ and runs tools to   │               │ - retry count   │
-   ┌───────────┐    │ implement the story │               └─────────────────┘
-   │ specs/    │    │                     │                        │
-   │ epic-N/   │──> │ Also auto-loads     │               ┌────────┴────────┐
-   │ story-*.md│    │ CLAUDE.md as        │               │                 │
-   │           │    │ project context     │               ▼                 ▼
-   │ (read by  │    └─────────┬──────────┘        ┌────────────┐   ┌────────────┐
-   │ ralph.sh  │              │                   │progress.txt│   │ ralph.log  │
-   │ and       │              │ Claude's text     │            │   │            │
-   │ embedded  │              │ output (stdout)   │ Human-     │   │ Timestamped│
-   │ in prompt)│              ▼                   │ readable   │   │ technical  │
-   └───────────┘       ┌─────────────┐            │ history:   │   │ messages   │
-        ▲              │ ralph.sh    │            │ [DONE]     │   │ for debug  │
-        │              │ parses the  │            │ [FAIL]     │   │            │
-        │              │ output for  │            │ [LEARN]    │   │            │
-        │ On success:  │ signal tags │            └────────────┘   └────────────┘
-        │ sed changes  └─────────────┘
-        │ "status: pending"
-        │ to "status: done"
-        │ in YAML frontmatter
-        └──────────────
+# Ralph Story Queue
+# Format: ID | Title
+
+# [batch:0] — sequential pre-work
+1.1 | Initialize Project Structure
+
+# [batch:1] — independent stories (parallel mode)
+2.1 | Create Budget View
+2.2 | Create Transaction View
+
+# [batch:2]
+3.1 | Add Reporting Dashboard
+
+# Prefix with x to skip:
+x 3.5 | Deferred Feature
 ```
 
----
-
-## What ralph.sh Does NOT Do
-
-These are things you might expect the script to handle, but they are manual steps done by a human before running the loop:
-
-1. **Create story spec files** — Someone writes `specs/epic-N/story-N.M-slug.md` with the required format (YAML frontmatter + markdown sections). Ralph does not generate stories.
-
-2. **Update STORY_ORDER** — When new stories are added, someone must edit the bash array inside ralph.sh to include the new story IDs. Ralph does not scan the specs/ directory.
-
-3. **Update ITERATIONS** — If more stories are added, someone must increase this number or Ralph will stop before reaching them.
-
-4. **Create directory structure** — `mkdir specs/epic-N` must be done before adding stories to a new epic.
-
-5. **Clean up dirty git state on timeout** — The prompt tells Claude to run `git checkout .` when it fails, but if Claude times out or crashes, the revert never happens. Ralph does not run any git commands itself.
-
-6. **Validate spec format** — If a spec file exists, Ralph uses it regardless of whether it has valid YAML frontmatter, all sections, or is well-formed. There is no schema check.
-
-7. **Respect the depends_on field** — The YAML frontmatter can include `depends_on: ["7.4"]`, but ralph.sh ignores this. Stories run in STORY_ORDER regardless of what depends_on says. It's up to whoever writes the STORY_ORDER array to get the sequencing right.
-
-8. **Manage branches** — Ralph runs on whatever git branch is currently checked out. It does not create branches, switch branches, or merge.
-
-9. **Reset state between retries** — When retrying a failed story, Ralph does not run `git checkout .` first. If the previous attempt left uncommitted changes, the retry starts with that dirty state.
+- `[batch:0]` and unbatched stories run sequentially before parallel batches
+- `[batch:N]` (N > 0) stories run concurrently in parallel mode
+- `x` prefix skips a story without removing it from the queue
 
 ---
 
-## Current State (as of January 30, 2026)
+## External Dependencies
 
-- **78 story IDs** are listed in STORY_ORDER (spanning epics 1 through 12)
-- **58 stories completed** — all of epics 1 through 8
-- **20 stories remaining** — epics 9, 10, 11, 12
-- **ITERATIONS is set to 45** — this is less than the 20 remaining stories, so it would need to be increased before running the loop again
-- **Spec files for epics 9-12** — their IDs are in STORY_ORDER, but their spec files in `specs/` need to be verified
+| Program | Required | Purpose |
+|---------|----------|---------|
+| `bash` 4.0+ | Yes | Script execution (auto-detected on macOS) |
+| `claude` | Yes | Claude Code CLI — sends prompts, receives output |
+| `jq` | Yes | All JSON operations (state, config, metrics) |
+| `git` | Yes | Worktrees (parallel), commits, branch management |
+| `timeout`/`gtimeout` | Yes | Story execution time limits |
+| `shasum` | For verify | PRD-to-spec provenance hashing |
 
 ---
 
-## No Tie to BMAD
+## Pipeline Slash Commands
 
-ralph.sh has zero coupling to the BMAD framework. It does not read, reference, or depend on anything in `_bmad/`, `.claude/commands/bmad/`, or any BMAD workflow.
+These Claude Code commands orchestrate full Ralph pipelines:
 
-What ralph.sh actually uses from spec files:
-- **The file's existence** (to know the story has a spec)
-- **The file's full content** (embedded in the prompt for Claude to read)
-- **The `status:` YAML field** (only to write "done" into it after success)
-
-Everything else in the YAML frontmatter (`priority`, `estimation`, `depends_on`, `frs`) is read by Claude as part of the embedded spec content, but ralph.sh itself does not parse or act on these fields.
-
-The original story spec files were created by Claude in a single bulk commit, not by any BMAD workflow. The Epic 8 stories were added individually in later commits, also by Claude directly.
+| Command | Description |
+|---------|-------------|
+| `/ralph-v2:pipeline-interactive` | Interactive pipeline: PRD → specs → premortem → run script, with user input at decision points |
+| `/ralph-v2:pipeline-full-auto` | Fully autonomous pipeline: PRD → specs → double premortem → run script, zero user input |
+| `/ralph-v2:reconcile-claude-code` | Post-run reconciliation for Claude Code |
+| `/ralph-v2:reconcile-codex` | Post-run reconciliation for Codex |
