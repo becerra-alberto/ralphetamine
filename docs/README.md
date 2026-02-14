@@ -11,12 +11,10 @@ Architecture:
 - `swimlane-diagram.md` — cross-functional swimlane view
 - `runtime-output-tree.md` — runtime artifacts and directory structure
 
-Operations and incidents:
-- `changelog-parallel-hardening.md` — parallel engine hardening notes
+Operations:
 - `changelog-run-summary.md` — execution run summary
 - `hitl-review.html` — generated HITL review page (output)
 - `hitl-remediation-prd.md` — generated remediation PRD (output)
-- `post-mortem.md` — incident post-mortem
 
 Reference:
 - `fake-user-stories-examples.md` — example story specs for testing and demos

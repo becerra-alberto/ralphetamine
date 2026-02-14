@@ -125,7 +125,6 @@ def default_sizing_files(projects: List[Path]) -> List[Path]:
     files.append(Path.home() / ".claude" / "sizing-data" / "measurements.jsonl")
 
     # Common nearby stores
-    files.append(Path("../ai-dev-toolkit/sizing/data/measurements.jsonl"))
     for project in projects:
         files.append(project / "_infra" / "sizing" / "data" / "measurements.jsonl")
 

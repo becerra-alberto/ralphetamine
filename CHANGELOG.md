@@ -113,4 +113,4 @@ Pipeline hardening, parallel execution stability, provenance tracking, and CI ma
 
 ### Changed
 
-- Removed legacy Stackz project files from the repo.
+- Removed legacy project files from the repo.

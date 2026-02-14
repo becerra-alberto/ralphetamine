@@ -2,8 +2,8 @@
 
 > v2.4.0 (2026-02-13)
 
-[![CI](https://github.com/bettos12/ralph-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/bettos12/ralph-v2/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/github/license/bettos12/ralph-v2)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/becerra-alberto/Ralphetamine/actions/workflows/ci.yml/badge.svg)](https://github.com/becerra-alberto/Ralphetamine/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/becerra-alberto/Ralphetamine)](https://opensource.org/licenses/MIT)
 
 Autonomous implementation loop for Claude Code. Ralph reads story specs, sends them to Claude one at a time, tracks success/failure, manages retries, and accumulates learnings — all without human intervention.
 
@@ -21,7 +21,7 @@ Autonomous implementation loop for Claude Code. Ralph reads story specs, sends t
 
 ```bash
 cd ~/Desktop/Tools  # or wherever you keep tools
-git clone git@github.com:bettos12/ralph-v2.git ralph-v2
+git clone git@github.com:becerra-alberto/Ralphetamine.git Ralphetamine
 ```
 
 ### 2. Install to PATH
@@ -272,9 +272,7 @@ Recommended safety practices:
 - Set `commit.stage_paths` for tightly scoped commits when stories target known files.
 - Review or disable `commit.auto_commit` if you need manual control.
 - In parallel mode, avoid running two Ralph instances against the same `.ralph/` state.
-- Parallel mode is core functionality and is actively hardened. See
-  `docs/changelog-parallel-hardening.md` for known parallel-mode edge cases and
-  planned fixes, including the 2026-02-06 production hardening notes.
+- Parallel mode is core functionality and is actively hardened.
 
 ## Story Queue Format
 
@@ -403,7 +401,7 @@ Legacy formats (`[DONE] Story X.X`, `[FAIL] Story X.X - reason`) are also suppor
 - `docs/README.md` — documentation index
 - `RALPH-REFERENCE.md` — complete system reference
 - `docs/architecture-flows.md` — architecture flow diagrams
-- `docs/changelog-parallel-hardening.md` — parallel engine hardening notes
+- `docs/changelog-run-summary.md` — execution run summary changelog
 
 ## Contributing
 

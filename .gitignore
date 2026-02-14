@@ -1,2 +1,9 @@
 .DS_Store
 .claude/
+.tmp/
+ralph-run-terminal-logs/
+*.log
+*.bak
+sandbox/**/*.log
+sandbox/ralphgraph-mega*.json
+.github/.DS_Store
