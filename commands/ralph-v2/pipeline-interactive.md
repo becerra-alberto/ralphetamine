@@ -107,7 +107,7 @@ Run the following steps using the Bash tool:
 
 ### Step 0.3: Set Working Context
 
-**All subsequent phases (1-7) operate inside the worktree directory.** When using the Bash tool, prefix commands with `cd "$WORKTREE_DIR" &&` or use absolute paths within the worktree. When using Read/Write/Edit tools, use the absolute worktree path.
+**All subsequent phases (1-8) operate inside the worktree directory.** When using the Bash tool, prefix commands with `cd "$WORKTREE_DIR" &&` or use absolute paths within the worktree. When using Read/Write/Edit tools, use the absolute worktree path.
 
 Create the `.ralph/` directory and initialize `ralph init` inside the worktree if `.ralph/config.json` does not already exist:
 ```bash
@@ -774,7 +774,7 @@ If any phase fails:
 4. **Spec generation fails:** Show what was generated, ask user if they want to continue with partial specs or retry.
 5. **Review Party gate fails:** Skip the gate and continue — reviews are optional enhancements, not blockers.
 6. **Premortem finds critical issues:** Do NOT skip Phase 6.4 — always fix critical issues before generating the run script.
-6. **Run script creation fails:** Provide the script content inline so the user can copy it manually.
+7. **Run script creation fails:** Provide the script content inline so the user can copy it manually.
 
 ---
 
