@@ -7,13 +7,13 @@ description: "Run the complete Ralph v2 pipeline fully autonomously with zero us
 
 Run the complete Ralph v2 pipeline from idea to execution-ready project with **zero user interaction**. Every decision point that would normally require user input instead uses structured self-evaluation: weigh risks, cons, and value — then proceed with the strongest proposal.
 
-This variant includes a **double premortem** — a second review pass that accounts for changes made by the first — to compensate for the lack of human oversight.
+This variant includes **worktree isolation** (so the main branch stays clean) and a **double premortem** — a second review pass that accounts for changes made by the first — to compensate for the lack of human oversight.
 
 ---
 
 ## Core Directive: Context Window Preservation
 
-**At every phase, maximally delegate work to sub-agents via the Task tool.** The main conversation context is a finite resource that must survive the entire 7-phase pipeline. Follow these rules:
+**At every phase, maximally delegate work to sub-agents via the Task tool.** The main conversation context is a finite resource that must survive the entire pipeline. Follow these rules:
 
 1. **Delegate all heavy reading and writing to sub-agents.** PRD generation, spec writing, premortem analysis, and consistency reviews should each run in their own Task agent. The main context only orchestrates, passes results forward, and makes git commits.
 2. **Never read full file contents into the main context when a sub-agent can do it.** If a phase needs to read 10 spec files and analyze them, spawn a sub-agent for that.
@@ -38,7 +38,7 @@ This pipeline is fully autonomous. **Do not pause to request write approval from
 
 1. **Generate artifacts for `ralph run` only.** Do not generate custom per-story loops that call `claude` directly.
 2. **Do not treat model prose as completion.** Story completion is determined by Ralph state/signal flow, not by freeform "done" text.
-3. **Normalize file paths to the current project root.** If cwd is `.../skills/oss-prep`, target `SKILL.md` (not `skills/oss-prep/SKILL.md`).
+3. **Normalize file paths to the worktree project root.** All file paths are relative to the worktree working directory, not the original repo.
 4. **Queue must be runnable before commit.** `.ralph/stories.txt` must include at least one active `N.M | Title` entry.
 
 ---
@@ -47,6 +47,7 @@ This pipeline is fully autonomous. **Do not pause to request write approval from
 
 | Phase | What Happens | Autonomous? |
 |-------|-------------|-------------|
+| 0. Worktree | Create isolated git worktree for the feature | Auto — slug derived from description |
 | 1. PRD | Generate a Product Requirements Document | Self-directed — Claude decides scope |
 | 2. Commit PRD | Commit the PRD to git | Auto |
 | 3. Specs | Convert PRD into epics, stories, batch queue | Self-directed — Claude decides breakdown |
@@ -58,6 +59,58 @@ This pipeline is fully autonomous. **Do not pause to request write approval from
 | 9. Run Script | Generate `run-ralph.sh` for autonomous execution | Auto |
 
 **No user input is requested at any phase.** Announce each phase transition clearly so the user can follow progress.
+
+---
+
+## Phase 0: Worktree Setup
+
+Create an isolated git worktree so all feature work happens on a dedicated branch, leaving the main branch clean for continued development.
+
+### Autonomous Slug Derivation
+
+Derive a kebab-case feature slug from the user's feature description. Use the first 3-4 meaningful words, lowercase, hyphen-separated:
+- "Add user authentication" → `user-authentication`
+- "Budget tracking dashboard" → `budget-tracking-dashboard`
+
+### Create the Worktree
+
+Run the following steps using the Bash tool:
+
+1. **Clean stale state:**
+   ```bash
+   rm -f .git/index.lock .git/HEAD.lock 2>/dev/null || true
+   git worktree prune 2>/dev/null || true
+   ```
+
+2. **Create the worktree:**
+   ```bash
+   git worktree add .ralph/worktrees/feature-<slug> -b ralph/feature-<slug>
+   ```
+   If the branch or worktree already exists (from a previous run), clean up and retry:
+   ```bash
+   git worktree unlock .ralph/worktrees/feature-<slug> 2>/dev/null || true
+   git worktree remove .ralph/worktrees/feature-<slug> --force 2>/dev/null || true
+   rm -rf .ralph/worktrees/feature-<slug> 2>/dev/null || true
+   git worktree prune 2>/dev/null || true
+   git branch -D ralph/feature-<slug> 2>/dev/null || true
+   git worktree add .ralph/worktrees/feature-<slug> -b ralph/feature-<slug>
+   ```
+
+3. **Resolve the absolute worktree path** and store it for all subsequent phases:
+   ```bash
+   WORKTREE_DIR="$(cd .ralph/worktrees/feature-<slug> && pwd)"
+   ```
+
+### Set Working Context
+
+**All subsequent phases (1-9) operate inside the worktree directory.** When using the Bash tool, prefix commands with `cd "$WORKTREE_DIR" &&` or use absolute paths within the worktree. When using Read/Write/Edit tools, use the absolute worktree path.
+
+Create the `.ralph/` directory and initialize `ralph init` inside the worktree if `.ralph/config.json` does not already exist:
+```bash
+cd "$WORKTREE_DIR" && ralph init
+```
+
+Announce: **"Phase 0 complete — Worktree created at `.ralph/worktrees/feature-<slug>` on branch `ralph/feature-<slug>`. All work will happen in this isolated environment."**
 
 ---
 
@@ -437,7 +490,7 @@ Save and `chmod +x run-ralph.sh`.
 
 ### Step 9.2: Launch in iTerm2
 
-After generating the script, **automatically launch it in a new iTerm2 window** so Ralph runs in its own dedicated terminal session, separate from the Claude Code conversation.
+After generating the script, **automatically launch it in a new iTerm2 window** so Ralph runs in its own dedicated terminal session inside the worktree.
 
 Use the Bash tool to run this AppleScript via `osascript`:
 
@@ -447,21 +500,21 @@ tell application "iTerm2"
     activate
     set newWindow to (create window with default profile)
     tell current session of newWindow
-        write text "cd \"'"$PROJECT_DIR"'\" && ./run-ralph.sh"
+        write text "cd \"'"$WORKTREE_DIR"'\" && ./run-ralph.sh"
     end tell
 end tell
 '
 ```
 
-Where `$PROJECT_DIR` is the absolute path to the current project root (resolve it via `pwd` before the osascript call).
+Where `$WORKTREE_DIR` is the absolute path to the worktree directory (resolved in Phase 0).
 
 **Fallback:** If iTerm2 is not installed or the AppleScript fails, fall back to:
 ```bash
-open -a Terminal.app "$(pwd)/run-ralph.sh"
+cd "$WORKTREE_DIR" && open -a Terminal.app "./run-ralph.sh"
 ```
-If both fail, tell the user: "Could not auto-launch. Run `./run-ralph.sh` manually."
+If both fail, tell the user: "Could not auto-launch. Run `./run-ralph.sh` from the worktree directory manually."
 
-Announce: **"Phase 9 complete — Ralph is now running in a new iTerm2 window."**
+Announce: **"Phase 9 complete — Ralph is running in a new iTerm2 window (worktree: `feature-<slug>`)."**
 
 ---
 
@@ -472,6 +525,8 @@ Print the final summary:
 ```
 Ralph v2 Full-Auto Pipeline Complete
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Worktree:     .ralph/worktrees/feature-<slug>
+Branch:       ralph/feature-<slug>
 PRD:          tasks/prd-[name].md
 Specs:        N stories across M epics
 Premortem 1:  X issues found, Y fixed
@@ -481,8 +536,17 @@ Reports:      .ralph/premortem-1-report.md
 Run script:   ./run-ralph.sh
 Execution:    Launched in iTerm2 window
 
-Ralph is running autonomously. Check the iTerm2 window for progress.
+Ralph is running autonomously in an isolated worktree.
+Check the iTerm2 window for progress.
 Premortem reports are available for review at any time.
+
+When complete, merge back to your main branch:
+  cd <project-root>
+  git merge ralph/feature-<slug>
+  git worktree remove .ralph/worktrees/feature-<slug>
+
+→ Then update the changelog:
+  /bonbon:ai-dev-toolkit:dev:1-changelog
 ```
 
 ---
@@ -491,12 +555,13 @@ Premortem reports are available for review at any time.
 
 If any phase fails:
 
-1. **PRD generation fails:** Retry with a simpler scope interpretation. If the user's description is truly ambiguous, fall back to the most literal reading.
-2. **Git commit fails:** Warn and continue — files are on disk.
-3. **Spec generation sub-agent fails:** Retry that specific story's spec sequentially. Do not re-run all agents.
-4. **Premortem finds critical issues:** Always fix them. Never skip Premortem 2 even if Premortem 1 was clean.
-5. **Run script creation fails:** Output the script content inline.
-6. **Write permission/file-creation failure:** Retry with alternate write method and explicit directory creation. If still blocked, add an entry to `.ralph/write-blockers.md` and continue without asking for interactive approval.
+1. **Worktree creation fails:** Clean stale locks (`rm -f .git/index.lock`), prune worktrees (`git worktree prune`), and retry. If the branch already exists, delete it and recreate.
+2. **PRD generation fails:** Retry with a simpler scope interpretation. If the user's description is truly ambiguous, fall back to the most literal reading.
+3. **Git commit fails:** Warn and continue — files are on disk.
+4. **Spec generation sub-agent fails:** Retry that specific story's spec sequentially. Do not re-run all agents.
+5. **Premortem finds critical issues:** Always fix them. Never skip Premortem 2 even if Premortem 1 was clean.
+6. **Run script creation fails:** Output the script content inline.
+7. **Write permission/file-creation failure:** Retry with alternate write method and explicit directory creation. If still blocked, add an entry to `.ralph/write-blockers.md` and continue without asking for interactive approval.
 
 ---
 
