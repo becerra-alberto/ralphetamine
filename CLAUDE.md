@@ -12,6 +12,15 @@ Ralph v2 is an autonomous implementation loop for Claude Code. It reads story sp
 - **Dependencies:** jq, git, coreutils (for timeout/gtimeout)
 - **CLI:** `claude` (Claude Code CLI)
 
+## Repository Remotes
+
+This repo uses a two-remote setup:
+
+- **`origin`** = `ralph-dev` (private) — default push target for daily development
+- **`public`** = `ralphetamine` (public) — release-only, explicit push required
+
+See `docs/repo-workflow.md` for full workflow details.
+
 ## Project Structure
 
 ```
