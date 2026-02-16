@@ -13,18 +13,45 @@ Run the complete Ralph v2 pipeline from idea to execution-ready project in one s
 
 ---
 
+## Review Party Protocol
+
+Three **Review Party** gates are embedded in the pipeline — multi-perspective evaluations where 3 specialist voices assess an artifact. The term "party" comes from BMAD's collaborative multi-agent format.
+
+### How It Works
+
+Since the pipeline runs in a single Claude conversation, personas are **simulated in-prompt** — adopt each voice in sequence, then synthesize. Each persona gives 3-5 bullet points + a 1-sentence verdict (~300 words total per gate). This keeps reviews scannable and fast.
+
+### Skip Mechanism
+
+Each gate independently asks **"Ready for the [Name] Party review, or skip?"** before running. The user can skip any individual gate without affecting the others. If skipped, proceed immediately to the next step.
+
+### Output Files
+
+Gate reports are persisted to `.ralph/reviews/`:
+- `vision-party.md` — Gate 1 (pre-PRD)
+- `requirements-party.md` — Gate 2 (post-PRD)
+- `execution-party.md` — Gate 3 (post-specs)
+
+Create the `.ralph/reviews/` directory if it doesn't exist.
+
+---
+
 ## Pipeline Overview
 
 | Phase | What Happens | User Input? |
 |-------|-------------|-------------|
 | 0. Worktree | Create an isolated git worktree for the feature | Yes — confirm feature slug |
-| 1. PRD | Generate a Product Requirements Document | Yes — clarifying questions |
+| 1. PRD | Get feature description + clarifying questions | Yes — clarifying questions |
+| 1b. Vision Party | Multi-perspective idea evaluation (Review Gate 1) | Yes — review findings |
+| 1c. Generate PRD | Generate the PRD from validated idea | No |
+| 1d. Requirements Party | Multi-perspective PRD evaluation (Review Gate 2) | Yes — review findings |
 | 2. Commit PRD | Commit the PRD to git | No |
 | 3. Specs | Convert PRD into epics, stories, batch queue | Yes — confirm breakdown |
 | 4. Commit Specs | Commit specs and stories.txt to git | No |
-| 5. Premortem | Analyze plan for failure modes, fix issues | Yes — review findings |
-| 6. Commit Fixes | Commit premortem fixes to git | No |
-| 7. Run Script | Generate `run-ralph.sh` for autonomous execution | No |
+| 5. Execution Coherence Party | Multi-perspective spec evaluation (Review Gate 3) | Yes — review findings |
+| 6. Premortem | Analyze plan for failure modes, fix issues | Yes — review findings |
+| 7. Commit Fixes | Commit all review fixes to git | No |
+| 8. Run Script | Generate `run-ralph.sh` for autonomous execution | No |
 
 **Important:** Complete each phase fully before moving to the next. Announce each phase transition clearly so the user knows where they are in the pipeline.
 
@@ -125,9 +152,57 @@ Format questions like this so users can respond "1A, 2C, 3B":
 
 **WAIT for the user to answer before continuing.**
 
-### Step 1.3: Generate the PRD
+### Step 1.3: Vision Party (Review Gate 1)
 
-Based on answers, generate a structured PRD with these sections:
+Ask the user: **"Ready for the Vision Party review, or skip?"**
+
+**WAIT for the user to respond.** If they say "skip", proceed directly to Step 1.4.
+
+If proceeding, evaluate the idea from three specialist perspectives before locking it into a PRD:
+
+| Voice | Focus | Key Questions |
+|-------|-------|---------------|
+| **Visionary Analyst** | Problem-space depth | Is this solving the root problem or a symptom? What's the 10x version? What would make this transformative rather than incremental? |
+| **User Advocate** | Human-centered design | Who benefits most and how deeply? What's the emotional journey? What friction points in the user's current workflow are we missing? |
+| **Innovation Strategist** | Opportunity space | What adjacent capabilities does this unlock? What's the bleeding-edge approach? What would a competitor ship that makes this obsolete? |
+
+Generate the report in this format and save to `.ralph/reviews/vision-party.md`:
+
+```
+## Vision Party Review
+
+### Visionary Analyst
+- [Bullet 1: problem depth assessment]
+- [Bullet 2: leverage point identified]
+- [Bullet 3: transformative potential or reframing]
+Verdict: [One sentence summary]
+
+### User Advocate
+- [Bullet 1: who benefits and how deeply]
+- [Bullet 2: friction/empathy gap identified]
+- [Bullet 3: experience opportunity]
+Verdict: [One sentence summary]
+
+### Innovation Strategist
+- [Bullet 1: adjacent capability unlocked]
+- [Bullet 2: bleeding-edge approach or competitive angle]
+- [Bullet 3: what would make this obsolete]
+Verdict: [One sentence summary]
+
+### Tensions & Synthesis
+- [Where voices disagree and what it reveals]
+
+### Recommended Adjustments
+- [Specific, actionable changes to incorporate before PRD generation]
+```
+
+Present the report to the user. Ask: **"Would you like to incorporate any of these insights before I generate the PRD, or proceed as-is?"**
+
+**WAIT for the user to respond.** If they request changes, note them for PRD generation. Then continue to Step 1.4.
+
+### Step 1.4: Generate the PRD
+
+Based on answers (and any Vision Party insights incorporated), generate a structured PRD with these sections:
 
 1. **Introduction/Overview** — Brief description and problem statement
 2. **Goals** — Specific, measurable objectives
@@ -140,6 +215,54 @@ Based on answers, generate a structured PRD with these sections:
 9. **Open Questions** — Remaining unknowns
 
 Save to `tasks/prd-[feature-name].md` (kebab-case filename).
+
+### Step 1.5: Requirements Party (Review Gate 2)
+
+Ask the user: **"Ready for the Requirements Party review, or skip?"**
+
+**WAIT for the user to respond.** If they say "skip", proceed directly to Phase 2.
+
+If proceeding, evaluate the PRD from three specialist perspectives:
+
+| Voice | Focus | Key Questions |
+|-------|-------|---------------|
+| **Product Strategist** | Requirements coherence | Do the functional requirements fully cover the goals? Are there contradictions? Is scope appropriate — not too narrow, not bloated? Do success metrics actually measure what matters? |
+| **Experience Designer** | User story quality | Are user stories genuinely user-centric or just developer tasks in disguise? Does the UX flow feel natural? Are edge-case user journeys covered? Is there an emotional design thread? |
+| **Technical Architect** | Feasibility & design | Are there implicit technical constraints the PRD doesn't acknowledge? Is the design consideration section realistic? Are there architectural decisions being deferred that will bite during implementation? |
+
+Generate the report in this format and save to `.ralph/reviews/requirements-party.md`:
+
+```
+## Requirements Party Review
+
+### Product Strategist
+- [Bullet 1: goal-requirement alignment check]
+- [Bullet 2: scope calibration — too narrow or bloated?]
+- [Bullet 3: success metrics assessment]
+Verdict: [One sentence summary]
+
+### Experience Designer
+- [Bullet 1: user story authenticity — user-centric or developer tasks in disguise?]
+- [Bullet 2: UX flow coherence]
+- [Bullet 3: edge-case journeys or empathy gaps]
+Verdict: [One sentence summary]
+
+### Technical Architect
+- [Bullet 1: implicit constraints not acknowledged]
+- [Bullet 2: feasibility of design considerations]
+- [Bullet 3: deferred decisions that will bite later]
+Verdict: [One sentence summary]
+
+### Cross-Cutting Concerns
+- [Tensions between voices — where business needs conflict with technical reality or UX]
+
+### Recommended PRD Revisions
+- [Specific revisions to apply to the PRD before committing]
+```
+
+Present the report to the user. Ask: **"Should I apply these revisions to the PRD, adjust specific items, or commit as-is?"**
+
+**WAIT for the user to respond.** If revisions are accepted, edit the PRD file in-place, then continue.
 
 Announce: **"Phase 1 complete — PRD saved to `tasks/prd-[name].md`. Moving to Phase 2: Commit."**
 
@@ -296,19 +419,75 @@ Commit all generated spec artifacts to git.
 2. Commit message: `ralph: add specs for [feature-name] (N stories across M epics)`
 3. If commit fails, warn but continue.
 
-Announce: **"Phase 4 complete — Specs committed. Moving to Phase 5: Premortem Review."**
+Announce: **"Phase 4 complete — Specs committed. Moving to Phase 5: Execution Coherence Review."**
 
 ---
 
-## Phase 5: Premortem Review
+## Phase 5: Execution Coherence Party (Review Gate 3)
+
+Evaluate whether the story breakdown actually serves the vision. This is **strategic** evaluation — the premortem that follows in Phase 6 is **tactical**.
+
+Ask the user: **"Ready for the Execution Coherence Party review, or skip?"**
+
+**WAIT for the user to respond.** If they say "skip", proceed directly to Phase 6.
+
+If proceeding, evaluate the specs from three specialist perspectives:
+
+| Voice | Focus | Key Questions |
+|-------|-------|---------------|
+| **Systems Thinker** | Holistic coherence | Do the stories compose into the intended whole, or has decomposition lost the narrative? Are there emergent behaviors from story interactions that nobody planned for? Is there a "golden thread" from vision → PRD → specs? |
+| **Developer Experience Advocate** | Implementation quality | Will a developer (or Claude) reading each spec understand *why*, not just *what*? Is there enough context to make good judgment calls? Are the stories enjoyable to implement or drudgework? |
+| **Quality Strategist** | Acceptance criteria & value | Do the acceptance criteria prove that value was delivered, or just that code was written? Are we testing behavior or implementation details? Would passing all tests mean a user would actually be satisfied? |
+
+Generate the report in this format and save to `.ralph/reviews/execution-party.md`:
+
+```
+## Execution Coherence Party Review
+
+### Systems Thinker
+- [Bullet 1: do stories compose into the intended whole?]
+- [Bullet 2: emergent behaviors from story interactions]
+- [Bullet 3: golden thread — vision → PRD → specs alignment]
+Verdict: [One sentence summary]
+
+### Developer Experience Advocate
+- [Bullet 1: spec clarity — does each spec explain *why*, not just *what*?]
+- [Bullet 2: context sufficiency for good judgment calls]
+- [Bullet 3: implementation ergonomics — enjoyable or drudgework?]
+Verdict: [One sentence summary]
+
+### Quality Strategist
+- [Bullet 1: do ACs prove value delivered, or just code written?]
+- [Bullet 2: testing behavior vs implementation details]
+- [Bullet 3: would passing all tests mean a user is satisfied?]
+Verdict: [One sentence summary]
+
+### Integration Concerns
+- [Gaps between stories where value falls through the cracks]
+
+### Recommended Spec Adjustments
+- [Specific adjustments before the tactical premortem runs]
+```
+
+Present the report to the user. Ask: **"Should I apply these adjustments, modify specific items, or proceed to the premortem?"**
+
+**WAIT for the user to respond.** If adjustments are accepted, edit spec files and stories.txt, re-run validation (Step 3.6 logic), recommit specs (`ralph: execution review adjustments for [feature-name]`), then continue.
+
+Announce: **"Phase 5 complete — Execution coherence review done. Moving to Phase 6: Premortem Review."**
+
+---
+
+## Phase 6: Premortem Review
 
 Perform a structured premortem analysis on the generated specs and stories. The premortem imagines the project has **already failed** and works backward to identify what went wrong — catching issues before they happen.
 
-### Step 5.1: Read All Specs
+**Note:** This is the **tactical** complement to Phase 5's strategic review. Phase 5 asked "are we building the right thing the right way?" — this phase asks "will the build actually work?"
+
+### Step 6.1: Read All Specs
 
 Read every spec file in `specs/` and the full `stories.txt`.
 
-### Step 5.2: Analyze for Failure Modes
+### Step 6.2: Analyze for Failure Modes
 
 Systematically check each category. For each issue found, note the story ID, the problem, and the severity (critical / warning).
 
@@ -347,7 +526,7 @@ Systematically check each category. For each issue found, note the story ID, the
 - Are there integration points between epics that have no integration tests?
 - Are there error/edge cases in the PRD's functional requirements that no story covers?
 
-### Step 5.3: Present Findings
+### Step 6.3: Present Findings
 
 Show the premortem report to the user, organized by severity:
 
@@ -368,7 +547,7 @@ If no issues are found, report: "Premortem clean — no issues detected."
 
 **WAIT for the user to review. Ask: "Should I apply all recommended fixes, or would you like to adjust any?"**
 
-### Step 5.4: Apply Fixes
+### Step 6.4: Apply Fixes
 
 Based on user approval, modify the spec files and stories.txt:
 
@@ -382,23 +561,23 @@ Based on user approval, modify the spec files and stories.txt:
 
 After applying fixes, re-run the validation from Step 3.6 to ensure consistency.
 
-Announce: **"Phase 5 complete — Premortem fixes applied. Moving to Phase 6: Commit Fixes."**
+Announce: **"Phase 6 complete — Premortem fixes applied. Moving to Phase 7: Commit Fixes."**
 
 ---
 
-## Phase 6: Commit Fixes
+## Phase 7: Commit Fixes
 
-Commit all premortem fixes to git.
+Commit all review and premortem fixes to git.
 
-1. Stage all modified files in `specs/` and `.ralph/stories.txt`
+1. Stage all modified files in `specs/`, `.ralph/stories.txt`, and `.ralph/reviews/`
 2. Commit message: `ralph: premortem fixes for [feature-name] (N issues resolved)`
 3. If no fixes were needed, skip this phase.
 
-Announce: **"Phase 6 complete — Fixes committed. Moving to Phase 7: Generate Run Script."**
+Announce: **"Phase 7 complete — Fixes committed. Moving to Phase 8: Generate Run Script."**
 
 ---
 
-## Phase 7: Generate Run Script
+## Phase 8: Generate Run Script
 
 Create a `run-ralph.sh` script in the project root that launches Ralph's autonomous execution loop.
 
@@ -493,6 +672,16 @@ echo ""
 echo "Starting in 3 seconds... (Ctrl+C to cancel)"
 sleep 3
 
+# Prevent duplicate loops for the same project.
+if [[ -f .ralph/.lock ]]; then
+    lock_pid="$(cat .ralph/.lock 2>/dev/null || true)"
+    if [[ -n "${lock_pid:-}" ]] && kill -0 "$lock_pid" 2>/dev/null; then
+        echo "Ralph appears to already be running for this project (PID $lock_pid)."
+        echo "Skipping duplicate launch."
+        exit 0
+    fi
+fi
+
 # Run Ralph
 if [[ "$run_mode" == "parallel" ]]; then
     ralph run --parallel --no-interactive "$@"
@@ -503,14 +692,23 @@ fi
 
 Save to `run-ralph.sh` in the project root and make it executable.
 
-### Step 7.2: Launch in iTerm2
+### Step 8.2: Launch in iTerm2
 
 After generating the script, **automatically launch it in a new iTerm2 window** so Ralph runs in its own dedicated terminal session inside the worktree.
 
-Use the Bash tool to run this AppleScript via `osascript`:
+Use the Bash tool to run this guarded launcher (checks for an active `.ralph/.lock` first, then launches):
 
 ```bash
-osascript -e '
+PROJECT_DIR="$(pwd)"
+lock_path="$PROJECT_DIR/.ralph/.lock"
+if [[ -f "$lock_path" ]]; then
+    lock_pid="$(cat "$lock_path" 2>/dev/null || true)"
+fi
+
+if [[ -n "${lock_pid:-}" ]] && kill -0 "$lock_pid" 2>/dev/null; then
+    echo "Ralph already running for this project (PID $lock_pid). Skipping terminal launch."
+else
+    if ! osascript -e '
 tell application "iTerm2"
     activate
     set newWindow to (create window with default profile)
@@ -518,7 +716,10 @@ tell application "iTerm2"
         write text "cd \"'"$WORKTREE_DIR"'\" && ./run-ralph.sh"
     end tell
 end tell
-'
+'; then
+        open -a Terminal.app "$PROJECT_DIR/run-ralph.sh"
+    fi
+fi
 ```
 
 Where `$WORKTREE_DIR` is the absolute path to the worktree directory (resolved in Phase 0).
@@ -529,7 +730,7 @@ cd "$WORKTREE_DIR" && open -a Terminal.app "./run-ralph.sh"
 ```
 If both fail, tell the user: "Could not auto-launch. Run `./run-ralph.sh` from the worktree directory manually."
 
-Announce: **"Phase 7 complete — Ralph is now running in a new iTerm2 window (worktree: `feature-<slug>`)."**
+Announce: **"Phase 8 complete — Ralph is now running in a new iTerm2 window (worktree: `feature-<slug>`)."**
 
 ---
 
@@ -543,6 +744,7 @@ Ralph v2 Pipeline Complete
 Worktree:   .ralph/worktrees/feature-<slug>
 Branch:     ralph/feature-<slug>
 PRD:        tasks/prd-[name].md
+Reviews:    .ralph/reviews/ (vision, requirements, execution)
 Specs:      N stories across M epics
 Premortem:  X issues found, Y fixed
 Run script: ./run-ralph.sh
@@ -555,6 +757,9 @@ When complete, merge back to your main branch:
   cd <project-root>
   git merge ralph/feature-<slug>
   git worktree remove .ralph/worktrees/feature-<slug>
+
+→ Then update the changelog:
+  /bonbon:ai-dev-toolkit:dev:1-changelog
 ```
 
 ---
@@ -567,7 +772,8 @@ If any phase fails:
 2. **PRD creation fails:** Ask user to clarify their feature description and retry Phase 1.
 3. **Git commit fails:** Warn and continue — files are on disk. The user can commit manually.
 4. **Spec generation fails:** Show what was generated, ask user if they want to continue with partial specs or retry.
-5. **Premortem finds critical issues:** Do NOT skip Phase 5.4 — always fix critical issues before generating the run script.
+5. **Review Party gate fails:** Skip the gate and continue — reviews are optional enhancements, not blockers.
+6. **Premortem finds critical issues:** Do NOT skip Phase 6.4 — always fix critical issues before generating the run script.
 6. **Run script creation fails:** Provide the script content inline so the user can copy it manually.
 
 ---
@@ -578,9 +784,11 @@ Before completing the pipeline:
 
 - [ ] Worktree created and working context set
 - [ ] PRD saved and committed (in worktree branch)
+- [ ] Review Party reports saved to `.ralph/reviews/` (for gates not skipped)
 - [ ] All specs follow the standard format with YAML frontmatter
 - [ ] stories.txt has correct batch annotations
+- [ ] Execution coherence review completed or explicitly skipped
 - [ ] Premortem review completed (even if no issues found)
-- [ ] All premortem fixes committed
+- [ ] All review and premortem fixes committed
 - [ ] run-ralph.sh is executable and has correct worktree path
 - [ ] Final summary printed with merge instructions
