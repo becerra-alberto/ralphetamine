@@ -1,6 +1,6 @@
 # Contributing
 
-> Last updated: v2.4.0 (2026-02-13)
+> Last updated: v2.5.0 (2026-02-17)
 
 Thanks for your interest in Ralph v2.
 

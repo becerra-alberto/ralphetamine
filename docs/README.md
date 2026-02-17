@@ -1,20 +1,29 @@
 # Documentation
 
-> Last updated: v2.4.0 (2026-02-13)
+> Last updated: v2.5.0 (2026-02-17)
 
-Start here:
-- `../README.md` — overview, install, quick start, safety notes
-- `../RALPH-REFERENCE.md` — complete v2 system reference (22 modules, all CLI commands, state machine, config schema)
+## New to Ralphetamine?
 
-Architecture:
-- `architecture-flows.md` — end-to-end flow diagrams and execution paths
-- `swimlane-diagram.md` — cross-functional swimlane view
-- `runtime-output-tree.md` — runtime artifacts and directory structure
+Start here: **[Getting Started Guide](getting-started.md)** — prerequisites, installation, and your first feature from idea to committed code.
 
-Operations:
-- `changelog-run-summary.md` — execution run summary
-- `hitl-review.html` — generated HITL review page (output)
-- `hitl-remediation-prd.md` — generated remediation PRD (output)
+## Want to customize?
 
-Reference:
-- `fake-user-stories-examples.md` — example story specs for testing and demos
+**[Power User Guide](power-user-guide.md)** — configuration deep dive, prompt templates, lifecycle hooks, story queue features, state machine, metrics, and signal protocol.
+
+## Having issues?
+
+**[Troubleshooting & FAQ](troubleshooting.md)** — common problems organized by symptom, from installation issues to runtime failures.
+
+## Reference
+
+- [System Reference](../RALPH-REFERENCE.md) — complete CLI, config schema, module map, state machine, signal protocol
+- [Architecture Flows](architecture-flows.md) — end-to-end execution flow diagrams
+- [Swimlane Diagram](swimlane-diagram.md) — cross-functional swimlane view
+- [Runtime Output Tree](runtime-output-tree.md) — runtime artifacts and directory structure
+- [Example Story Specs](fake-user-stories-examples.md) — example specs for testing and demos
+
+## Operations
+
+- [Changelog](../CHANGELOG.md) — version history
+- [Repo Workflow](repo-workflow.md) — two-remote development workflow
+- [Contributing](../CONTRIBUTING.md) — contribution guidelines

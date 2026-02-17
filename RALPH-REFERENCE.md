@@ -1,6 +1,6 @@
 # Ralph v2: Complete System Reference
 
-> Last updated: v2.4.0 (2026-02-13)
+> Last updated: v2.5.0 (2026-02-17)
 
 Ralph v2 is a modular autonomous implementation loop for Claude Code. It reads story specs, sends them to Claude one at a time (or in parallel batches), tracks success/failure, manages retries with automatic decomposition, and accumulates learnings — all without human intervention.
 
@@ -511,13 +511,59 @@ x 3.5 | Deferred Feature
 
 ---
 
-## Pipeline Slash Commands
+## Slash Commands and Skills
 
-These Claude Code commands orchestrate full Ralph pipelines:
+Claude Code slash commands and their skill shorthands. Both forms are interchangeable.
 
-| Command | Description |
-|---------|-------------|
-| `/ralph-v2:pipeline-interactive` | Interactive pipeline: PRD → specs → premortem → run script, with user input at decision points |
-| `/ralph-v2:pipeline-full-auto` | Fully autonomous pipeline: PRD → specs → double premortem → run script, zero user input |
-| `/ralph-v2:reconcile-claude-code` | Post-run reconciliation for Claude Code |
-| `/ralph-v2:reconcile-codex` | Post-run reconciliation for Codex |
+### Pipelines
+
+| Full Command | Skill Shorthand | Description |
+|-------------|-----------------|-------------|
+| `/ralph-v2:pipeline-full-auto` | `/ralph-pipeline-full-auto` | Fully autonomous: PRD → specs → double premortem → run script, zero input |
+| `/ralph-v2:pipeline-interactive` | `/ralph-pipeline-interactive` | Interactive: PRD → specs → premortem → run script, with review gates |
+
+### Individual Steps
+
+| Full Command | Skill Shorthand | Description |
+|-------------|-----------------|-------------|
+| `/ralph-v2:step_1-create-prd-from-ideas` | `/prd` | Generate a PRD from a feature description |
+| `/ralph-v2:step_2-create-epics-and-stories-from-prd` | `/ralph` | Convert a PRD into specs + story queue |
+| `/ralph-v2:step_3-add-ad-hoc-spec` | `/ralph-create-spec` | Add a single ad-hoc story spec |
+
+### Post-Run
+
+| Full Command | Skill Shorthand | Description |
+|-------------|-----------------|-------------|
+| `/ralph-v2:reconcile-claude-code` | `/ralph-reconcile-claude-code` | Reconcile orphaned branches (Claude Code mode) |
+| `/ralph-v2:reconcile-codex` | `/ralph-reconcile-codex` | Reconcile orphaned branches (Codex mode) |
+
+---
+
+## Project Structure
+
+```
+Ralphetamine/
+├── bin/ralph              # CLI entry point (Bash 4+ auto-detection, subcommand dispatch)
+├── lib/                   # 22 modular bash libraries (see Component Map above)
+├── templates/             # Default prompt templates
+├── tests/                 # 270+ BATS tests across 4 tiers + integration tests
+│   ├── tier1-unit/        # Pure function unit tests
+│   ├── tier2-filesystem/  # Tests requiring filesystem state
+│   ├── tier3-component/   # Multi-module component tests
+│   ├── tier4-workflow/    # End-to-end workflow tests
+│   └── integration/       # Real binary integration tests
+├── commands/              # Claude Code slash commands
+│   └── ralph-v2/         # Pipeline, PRD, spec generation, reconcile commands
+├── skills/                # Skill definitions (/ralph, pipelines, reconcile)
+├── install.sh             # Symlink installer (PATH + commands + skills)
+├── RALPH-REFERENCE.md     # This file — complete system reference
+├── CONTRIBUTING.md        # Contribution guidelines
+├── CHANGELOG.md           # Version history
+└── docs/                  # Additional documentation
+    ├── getting-started.md # Full onboarding walk-through
+    ├── power-user-guide.md # Configuration, templates, hooks, state
+    ├── troubleshooting.md # FAQ organized by symptom
+    ├── architecture-flows.md # Execution flow diagrams
+    ├── swimlane-diagram.md   # Cross-functional swimlane view
+    └── runtime-output-tree.md # Runtime artifacts directory structure
+```

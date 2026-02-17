@@ -5,23 +5,26 @@
 [![CI](https://github.com/becerra-alberto/Ralphetamine/actions/workflows/ci.yml/badge.svg)](https://github.com/becerra-alberto/Ralphetamine/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/becerra-alberto/Ralphetamine)](https://opensource.org/licenses/MIT)
 
-**Ship entire features while you sleep.** Ralphetamine is an autonomous implementation loop for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Give it a list of story specs and walk away — it will implement them one by one, run your tests, retry failures, learn from mistakes, and commit the results. No babysitting required.
+**Describe a feature. Get back working code.** Ralphetamine is an autonomous implementation pipeline for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Describe what you want in plain English — Ralphetamine generates a PRD, breaks it into story specs, runs a risk premortem, then implements every story autonomously with retries, validation, and learning. No babysitting required.
 
 ```
-ralph init          # set up in any project
-ralph run           # start the loop
-ralph run --parallel  # run independent stories concurrently
+> /ralph-pipeline-full-auto
+
+  Add a REST API for bookmarks with CRUD endpoints, tag-based filtering,
+  and full-text search. Use Express + SQLite. Include integration tests.
 ```
+
+That's it. Ralphetamine takes your description and runs the full pipeline: **PRD** → **specs** → **premortem** → **autonomous implementation**. Come back to committed, tested code.
 
 ## Why Ralphetamine
 
-Most AI coding tools help you write code interactively. Ralphetamine takes a different approach: you define *what* needs to be built as structured story specs, and it handles the *how* autonomously — including retries, validation, and learning from each story to improve the next.
+Most AI coding tools help you write code interactively. Ralphetamine takes a different approach: you describe *what* needs to be built, and it handles the *how* — from planning through implementation — autonomously.
 
 **Crash-safe state machine.** Every story's progress is tracked in `.ralph/state.json` with atomic writes. Kill the process, reboot your machine, lose power — `ralph run` picks up exactly where it left off.
 
 **Parallel execution via git worktrees.** Independent stories run concurrently in isolated worktrees, then merge back. Failed stories retry sequentially before the final merge. Annotate batches in your story queue and Ralphetamine handles the orchestration.
 
-**Automatic retry with decomposition.** When a story fails after max retries, Ralphetamine can automatically decompose it into 2-4 smaller sub-stories and retry those instead — breaking down complexity without human intervention.
+**Automatic retry with decomposition.** When a story fails after max retries, Ralphetamine automatically decomposes it into 2-4 smaller sub-stories and retries those instead — breaking down complexity without human intervention.
 
 **Cumulative learning.** Each run extracts `LEARN` signals from Claude's output and injects relevant learnings into future prompts. The knowledge base grows with every story, so later stories benefit from earlier mistakes.
 
@@ -33,6 +36,17 @@ Most AI coding tools help you write code interactively. Ralphetamine takes a dif
 
 ## Quick Start
 
+### Prerequisites
+
+| Requirement | Check |
+|-------------|-------|
+| [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | `claude --version` |
+| Bash 4.0+ | `bash --version` |
+| `jq` | `jq --version` |
+| `git` + `coreutils` | `git --version` |
+
+macOS: `brew install bash jq coreutils` (Ralph auto-detects Homebrew Bash).
+
 ### Install
 
 ```bash
@@ -41,47 +55,37 @@ cd Ralphetamine
 ./install.sh
 ```
 
-Requires Bash 4.0+, [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), `jq`, `git`, and `coreutils` (for `timeout`/`gtimeout` on macOS).
+### Your First Feature
 
-### Initialize in your project
-
-```bash
-cd your-project
-ralph init
-```
-
-The interactive wizard creates `.ralph/config.json`, an empty story queue, prompt templates, and a learnings directory.
-
-### Run the pipeline
-
-Open Claude Code in your project and describe what you want to build:
+Open Claude Code in your project directory:
 
 ```
-> /ralph-v2:pipeline-full-auto
+> /ralph-pipeline-full-auto
 
-  Build a budget tracking app with monthly spending categories,
-  recurring transactions, and a dashboard that shows spending
-  trends over the last 6 months.
+  Build a CLI expense tracker. Commands: add (amount, category, note),
+  list (with date range and category filters), summary (monthly totals
+  by category), and export-csv. Store data in a local JSON file.
 ```
 
-That's it. Ralphetamine takes your idea and runs the full pipeline autonomously:
+Ralphetamine runs four phases autonomously:
 
 1. **PRD** — generates a structured product requirements document, self-answering all design questions
 2. **Specs** — breaks the PRD into epics and story specs with acceptance criteria, test definitions, and file lists
-3. **Double premortem** — two passes of risk analysis to catch dependency gaps, scope issues, and integration risks before any code is written
+3. **Double premortem** — two passes of risk analysis to catch dependency gaps and integration risks
 4. **Run script** — generates `run-ralph.sh` and launches Ralph in a new terminal window
 
 Stories start implementing immediately. Come back to a working feature.
 
-#### Interactive mode
+### Want More Control?
 
-Want more control? Use the interactive pipeline instead:
+Use the interactive pipeline instead:
 
 ```
-> /ralph-v2:pipeline-interactive
+> /ralph-pipeline-interactive
 
-  Build a budget tracking app with monthly spending categories,
-  recurring transactions, and a dashboard with spending trends.
+  Migrate the authentication system from session cookies to JWT tokens.
+  Keep backward compatibility for 2 weeks via a dual-auth middleware.
+  Update all protected routes and add token refresh logic.
 ```
 
 Same pipeline, but it pauses at key decision points:
@@ -90,155 +94,154 @@ Same pipeline, but it pauses at key decision points:
 - **Spec phase** — shows the proposed epic/story breakdown for you to confirm or adjust
 - **Premortem phase** — presents failure modes and lets you decide which fixes to apply
 
-#### Manual step-by-step
-
-You can also run each phase as a standalone command:
+You can also give minimal descriptions and let Ralphetamine make the decisions:
 
 ```
-/prd                    # describe your idea, answer clarifying questions, get a PRD
-/ralph                  # convert a PRD into story specs + queue
-/create-spec            # add a single ad-hoc story spec
+> /ralph-pipeline-full-auto
+
+  Add dark mode support to the app.
 ```
 
-Then start the loop from your terminal:
-
-```bash
-ralph run               # sequential — one story at a time
-ralph run --parallel    # concurrent — independent batches in worktrees
-ralph run -d            # dry run — preview prompts without executing
-```
-
-### After a run
-
-```bash
-ralph status            # progress summary
-ralph stats             # token usage and cost breakdown
-ralph stories           # list all stories with completion status
-ralph learnings         # see what Ralph learned
-ralph reconcile         # find and recover orphaned story branches
-```
+Ralph auto-generates clarifying decisions: CSS variables vs Tailwind, toggle location, system preference detection, persistence strategy.
 
 ## How It Works
+
+### The Pipeline
+
+| Phase | Full-Auto | Interactive |
+|-------|-----------|-------------|
+| PRD generation | Self-answers all questions | Asks 3-5 clarifying questions |
+| Vision Party review | Skipped | Optional 3-perspective review |
+| Spec generation | Automatic | Shows breakdown for approval |
+| Premortem | Double pass (automatic) | Single pass with user review |
+| Execution | Autonomous | Autonomous |
+
+### Inside `ralph run`
 
 Each iteration:
 
 1. **Select** the next uncompleted story from `.ralph/stories.txt`
-2. **Load** the spec and inject relevant learnings into the prompt template
-3. **Invoke Claude** with the full prompt and configured flags
-4. **Parse signals** — `<ralph>DONE X.X</ralph>`, `<ralph>FAIL X.X: reason</ralph>`, or `<ralph>LEARN: text</ralph>`
+2. **Load** the spec and inject relevant learnings into the prompt
+3. **Invoke Claude** with the full prompt and configured timeout
+4. **Parse signals** — `<ralph>DONE X.X</ralph>`, `<ralph>FAIL X.X</ralph>`, or `<ralph>LEARN: text</ralph>`
 5. **Validate** — run configured test/lint/typecheck commands
 6. **Update state** — mark done or increment retry count
 7. **Commit** — auto-commit with a structured message
 
-On failure: retry up to `max_retries` times, then optionally decompose into sub-stories. On timeout: run a postmortem prompt to diagnose what went wrong.
+### When Things Fail
+
+```
+Failure → retry (up to max_retries)
+       → decompose into 2-4 sub-stories (if enabled)
+       → halt with "Human intervention required"
+
+Timeout → postmortem diagnostic (identifies root cause)
+       → then retry/decompose/halt as above
+```
+
+## Running Ralph Manually
+
+### Step-by-Step Slash Commands
+
+```
+/prd                          # describe your idea, answer questions, get a PRD
+/ralph                        # convert a PRD into story specs + queue
+/ralph-create-spec            # add a single ad-hoc story spec
+```
+
+### CLI Commands
+
+```bash
+ralph init                    # initialize Ralph in a project
+ralph run                     # sequential — one story at a time
+ralph run --parallel          # concurrent — independent batches in worktrees
+ralph run -d                  # dry run — preview prompts without executing
+ralph run -s 3.4              # run a specific story
+ralph run -n 5 -v             # run 5 iterations, verbose
+ralph run -r 4.1              # resume from story 4.1
+```
+
+### After a Run
+
+```bash
+ralph status                  # progress summary
+ralph stats                   # token usage and cost breakdown
+ralph stories                 # list all stories with completion status
+ralph learnings               # see what Ralph learned
+ralph reconcile               # find and recover orphaned story branches
+ralph verify                  # PRD-to-spec provenance check
+ralph decompose <id>          # manually decompose a story
+ralph hitl generate           # generate HITL review page
+ralph reset                   # reset all state
+```
 
 ## Configuration
 
-`.ralph/config.json` controls all behavior:
+`.ralph/config.json` controls all behavior. Here are the most common customizations:
 
+**Stories timing out?**
+```json
+{ "loop": { "timeout_seconds": 3600 } }
+```
+
+**Run tests after each story?**
 ```json
 {
-  "project": { "name": "my-project" },
-  "loop": {
-    "timeout_seconds": 1800,
-    "max_retries": 3
-  },
   "validation": {
     "commands": [
       { "name": "typecheck", "cmd": "npm run check", "required": true },
       { "name": "tests", "cmd": "npm run test", "required": true }
-    ],
-    "blocked_commands": ["rm -rf", "DROP TABLE"]
-  },
-  "commit": {
-    "format": "feat(story-{{id}}): {{title}}",
-    "auto_commit": true
-  },
-  "parallel": { "enabled": false, "max_concurrent": 8 },
-  "learnings": { "enabled": true, "max_inject_count": 5 },
-  "caffeine": false
+    ]
+  }
 }
 ```
 
-See [`RALPH-REFERENCE.md`](RALPH-REFERENCE.md) for the complete configuration schema and system reference.
-
-## CLI Reference
-
-```bash
-ralph init                  # initialize in current project
-ralph run [options]         # run the implementation loop
-ralph run -s 3.4            # run a specific story
-ralph run -n 5 -v           # run 5 iterations, verbose
-ralph run -r 4.1            # resume from story 4.1
-ralph run --parallel        # parallel execution
-ralph status                # progress summary
-ralph stats                 # token usage and cost analysis
-ralph stats --last 3        # last 3 runs
-ralph stories               # list stories with status
-ralph learnings [topic]     # show extracted learnings
-ralph verify                # PRD-to-spec provenance check
-ralph reconcile [--apply]   # find/merge orphaned branches
-ralph decompose <id>        # manually decompose a story
-ralph hitl generate         # generate HITL review page
-ralph hitl feedback <file>  # generate remediation PRD
-ralph reset                 # reset all state
+**Enable parallel execution?**
+```json
+{ "parallel": { "enabled": true } }
 ```
 
-## Story Queue Format
-
-`.ralph/stories.txt`:
-
+Annotate batches in `.ralph/stories.txt`:
 ```
-# [batch:1] — independent stories (run in parallel)
-1.1 | Initialize Project Structure
-1.2 | Setup Database Schema
-
-# [batch:2] — depends on batch 1
-2.1 | Create Budget View
-2.2 | Create Transaction View
-
-# Prefix with x to skip:
-x 3.5 | Deferred Feature
+# [batch:1] — independent stories
+2.1 | Create User API
+2.2 | Create Product API
 ```
+
+**Block dangerous commands?**
+```json
+{
+  "validation": {
+    "blocked_commands": ["rm -rf", "DROP TABLE"]
+  }
+}
+```
+
+See [`RALPH-REFERENCE.md`](RALPH-REFERENCE.md) for the complete configuration schema, and the [Power User Guide](docs/power-user-guide.md) for detailed configuration patterns.
 
 ## Safety
 
 Ralphetamine runs Claude Code with `--dangerously-skip-permissions`. Treat this as full local code execution.
+
+Mitigations:
 
 - Run in a dedicated repo with clean git status
 - Configure `validation.blocked_commands` to prevent destructive operations
 - Set `commit.stage_paths` to scope commits to known files
 - Review `claude.flags` in your config before running
 
-## Project Structure
-
-```
-Ralphetamine/
-├── bin/ralph              # CLI entry point
-├── lib/                   # 22 modular bash libraries
-│   ├── runner.sh          # Sequential execution loop
-│   ├── parallel.sh        # Git worktree parallelization
-│   ├── signals.sh         # Claude output signal parsing
-│   ├── state.sh           # Atomic JSON state persistence
-│   ├── decompose.sh       # Story decomposition
-│   ├── learnings.sh       # Learning extraction and injection
-│   ├── metrics.sh         # Token tracking and cost analysis
-│   ├── provenance.sh      # PRD-to-spec traceability
-│   ├── hitl.sh            # Human-in-the-loop review
-│   └── ...                # config, display, hooks, specs, stories, etc.
-├── templates/             # Prompt templates
-├── tests/                 # 270+ BATS tests + integration tests
-├── commands/              # Claude Code slash commands
-├── skills/                # Skill definitions
-└── install.sh             # Symlink installer
-```
+See the [Troubleshooting guide](docs/troubleshooting.md#safety) for more detail on what this means and how to limit scope.
 
 ## Documentation
 
-- [`RALPH-REFERENCE.md`](RALPH-REFERENCE.md) — complete system reference
-- [`docs/architecture-flows.md`](docs/architecture-flows.md) — execution flow diagrams
-- [`CHANGELOG.md`](CHANGELOG.md) — version history
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution guidelines
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](docs/getting-started.md) | Prerequisites, installation, first feature walk-through |
+| [Power User Guide](docs/power-user-guide.md) | Configuration, templates, hooks, state machine, scripting |
+| [Troubleshooting](docs/troubleshooting.md) | FAQ organized by symptom |
+| [System Reference](RALPH-REFERENCE.md) | Complete CLI, config schema, module map |
+| [Architecture Flows](docs/architecture-flows.md) | Execution flow diagrams |
+| [Changelog](CHANGELOG.md) | Version history |
 
 ## Contributing
 
