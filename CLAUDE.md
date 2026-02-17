@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> Last updated: v2.4.0 (2026-02-13)
+> Last updated: v2.5.0 (2026-02-17)
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -11,15 +11,6 @@ Ralph v2 is an autonomous implementation loop for Claude Code. It reads story sp
 - **Language:** Bash 4.0+ (auto-detected on macOS via self-re-exec)
 - **Dependencies:** jq, git, coreutils (for timeout/gtimeout)
 - **CLI:** `claude` (Claude Code CLI)
-
-## Repository Remotes
-
-This repo uses a two-remote setup:
-
-- **`origin`** = `ralph-dev` (private) — default push target for daily development
-- **`public`** = `ralphetamine` (public) — release-only, explicit push required
-
-See `docs/repo-workflow.md` for full workflow details.
 
 ## Project Structure
 

@@ -759,7 +759,7 @@ When complete, merge back to your main branch:
   git worktree remove .ralph/worktrees/feature-<slug>
 
 → Then update the changelog:
-  /bonbon:ai-dev-toolkit:dev:1-changelog
+  # Update CHANGELOG.md and bump version
 ```
 
 ---
