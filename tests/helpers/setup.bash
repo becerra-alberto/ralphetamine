@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ralph v2 Test Helpers — Test environment management
+# Ralphetamine Test Helpers — Test environment management
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RALPH_DIR="$(cd "$TESTS_DIR/.." && pwd)"

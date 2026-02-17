@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Interactive startup prompts and init wizard
+# Ralphetamine — Interactive startup prompts and init wizard
 
 # ── Init wizard ─────────────────────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ interactive_init() {
     mkdir -p ".claude/commands"
     local create_spec_source="${RALPH_DIR}/commands/create-spec.md"
     if [[ ! -f "$create_spec_source" ]]; then
-        create_spec_source="${RALPH_DIR}/commands/ralph-v2/step_3-add-ad-hoc-spec.md"
+        create_spec_source="${RALPH_DIR}/commands/ralphetamine/step_3-add-ad-hoc-spec.md"
     fi
     cp "$create_spec_source" ".claude/commands/create-spec.md"
 

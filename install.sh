@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Install script
+# Ralphetamine — Install script
 # Adds bin/ralph to PATH via symlink
 
 set -euo pipefail
@@ -8,7 +8,7 @@ RALPH_DIR="$(cd "$(dirname "$0")" && pwd)"
 RALPH_BIN="${RALPH_DIR}/bin/ralph"
 INSTALL_DIR="${HOME}/.local/bin"
 
-echo "Ralph v2 Installer"
+echo "Ralphetamine Installer"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -44,7 +44,7 @@ CLAUDE_COMMANDS_DIR="${HOME}/.claude/commands"
 mkdir -p "$CLAUDE_COMMANDS_DIR"
 CREATE_SPEC_SOURCE="${RALPH_DIR}/commands/create-spec.md"
 if [[ ! -f "$CREATE_SPEC_SOURCE" ]]; then
-    CREATE_SPEC_SOURCE="${RALPH_DIR}/commands/ralph-v2/step_3-add-ad-hoc-spec.md"
+    CREATE_SPEC_SOURCE="${RALPH_DIR}/commands/ralphetamine/step_3-add-ad-hoc-spec.md"
 fi
 cp "$CREATE_SPEC_SOURCE" "${CLAUDE_COMMANDS_DIR}/ralph-create-spec.md"
 echo "Installed: ${CLAUDE_COMMANDS_DIR}/ralph-create-spec.md"

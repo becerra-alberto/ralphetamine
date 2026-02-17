@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Reconcile orphaned story branches
+# Ralphetamine — Reconcile orphaned story branches
 # Scans for ralph/story-* branches with unmerged commits not tracked in state.
 
 # Main reconcile entry point.

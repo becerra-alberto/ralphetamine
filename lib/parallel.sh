@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Git worktree parallelization and merge orchestration
+# Ralphetamine — Git worktree parallelization and merge orchestration
 # Requires Bash 4.0+ (gated at entry via prereqs_require_bash4)
 
 RALPH_WORKTREE_DIR=".ralph/worktrees"

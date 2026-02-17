@@ -1,14 +1,14 @@
-# Ralph v2: Complete System Reference
+# Ralphetamine: Complete System Reference
 
 > Last updated: v2.5.0 (2026-02-17)
 
-Ralph v2 is a modular autonomous implementation loop for Claude Code. It reads story specs, sends them to Claude one at a time (or in parallel batches), tracks success/failure, manages retries with automatic decomposition, and accumulates learnings — all without human intervention.
+Ralphetamine is a modular autonomous implementation loop for Claude Code. It reads story specs, sends them to Claude one at a time (or in parallel batches), tracks success/failure, manages retries with automatic decomposition, and accumulates learnings — all without human intervention.
 
 ---
 
 ## Component Map
 
-Ralph v2 is organized as a 486-line CLI entry point (`bin/ralph`) that dispatches to 22 bash libraries in `lib/`. Each library owns a single concern.
+Ralphetamine is organized as a 486-line CLI entry point (`bin/ralph`) that dispatches to 22 bash libraries in `lib/`. Each library owns a single concern.
 
 ```
 bin/ralph                (486 lines)  CLI entry point, Bash 4+ detection, subcommand dispatch
@@ -519,23 +519,23 @@ Claude Code slash commands and their skill shorthands. Both forms are interchang
 
 | Full Command | Skill Shorthand | Description |
 |-------------|-----------------|-------------|
-| `/ralph-v2:pipeline-full-auto` | `/ralph-pipeline-full-auto` | Fully autonomous: PRD → specs → double premortem → run script, zero input |
-| `/ralph-v2:pipeline-interactive` | `/ralph-pipeline-interactive` | Interactive: PRD → specs → premortem → run script, with review gates |
+| `/ralphetamine:pipeline-full-auto` | `/ralph-pipeline-full-auto` | Fully autonomous: PRD → specs → double premortem → run script, zero input |
+| `/ralphetamine:pipeline-interactive` | `/ralph-pipeline-interactive` | Interactive: PRD → specs → premortem → run script, with review gates |
 
 ### Individual Steps
 
 | Full Command | Skill Shorthand | Description |
 |-------------|-----------------|-------------|
-| `/ralph-v2:step_1-create-prd-from-ideas` | `/prd` | Generate a PRD from a feature description |
-| `/ralph-v2:step_2-create-epics-and-stories-from-prd` | `/ralph` | Convert a PRD into specs + story queue |
-| `/ralph-v2:step_3-add-ad-hoc-spec` | `/ralph-create-spec` | Add a single ad-hoc story spec |
+| `/ralphetamine:step_1-create-prd-from-ideas` | `/prd` | Generate a PRD from a feature description |
+| `/ralphetamine:step_2-create-epics-and-stories-from-prd` | `/ralph` | Convert a PRD into specs + story queue |
+| `/ralphetamine:step_3-add-ad-hoc-spec` | `/ralph-create-spec` | Add a single ad-hoc story spec |
 
 ### Post-Run
 
 | Full Command | Skill Shorthand | Description |
 |-------------|-----------------|-------------|
-| `/ralph-v2:reconcile-claude-code` | `/ralph-reconcile-claude-code` | Reconcile orphaned branches (Claude Code mode) |
-| `/ralph-v2:reconcile-codex` | `/ralph-reconcile-codex` | Reconcile orphaned branches (Codex mode) |
+| `/ralphetamine:reconcile-claude-code` | `/ralph-reconcile-claude-code` | Reconcile orphaned branches (Claude Code mode) |
+| `/ralphetamine:reconcile-codex` | `/ralph-reconcile-codex` | Reconcile orphaned branches (Codex mode) |
 
 ---
 
@@ -553,7 +553,7 @@ Ralphetamine/
 │   ├── tier4-workflow/    # End-to-end workflow tests
 │   └── integration/       # Real binary integration tests
 ├── commands/              # Claude Code slash commands
-│   └── ralph-v2/         # Pipeline, PRD, spec generation, reconcile commands
+│   └── ralphetamine/     # Pipeline, PRD, spec generation, reconcile commands
 ├── skills/                # Skill definitions (/ralph, pipelines, reconcile)
 ├── install.sh             # Symlink installer (PATH + commands + skills)
 ├── RALPH-REFERENCE.md     # This file — complete system reference

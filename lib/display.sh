@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Append-only display (event-driven status lines)
+# Ralphetamine — Append-only display (event-driven status lines)
 # No scroll regions, no cursor manipulation. CI-safe.
 
 # ── Dashboard state ──────────────────────────────────────────────────

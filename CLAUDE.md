@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Ralph v2 is an autonomous implementation loop for Claude Code. It reads story specs, sends them to Claude one at a time, tracks success/failure, manages retries, and accumulates learnings — all without human intervention.
+Ralphetamine is an autonomous implementation loop for Claude Code. It reads story specs, sends them to Claude one at a time, tracks success/failure, manages retries, and accumulates learnings — all without human intervention.
 
 - **Language:** Bash 4.0+ (auto-detected on macOS via self-re-exec)
 - **Dependencies:** jq, git, coreutils (for timeout/gtimeout)
@@ -15,7 +15,7 @@ Ralph v2 is an autonomous implementation loop for Claude Code. It reads story sp
 ## Project Structure
 
 ```
-ralph-v2/
+ralphetamine/
 ├── bin/ralph              # CLI entry point
 ├── lib/                   # 22 modular bash libraries
 ├── templates/             # Default prompt templates

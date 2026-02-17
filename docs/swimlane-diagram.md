@@ -1,4 +1,4 @@
-# Ralph v2 — ASCII Swimlane Diagram
+# Ralphetamine — ASCII Swimlane Diagram
 
 This diagram maps every code path and output channel in Ralph's execution loop across four swimlanes.
 

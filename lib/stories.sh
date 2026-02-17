@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Story queue management (stories.txt parsing)
+# Ralphetamine — Story queue management (stories.txt parsing)
 
 RALPH_STORIES_FILE=".ralph/stories.txt"
 

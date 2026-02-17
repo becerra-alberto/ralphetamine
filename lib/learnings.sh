@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Learning extraction, categorization, and injection
+# Ralphetamine — Learning extraction, categorization, and injection
 
 RALPH_LEARNINGS_DIR=".ralph/learnings"
 RALPH_LEARNINGS_INDEX="$RALPH_LEARNINGS_DIR/_index.json"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — HITL (Human-in-the-Loop) review page generator
+# Ralphetamine — HITL (Human-in-the-Loop) review page generator
 # Parses completed specs' Acceptance Criteria into verification items
 # and generates an interactive HTML review page.
 

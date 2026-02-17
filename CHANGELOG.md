@@ -52,7 +52,7 @@ Pipeline hardening, parallel execution stability, provenance tracking, and CI ma
 | 5 | 2026-02-09 | Fixed | Parallel | Crash from undeclared `_PARALLEL_ALL_SUCCESSFUL` array; `state_mark_done` moved to post-merge | 0631550 |
 | 6 | 2026-02-09 | Added | Provenance | PRD-to-specs provenance tracking with sha256 hashes — new `ralph verify` command | 6ad001b, 7c65fd4 |
 | 7 | 2026-02-09 | Fixed | Runner | Unresolved `{{` template variables in spec pattern gave confusing "not found" error | e29cb07 |
-| 8 | 2026-02-09 | Changed | Skills | Skills renamed to namespaced `ralph-v2/` pipeline with enumerated step names | 6bbfe46 |
+| 8 | 2026-02-09 | Changed | Skills | Skills renamed to namespaced `ralphetamine/` pipeline with enumerated step names | 6bbfe46 |
 | 9 | 2026-02-09 | Fixed | Testing | BATS CI failures fixed — `set -Eeuo` in tests, git identity, tier5 ref, submodule tracking | 27ed088, 7d0fb58, dc70767, 93aafc5 |
 | 10 | 2026-02-09 | Added | Testing | Strengthen weak tests, add 5 missing integration tests, reclassify tier5 | aa30b24 |
 | 11 | 2026-02-10 | Added | CLI | Auto-commit specs to git after `/ralph` generation for worktree visibility | 1e46399 |
@@ -119,7 +119,7 @@ Pipeline hardening, parallel execution stability, provenance tracking, and CI ma
 
 ### Added
 
-- Ralph v2 modular autonomous implementation loop and CLI.
+- Ralphetamine modular autonomous implementation loop and CLI.
 - Real-time TUI dashboard for run progress.
 - `/ralph` skill updates for v2 spec generation, including parallel spec writing
   for PRDs with 5+ stories.

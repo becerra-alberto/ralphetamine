@@ -2,7 +2,7 @@
 
 > Last updated: v2.5.0 (2026-02-17)
 
-Thanks for your interest in Ralph v2.
+Thanks for your interest in Ralphetamine.
 
 We accept GitHub issues for tracking and discussion. **PRs are by invitation only.**
 If you want to contribute, start by opening an issue so we can align on scope and

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — tmux auto-wrapping (detachable sessions)
+# Ralphetamine — tmux auto-wrapping (detachable sessions)
 
 tmux_ensure() {
     # Already inside tmux

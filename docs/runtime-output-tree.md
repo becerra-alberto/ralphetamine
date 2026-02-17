@@ -1,4 +1,4 @@
-# Ralph v2 — Runtime Output Tree
+# Ralphetamine — Runtime Output Tree
 
 This document maps every piece of information Ralph produces during execution. It's organized as a tree where each branch represents a distinct output channel, phase, or data stream. A UX designer can use this to understand what information exists, when it appears, and how it relates to the user's mental model of "is my code getting built?"
 

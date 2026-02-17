@@ -1,6 +1,6 @@
 # Governance
 
-Ralph v2 is a maintainer-led project.
+Ralphetamine is a maintainer-led project.
 
 ## Maintainer
 

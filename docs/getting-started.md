@@ -63,13 +63,13 @@ Each slash command has a full name and a skill shorthand. Both work identically:
 
 | What | Full Slash Command | Skill Shorthand |
 |------|-------------------|-----------------|
-| Full-auto pipeline | `/ralph-v2:pipeline-full-auto` | `/ralph-pipeline-full-auto` |
-| Interactive pipeline | `/ralph-v2:pipeline-interactive` | `/ralph-pipeline-interactive` |
-| Generate PRD | `/ralph-v2:step_1-create-prd-from-ideas` | `/prd` |
-| Generate specs | `/ralph-v2:step_2-create-epics-and-stories-from-prd` | `/ralph` |
-| Add ad-hoc spec | `/ralph-v2:step_3-add-ad-hoc-spec` | `/ralph-create-spec` |
-| Reconcile (Claude Code) | `/ralph-v2:reconcile-claude-code` | `/ralph-reconcile-claude-code` |
-| Reconcile (Codex) | `/ralph-v2:reconcile-codex` | `/ralph-reconcile-codex` |
+| Full-auto pipeline | `/ralphetamine:pipeline-full-auto` | `/ralph-pipeline-full-auto` |
+| Interactive pipeline | `/ralphetamine:pipeline-interactive` | `/ralph-pipeline-interactive` |
+| Generate PRD | `/ralphetamine:step_1-create-prd-from-ideas` | `/prd` |
+| Generate specs | `/ralphetamine:step_2-create-epics-and-stories-from-prd` | `/ralph` |
+| Add ad-hoc spec | `/ralphetamine:step_3-add-ad-hoc-spec` | `/ralph-create-spec` |
+| Reconcile (Claude Code) | `/ralphetamine:reconcile-claude-code` | `/ralph-reconcile-claude-code` |
+| Reconcile (Codex) | `/ralphetamine:reconcile-codex` | `/ralph-reconcile-codex` |
 
 ---
 

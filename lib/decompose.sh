@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Story decomposition engine
+# Ralphetamine — Story decomposition engine
 # Breaks failed stories into 2-4 smaller sub-stories via Claude.
 
 # ── Hierarchical ID helpers ──────────────────────────────────────────

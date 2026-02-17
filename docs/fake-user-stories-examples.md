@@ -1,4 +1,4 @@
-# Fake User Stories Examples (Ralph v2)
+# Fake User Stories Examples (Ralphetamine)
 
 Use these as sample inputs to understand how `stories.txt` and spec files fit together.
 

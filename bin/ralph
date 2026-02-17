@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Autonomous Implementation Loop
+# Ralphetamine — Autonomous Implementation Loop
 # Usage: ralph <command> [options]
 
 # ── Ensure Bash 4+ ────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ RALPH_VERSION="2.4.0"
 
 # ── Usage ───────────────────────────────────────────────────────────────────
 usage() {
-    echo "Ralph v${RALPH_VERSION} — Autonomous Implementation Loop"
+    echo "Ralphetamine v${RALPH_VERSION} — Autonomous Implementation Loop"
     echo ""
     echo "Usage: ralph <command> [options]"
     echo ""
@@ -477,7 +477,7 @@ case "${1:-}" in
     stories)   shift; cmd_stories "$@" ;;
     learnings) shift; cmd_learnings "$@" ;;
     reset)     shift; cmd_reset "$@" ;;
-    version|-V|--version) echo "Ralph v${RALPH_VERSION}" ;;
+    version|-V|--version) echo "Ralphetamine v${RALPH_VERSION}" ;;
     help|-h|--help|"") usage ;;
     *)
         log_error "Unknown command: $1"

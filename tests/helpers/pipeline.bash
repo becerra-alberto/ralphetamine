@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ralph v2 Test Helpers — Pipeline E2E scaffold and assertions
+# Ralphetamine Test Helpers — Pipeline E2E scaffold and assertions
 # Used by tier5-e2e tests with the "Notely" mock PRD fixtures.
 
 PIPELINE_FIXTURES_DIR="${TESTS_DIR}/fixtures/pipeline"

@@ -1,4 +1,4 @@
-# Ralph v2 — Sandbox Test Matrix
+# Ralphetamine — Sandbox Test Matrix
 
 A set of 6 self-contained mock projects for testing different stages of the Ralph pipeline.
 
@@ -92,4 +92,4 @@ sandbox/run-all.sh reset
 - All projects are **pure bash** — no npm, cargo, pip, or other dependencies
 - Stories create bash scripts and text files only
 - Each sandbox is a self-contained nested git repo
-- The `sandbox/` directory is in `.gitignore` for the parent ralph-v2 repo
+- The `sandbox/` directory is in `.gitignore` for the parent Ralphetamine repo

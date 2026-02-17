@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 Test Runner — Execute BATS test suites by tier
+# Ralphetamine Test Runner — Execute BATS test suites by tier
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

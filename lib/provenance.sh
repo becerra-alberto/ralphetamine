@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — PRD-to-Specs provenance tracking
+# Ralphetamine — PRD-to-Specs provenance tracking
 
 RALPH_PROVENANCE_FILE="$RALPH_STATE_DIR/provenance.json"
 

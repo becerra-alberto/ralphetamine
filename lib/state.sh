@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — State management (state.json read/write)
+# Ralphetamine — State management (state.json read/write)
 
 RALPH_STATE_DIR=".ralph"
 RALPH_STATE_FILE="$RALPH_STATE_DIR/state.json"

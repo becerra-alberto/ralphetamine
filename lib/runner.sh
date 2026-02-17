@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Shared sequential runner and failure handler
+# Ralphetamine — Shared sequential runner and failure handler
 # Extracted from bin/ralph so both sequential and parallel paths can use them.
 
 RALPH_LOCK_FILE=".ralph/.lock"

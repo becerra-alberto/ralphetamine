@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ralph v2 Test Helpers — Custom assertions
+# Ralphetamine Test Helpers — Custom assertions
 
 # Assert a file contains a pattern
 # Usage: assert_file_contains "path/to/file" "expected pattern"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ralph v2 Test Helpers — Mock command generator
+# Ralphetamine Test Helpers — Mock command generator
 
 MOCK_BIN_DIR=""
 

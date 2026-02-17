@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Testing specialist phase (optional second Claude invocation)
+# Ralphetamine — Testing specialist phase (optional second Claude invocation)
 
 # Run a test review after a story is implemented and committed
 testing_review() {

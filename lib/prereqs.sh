@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Environment prerequisite checks
+# Ralphetamine — Environment prerequisite checks
 
 prereqs_check() {
     local missing=()

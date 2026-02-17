@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — macOS caffeinate management (prevent sleep during long runs)
+# Ralphetamine — macOS caffeinate management (prevent sleep during long runs)
 
 _CAFFEINE_PID=""
 

@@ -1,8 +1,8 @@
-# Ralph v2 — Step 2: Create Epics and Stories from PRD
+# Ralphetamine — Step 2: Create Epics and Stories from PRD
 
 Converts a PRD into structured story spec files and a story queue that Ralph's autonomous loop can execute.
 
-**This is Step 2 of the Ralph v2 pipeline.** Requires a PRD at `tasks/prd-*.md`. If none exists, run `/ralph-v2:step_1-create-prd-from-ideas` first.
+**This is Step 2 of the Ralphetamine pipeline.** Requires a PRD at `tasks/prd-*.md`. If none exists, run `/ralphetamine:step_1-create-prd-from-ideas` first.
 
 ---
 
@@ -18,7 +18,7 @@ Read a PRD from `tasks/prd-*.md`, decompose it into epics and stories, and gener
 
 ### 1. Find the PRD
 
-Look for files matching `tasks/prd-*.md`. If multiple exist, ask the user which one to use. If none exist, ask the user to point to the PRD file or run `/ralph-v2:step_1-create-prd-from-ideas` first.
+Look for files matching `tasks/prd-*.md`. If multiple exist, ask the user which one to use. If none exist, ask the user to point to the PRD file or run `/ralphetamine:step_1-create-prd-from-ideas` first.
 
 ### 2. Analyze the PRD
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Run metrics persistence and stats dashboard
+# Ralphetamine — Run metrics persistence and stats dashboard
 # Stores per-run JSON files in .ralph/runs/ for cumulative analysis.
 
 RALPH_RUNS_DIR=".ralph/runs"

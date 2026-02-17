@@ -1,8 +1,8 @@
-# Ralph v2 — Step 1: Create PRD from Ideas
+# Ralphetamine — Step 1: Create PRD from Ideas
 
 Create detailed Product Requirements Documents that are clear, actionable, and suitable for implementation by Ralph's autonomous loop.
 
-**This is Step 1 of the Ralph v2 pipeline.** After creating the PRD, run `/ralph-v2:step_2-create-epics-and-stories-from-prd` to convert it into executable story specs.
+**This is Step 1 of the Ralphetamine pipeline.** After creating the PRD, run `/ralphetamine:step_2-create-epics-and-stories-from-prd` to convert it into executable story specs.
 
 ---
 
@@ -134,7 +134,7 @@ The PRD reader may be a junior developer or AI agent. Therefore:
 - **Location:** `tasks/`
 - **Filename:** `prd-[feature-name].md` (kebab-case)
 
-After saving, remind the user: **Next step:** Run `/ralph-v2:step_2-create-epics-and-stories-from-prd` to convert this PRD into story specs.
+After saving, remind the user: **Next step:** Run `/ralphetamine:step_2-create-epics-and-stories-from-prd` to convert this PRD into story specs.
 
 ---
 

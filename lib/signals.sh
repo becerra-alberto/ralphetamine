@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph v2 — Parse structured <ralph> tags from Claude output
+# Ralphetamine — Parse structured <ralph> tags from Claude output
 # Story IDs are hierarchical: X.X, X.X.X, X.X.X.X, etc.
 
 # Shared story ID pattern for grep -oE (ERE)

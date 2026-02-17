@@ -1,9 +1,9 @@
 ---
 name: ralph
-description: "Convert a PRD into Ralph v2 story specs and queue. Reads a PRD file and generates specs/epic-{N}/story-{N.M}-{slug}.md files plus .ralph/stories.txt. Triggers on: /ralph, convert prd to specs, generate ralph specs, create story specs."
+description: "Convert a PRD into Ralphetamine story specs and queue. Reads a PRD file and generates specs/epic-{N}/story-{N.M}-{slug}.md files plus .ralph/stories.txt. Triggers on: /ralph, convert prd to specs, generate ralph specs, create story specs."
 ---
 
-# Ralph v2 — PRD to Specs Converter
+# Ralphetamine — PRD to Specs Converter
 
 Converts a PRD into structured story spec files and a story queue that Ralph's autonomous loop can execute.
 

@@ -56,7 +56,7 @@ After running `./install.sh`, slash commands are installed to `~/.claude/command
 
 ### `ralph init` fails with missing template
 
-**Known issue:** `ralph init` looks for `commands/create-spec.md` which was renamed to `commands/ralph-v2/step_3-add-ad-hoc-spec.md`. The installer handles this fallback, but if you're running `ralph init` from a stale installation, re-run `./install.sh`.
+**Known issue:** `ralph init` looks for `commands/create-spec.md` which was renamed to `commands/ralphetamine/step_3-add-ad-hoc-spec.md`. The installer handles this fallback, but if you're running `ralph init` from a stale installation, re-run `./install.sh`.
 
 ### Worktree creation fails during parallel pipeline
 

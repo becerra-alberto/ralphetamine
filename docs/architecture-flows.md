@@ -1,6 +1,6 @@
-# Ralph v2 Architecture Flow Diagrams
+# Ralphetamine Architecture Flow Diagrams
 
-Reference diagrams for every supported execution path in Ralph v2.
+Reference diagrams for every supported execution path in Ralphetamine.
 Each diagram reads left-to-right and maps directly to the source in `lib/` and `bin/ralph`.
 
 ---
