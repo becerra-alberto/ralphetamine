@@ -1,0 +1,56 @@
+{
+    "version": "2.0.0",
+    "project": {
+        "name": "bookmarks"
+    },
+    "specs": {
+        "pattern": "specs/epic-{{epic}}/story-{{id}}-*.md",
+        "id_format": "epic.story",
+        "frontmatter_status_field": "status"
+    },
+    "loop": {
+        "max_iterations": 0,
+        "timeout_seconds": 600,
+        "max_retries": 2
+    },
+    "validation": {
+        "commands": [
+            {
+                "name": "bookmarks-tests",
+                "cmd": "bash -c '[ -f tests/run-tests.sh ] && bash tests/run-tests.sh || true'",
+                "required": false
+            }
+        ],
+        "blocked_commands": []
+    },
+    "claude": {
+        "flags": ["--print", "--dangerously-skip-permissions"]
+    },
+    "commit": {
+        "format": "feat(story-{{id}}): {{title}}",
+        "auto_commit": true
+    },
+    "testing_phase": {
+        "enabled": false,
+        "timeout_seconds": 600
+    },
+    "learnings": {
+        "enabled": true,
+        "max_inject_count": 5
+    },
+    "parallel": {
+        "enabled": true,
+        "max_concurrent": 3,
+        "strategy": "worktree",
+        "auto_merge": true,
+        "merge_review_timeout": 900,
+        "stagger_seconds": 2
+    },
+    "caffeine": false,
+    "hooks": {
+        "pre_iteration": "",
+        "post_iteration": "",
+        "pre_story": "",
+        "post_story": ""
+    }
+}

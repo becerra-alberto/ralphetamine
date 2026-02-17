@@ -1,0 +1,14 @@
+# Calculator — Bash Calculator
+# Epic 1 — Foundation (sequential)
+# [batch:0]
+1.1 | Set up project structure
+1.2 | Implement core math logic
+
+# Epic 2 — I/O Layer (parallel)
+# [batch:1]
+2.1 | Build input handler and parser
+2.2 | Build output formatter
+
+# Epic 3 — Integration (sequential, depends on batch 1)
+# [batch:2]
+3.1 | Wire up integration and CLI entry point

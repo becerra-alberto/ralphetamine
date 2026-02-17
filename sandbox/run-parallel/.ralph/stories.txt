@@ -1,0 +1,15 @@
+# Bookmarks — JSON Bookmark Manager
+# Epic 1 — Data Layer (sequential)
+# [batch:0]
+1.1 | Initialize schema and data store
+1.2 | Seed sample data
+
+# Epic 2 — Query Endpoints (parallel)
+# [batch:1]
+2.1 | List all bookmarks
+2.2 | Search bookmarks
+2.3 | Bookmark detail view
+
+# Epic 3 — CLI Interface (sequential, depends on batch 1)
+# [batch:2]
+3.1 | CLI interface and dispatcher

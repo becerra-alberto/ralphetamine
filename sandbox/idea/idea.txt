@@ -1,0 +1,13 @@
+A simple command-line tool called "md2html" that converts Markdown files to HTML.
+
+It should:
+- Accept a markdown file path as input
+- Output HTML to stdout by default
+- Support an -o/--output flag to write to a file
+- Handle basic markdown: headings, bold, italic, links, code blocks, lists
+- Support a --watch flag that re-converts when the source file changes
+- Exit with code 1 and a helpful error if the input file doesn't exist
+- Include a --help flag showing usage
+
+The tool should be written in pure bash using sed for transformations.
+No external dependencies beyond standard Unix tools.

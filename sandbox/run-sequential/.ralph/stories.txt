@@ -1,0 +1,5 @@
+# Greeter — Bash Greeting Script
+# Epic 1 — Core Greeter (sequential)
+1.1 | Create greeting script
+1.2 | Add test suite
+1.3 | Enhance with flags and formatting
