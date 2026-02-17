@@ -191,29 +191,24 @@ parallel_run() {
         done
     fi
 
-    # Find which batches exist and need execution
-    local current_batch=0
-    while true; do
+    # Discover all batch numbers from stories.txt
+    local all_batches=()
+    while IFS= read -r b; do
+        [[ -n "$b" ]] && all_batches+=("$b")
+    done < <(stories_get_all_batches)
+
+    for current_batch in "${all_batches[@]}"; do
         local batch_stories=()
         while IFS= read -r story_id; do
             [[ -z "$story_id" ]] && continue
             state_is_completed "$story_id" || batch_stories+=("$story_id")
         done < <(stories_get_batch_members "$current_batch")
 
-        # No stories in this batch — try next, or we're done
-        if [[ ${#batch_stories[@]} -eq 0 ]]; then
-            local next_batch=$((current_batch + 1))
-            local next_members
-            next_members=$(stories_get_batch_members "$next_batch" | head -1) || true
-            if [[ -z "$next_members" ]]; then
-                break
-            fi
-            current_batch=$next_batch
-            continue
-        fi
+        # All stories in this batch completed — skip
+        [[ ${#batch_stories[@]} -eq 0 ]] && continue
 
         # Batch 0 = sequential foundation — always run one at a time
-        if [[ "$current_batch" -eq 0 ]]; then
+        if [[ "$current_batch" == "0" ]]; then
             phase_header "Batch 0: Foundation (sequential)"
             log_info "Batch 0: running ${#batch_stories[@]} stories sequentially (foundation)"
             for story in "${batch_stories[@]}"; do
@@ -228,7 +223,6 @@ parallel_run() {
                     _run_sequential "1" "$timeout_secs" "$verbose" false "$story" ""
                 fi
             done
-            current_batch=$((current_batch + 1))
             continue
         fi
 
@@ -245,7 +239,6 @@ parallel_run() {
             for story in "${batch_stories[@]}"; do
                 echo "  - Story $story"
             done
-            current_batch=$((current_batch + 1))
             continue
         fi
 
@@ -255,7 +248,6 @@ parallel_run() {
             title=$(stories_get_title "${batch_stories[0]}" 2>/dev/null || echo "")
             log_info "Single story in batch, running in-place: ${batch_stories[0]} | $title"
             _run_sequential "1" "$timeout_secs" "$verbose" false "${batch_stories[0]}" ""
-            current_batch=$((current_batch + 1))
             continue
         fi
 
@@ -294,8 +286,6 @@ parallel_run() {
             done
             return 0
         fi
-
-        current_batch=$((current_batch + 1))
     done
 
     _run_summary "parallel"

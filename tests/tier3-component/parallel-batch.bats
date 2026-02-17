@@ -87,6 +87,70 @@ teardown() {
     [[ $uncompleted -eq 1 ]]
 }
 
+@test "Parallel dry-run processes high batch numbers (no batch 0 or 1)" {
+    # Replace stories.txt with high batch numbers only
+    cat > .ralph/stories.txt <<'EOF'
+# [batch:29]
+29.1 | Story Alpha
+29.2 | Story Beta
+# [batch:35]
+35.1 | Story Gamma
+EOF
+
+    # Create minimal spec files for these stories
+    mkdir -p specs/epic-29 specs/epic-35
+    cat > specs/epic-29/story-29.1-story-alpha.md <<'SPEC'
+# Story 29.1 — Story Alpha
+## Task
+Do something
+SPEC
+    cat > specs/epic-29/story-29.2-story-beta.md <<'SPEC'
+# Story 29.2 — Story Beta
+## Task
+Do something else
+SPEC
+    cat > specs/epic-35/story-35.1-story-gamma.md <<'SPEC'
+# Story 35.1 — Story Gamma
+## Task
+Do another thing
+SPEC
+
+    run parallel_run 1800 false true
+    assert_success
+    assert_output --partial "Batch 29"
+    assert_output --partial "Batch 35"
+    assert_output --partial "29.1"
+    assert_output --partial "35.1"
+}
+
+@test "Parallel dry-run processes decimal batch numbers" {
+    cat > .ralph/stories.txt <<'EOF'
+# [batch:31]
+31.1 | Integer Batch Story
+# [batch:31.5]
+31.2 | Decimal Batch Story
+EOF
+
+    mkdir -p specs/epic-31
+    cat > specs/epic-31/story-31.1-integer-batch.md <<'SPEC'
+# Story 31.1 — Integer Batch Story
+## Task
+Do something
+SPEC
+    cat > specs/epic-31/story-31.2-decimal-batch.md <<'SPEC'
+# Story 31.2 — Decimal Batch Story
+## Task
+Do something
+SPEC
+
+    run parallel_run 1800 false true
+    assert_success
+    assert_output --partial "Batch 31"
+    assert_output --partial "Batch 31.5"
+    assert_output --partial "31.1"
+    assert_output --partial "31.2"
+}
+
 @test "depends_on: spec_get_depends_on returns dependency IDs" {
     run spec_get_depends_on "specs/epic-2/story-2.3-with-depends.md"
     assert_success

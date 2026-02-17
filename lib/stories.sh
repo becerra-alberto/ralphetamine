@@ -120,7 +120,7 @@ stories_get_batch() {
 
     while IFS= read -r line; do
         # Track batch annotations
-        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*\[batch:([0-9]+)\] ]]; then
+        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*\[batch:([0-9]+(\.[0-9]+)*)\] ]]; then
             current_batch="${BASH_REMATCH[1]}"
             continue
         fi
@@ -145,7 +145,7 @@ stories_get_batch_members() {
     local current_batch=""
 
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*\[batch:([0-9]+)\] ]]; then
+        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*\[batch:([0-9]+(\.[0-9]+)*)\] ]]; then
             current_batch="${BASH_REMATCH[1]}"
             continue
         fi
@@ -165,7 +165,7 @@ stories_get_batch_members() {
 stories_get_unbatched() {
     local current_batch=""
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*\[batch:([0-9]+)\] ]]; then
+        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*\[batch:([0-9]+(\.[0-9]+)*)\] ]]; then
             current_batch="${BASH_REMATCH[1]}"
             continue
         fi
@@ -177,6 +177,23 @@ stories_get_unbatched() {
             echo "$id"
         fi
     done < "$RALPH_STORIES_FILE"
+}
+
+# Return sorted list of distinct batch numbers found in stories.txt
+stories_get_all_batches() {
+    local batches=()
+    local seen=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*\[batch:([0-9]+(\.[0-9]+)*)\] ]]; then
+            local b="${BASH_REMATCH[1]}"
+            # Deduplicate
+            if [[ " $seen " != *" $b "* ]]; then
+                batches+=("$b")
+                seen="$seen $b"
+            fi
+        fi
+    done < "$RALPH_STORIES_FILE"
+    printf '%s\n' "${batches[@]}"
 }
 
 # Append a story to stories.txt
