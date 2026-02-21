@@ -289,6 +289,9 @@ _run_sequential() {
             iteration_header "$iteration" "$( [[ "$iterations" == "0" ]] && echo "inf" || echo "$iterations" )"
         fi
 
+        # Run pre_iteration hook
+        hooks_run "pre_iteration" "RALPH_ITERATION=$iteration" || true
+
         # Find next story
         local next_story
         if [[ -n "$specific_story" ]]; then

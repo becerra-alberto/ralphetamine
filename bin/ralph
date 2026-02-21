@@ -140,6 +140,7 @@ cmd_run() {
     [[ -f "${RALPH_DIR}/lib/hitl.sh" ]] && source "${RALPH_DIR}/lib/hitl.sh"
     [[ -f "${RALPH_DIR}/lib/metrics.sh" ]] && source "${RALPH_DIR}/lib/metrics.sh"
     [[ -f "${RALPH_DIR}/lib/decompose.sh" ]] && source "${RALPH_DIR}/lib/decompose.sh"
+    [[ -f "${RALPH_DIR}/lib/mcp.sh" ]] && source "${RALPH_DIR}/lib/mcp.sh"
 
     # Check prerequisites
     prereqs_check || exit 1
@@ -214,6 +215,16 @@ cmd_run() {
     if [[ "$(config_get '.caffeine' 'false')" == "true" || "${caffeine_requested:-}" == "true" ]]; then
         caffeine_start
         ralph_on_exit caffeine_stop
+    fi
+
+    # MCP browser lifecycle — start before state_init so run manifest is written early
+    # Export parallel mode so mcp_browser_start can populate the manifest correctly
+    if [[ "$use_parallel" == true || "$(config_get '.parallel.enabled' 'false')" == "true" ]]; then
+        export _RALPH_PARALLEL_MODE="true"
+    fi
+    if type mcp_browser_enabled &>/dev/null && mcp_browser_enabled 2>/dev/null; then
+        mcp_browser_start || { log_error "MCP browser start failed. Aborting."; exit 1; }
+        ralph_on_exit mcp_browser_stop
     fi
 
     # Initialize state

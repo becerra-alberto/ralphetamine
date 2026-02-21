@@ -96,3 +96,143 @@ EOF
     assert_line --index 2 "--output-format"
     assert_line --index 3 "json"
 }
+
+# ── MCP config defaults ──────────────────────────────────────────────────────
+
+@test "config_get: mcp.enabled defaults to false" {
+    copy_fixture config.json .ralph/config.json
+    config_load
+    run config_get '.mcp.enabled'
+    assert_success
+    assert_output "false"
+}
+
+@test "config_get: mcp.browser.mode defaults to web" {
+    copy_fixture config.json .ralph/config.json
+    config_load
+    run config_get '.mcp.browser.mode'
+    assert_success
+    assert_output "web"
+}
+
+@test "config_get: mcp.browser.profile defaults to persistent" {
+    copy_fixture config.json .ralph/config.json
+    config_load
+    run config_get '.mcp.browser.profile'
+    assert_success
+    assert_output "persistent"
+}
+
+# ── MCP flag injection ───────────────────────────────────────────────────────
+
+@test "config_get_claude_flags: omits MCP flags when mcp.enabled=false" {
+    copy_fixture config.json .ralph/config.json
+    config_load
+    run config_get_claude_flags
+    assert_success
+    refute_output --partial "--mcp-config"
+    refute_output --partial "--allowedTools"
+    refute_output --partial "--strict-mcp-config"
+}
+
+@test "config_get_claude_flags: includes --mcp-config when enabled and config file exists" {
+    mkdir -p .ralph
+    cat > .ralph/config.json <<'EOF'
+{
+  "version": "2.4.0",
+  "project": { "name": "test" },
+  "claude": { "flags": ["--print", "--dangerously-skip-permissions", "--output-format", "json"] },
+  "mcp": { "enabled": true, "config_file": ".ralph/mcp-config.json", "allowed_tools": [], "strict": false }
+}
+EOF
+    # Pre-create the config file so the flag is injected
+    echo '{"mcpServers":{}}' > .ralph/mcp-config.json
+    config_load
+    run config_get_claude_flags
+    assert_success
+    assert_output --partial "--mcp-config"
+}
+
+@test "config_get_claude_flags: --mcp-config path is absolute even with relative config_file" {
+    mkdir -p .ralph
+    cat > .ralph/config.json <<'EOF'
+{
+  "version": "2.4.0",
+  "project": { "name": "test" },
+  "claude": { "flags": ["--print", "--dangerously-skip-permissions", "--output-format", "json"] },
+  "mcp": { "enabled": true, "config_file": ".ralph/mcp-config.json", "allowed_tools": [], "strict": false }
+}
+EOF
+    echo '{"mcpServers":{}}' > .ralph/mcp-config.json
+    config_load
+    run config_get_claude_flags
+    assert_success
+    # The path after --mcp-config must start with /
+    local found=false
+    local next_is_path=false
+    while IFS= read -r line; do
+        if [[ "$next_is_path" == "true" ]]; then
+            [[ "$line" == /* ]] && found=true
+            next_is_path=false
+        fi
+        [[ "$line" == "--mcp-config" ]] && next_is_path=true
+    done <<< "$output"
+    [[ "$found" == "true" ]]
+}
+
+@test "config_get_claude_flags: includes --allowedTools when mcp.allowed_tools non-empty" {
+    mkdir -p .ralph
+    echo '{"mcpServers":{}}' > .ralph/mcp-config.json
+    cat > .ralph/config.json <<'EOF'
+{
+  "version": "2.4.0",
+  "project": { "name": "test" },
+  "claude": { "flags": ["--print", "--dangerously-skip-permissions", "--output-format", "json"] },
+  "mcp": {
+    "enabled": true,
+    "config_file": ".ralph/mcp-config.json",
+    "allowed_tools": ["mcp__chrome-devtools__*", "Bash"],
+    "strict": false
+  }
+}
+EOF
+    config_load
+    run config_get_claude_flags
+    assert_success
+    assert_output --partial "--allowedTools"
+    assert_output --partial "mcp__chrome-devtools__*"
+}
+
+@test "config_get_claude_flags: includes --strict-mcp-config when mcp.strict=true" {
+    mkdir -p .ralph
+    echo '{"mcpServers":{}}' > .ralph/mcp-config.json
+    cat > .ralph/config.json <<'EOF'
+{
+  "version": "2.4.0",
+  "project": { "name": "test" },
+  "claude": { "flags": ["--print", "--dangerously-skip-permissions", "--output-format", "json"] },
+  "mcp": { "enabled": true, "config_file": ".ralph/mcp-config.json", "allowed_tools": [], "strict": true }
+}
+EOF
+    config_load
+    run config_get_claude_flags
+    assert_success
+    assert_output --partial "--strict-mcp-config"
+}
+
+@test "config_get_claude_flags: omits --mcp-config when config file does not exist" {
+    mkdir -p .ralph
+    cat > .ralph/config.json <<'EOF'
+{
+  "version": "2.4.0",
+  "project": { "name": "test" },
+  "claude": { "flags": ["--print", "--dangerously-skip-permissions", "--output-format", "json"] },
+  "mcp": { "enabled": true, "config_file": ".ralph/mcp-config.json", "allowed_tools": [], "strict": false }
+}
+EOF
+    # Do NOT create .ralph/mcp-config.json
+    config_load
+    run config_get_claude_flags
+    assert_success
+    refute_output --partial "--mcp-config"
+}

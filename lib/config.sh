@@ -63,6 +63,21 @@ _CONFIG_DEFAULTS='{
         "post_story": "",
         "pre_worktree": "",
         "pre_worktree_timeout": 120
+    },
+    "mcp": {
+        "enabled": false,
+        "config_file": "",
+        "allowed_tools": [],
+        "strict": false,
+        "browser": {
+            "enabled": false,
+            "manager": "mcp-run",
+            "mode": "web",
+            "profile": "persistent",
+            "background": true,
+            "headless": false,
+            "ext": ""
+        }
     }
 }'
 
@@ -155,6 +170,39 @@ config_get_claude_flags() {
     # Ensure required flags are present even in older project configs.
     [[ "$has_print" == false ]] && flags+=("--print")
     [[ "$has_output_json" == false ]] && flags+=("--output-format" "json")
+
+    # MCP flag injection
+    local mcp_enabled
+    mcp_enabled=$(echo "$_CONFIG" | jq -r '.mcp.enabled' 2>/dev/null)
+    if [[ "$mcp_enabled" == "true" ]]; then
+        # Resolve config file path — explicit or auto-generated browser path
+        local mcp_config_file
+        mcp_config_file=$(echo "$_CONFIG" | jq -r '.mcp.config_file' 2>/dev/null)
+        if [[ -z "$mcp_config_file" || "$mcp_config_file" == "null" ]]; then
+            mcp_config_file=".ralph/mcp-config.json"
+        fi
+        # Resolve to absolute path (safe for parallel worktree subshells)
+        if [[ "$mcp_config_file" != /* ]]; then
+            mcp_config_file="$(pwd)/${mcp_config_file}"
+        fi
+        if [[ -f "$mcp_config_file" ]]; then
+            flags+=("--mcp-config" "$mcp_config_file")
+        fi
+
+        # --allowedTools
+        local allowed_tools
+        allowed_tools=$(echo "$_CONFIG" | jq -r '(.mcp.allowed_tools // []) | join(",")' 2>/dev/null)
+        if [[ -n "$allowed_tools" && "$allowed_tools" != "null" && "$allowed_tools" != "" ]]; then
+            flags+=("--allowedTools" "$allowed_tools")
+        fi
+
+        # --strict-mcp-config
+        local mcp_strict
+        mcp_strict=$(echo "$_CONFIG" | jq -r '.mcp.strict' 2>/dev/null)
+        if [[ "$mcp_strict" == "true" ]]; then
+            flags+=("--strict-mcp-config")
+        fi
+    fi
 
     printf '%s\n' "${flags[@]}"
 }

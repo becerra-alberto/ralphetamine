@@ -91,7 +91,22 @@ interactive_init() {
                 stagger_seconds: 3
             },
             caffeine: false,
-            hooks: { pre_iteration: "", post_iteration: "", pre_story: "", post_story: "" }
+            hooks: { pre_iteration: "", post_iteration: "", pre_story: "", post_story: "" },
+            mcp: {
+                enabled: false,
+                config_file: "",
+                allowed_tools: [],
+                strict: false,
+                browser: {
+                    enabled: false,
+                    manager: "mcp-run",
+                    mode: "web",
+                    profile: "persistent",
+                    background: true,
+                    headless: false,
+                    ext: ""
+                }
+            }
         }' > ".ralph/config.json"
 
     # Copy stories.txt template
