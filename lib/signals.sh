@@ -263,3 +263,35 @@ signals_has_completion() {
     signals_parse_fail "$output" >/dev/null 2>&1 && return 0
     return 1
 }
+
+# Parse DISCOVERY_DONE signal: <ralph>DISCOVERY_DONE: path/to/prd.md</ralph>
+signals_parse_discovery_done() {
+    local output="$1"
+
+    if [[ "$output" =~ \<ralph\>DISCOVERY_DONE:[[:space:]]*([^\<]+)\</ralph\> ]]; then
+        local result="${BASH_REMATCH[1]}"
+        # Trim leading/trailing whitespace
+        result="${result#"${result%%[![:space:]]*}"}"
+        result="${result%"${result##*[![:space:]]}"}"
+        echo "$result"
+        return 0
+    fi
+
+    return 1
+}
+
+# Parse E2E_SETUP_DONE signal: <ralph>E2E_SETUP_DONE: N files</ralph>
+signals_parse_e2e_setup_done() {
+    local output="$1"
+
+    if [[ "$output" =~ \<ralph\>E2E_SETUP_DONE:[[:space:]]*([^\<]+)\</ralph\> ]]; then
+        local result="${BASH_REMATCH[1]}"
+        # Trim leading/trailing whitespace
+        result="${result#"${result%%[![:space:]]*}"}"
+        result="${result%"${result##*[![:space:]]}"}"
+        echo "$result"
+        return 0
+    fi
+
+    return 1
+}

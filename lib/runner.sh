@@ -282,6 +282,7 @@ _run_sequential() {
                 box_header "Reached iteration limit ($iterations)"
             fi
             _run_summary "sequential"
+            if type post_run_orchestrate &>/dev/null; then post_run_orchestrate; fi
             break
         fi
 
@@ -306,6 +307,7 @@ _run_sequential() {
                 log "All stories complete — Ralph loop finished"
             fi
             _run_summary "sequential"
+            if type post_run_orchestrate &>/dev/null; then post_run_orchestrate; fi
             return 0
         fi
         # Clear resume after first use
@@ -498,7 +500,11 @@ _run_sequential() {
                 local_retry_count=0
                 last_failed_story=""
 
-                [[ -n "$specific_story" ]] && return 0
+                if [[ -n "$specific_story" ]]; then
+                    _run_summary "sequential"
+                    if type post_run_orchestrate &>/dev/null; then post_run_orchestrate; fi
+                    return 0
+                fi
             else
                 log_warn "DONE signal for $done_id but expected $next_story"
                 _STORY_OUTCOMES["$next_story"]="failed"

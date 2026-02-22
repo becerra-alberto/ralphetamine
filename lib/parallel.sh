@@ -289,6 +289,7 @@ parallel_run() {
     done
 
     _run_summary "parallel"
+    if type post_run_orchestrate &>/dev/null; then post_run_orchestrate; fi
 }
 
 # Execute a batch of stories in parallel via git worktrees

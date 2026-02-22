@@ -78,6 +78,16 @@ _CONFIG_DEFAULTS='{
             "headless": false,
             "ext": ""
         }
+    },
+    "post_run": {
+        "e2e_testing": true,
+        "e2e_timeout_seconds": 900,
+        "e2e_setup_timeout_seconds": 300,
+        "feature_discovery": true,
+        "discovery_timeout_seconds": 600,
+        "auto_launch_pipeline": true,
+        "pipeline_timeout_seconds": 3600,
+        "max_pipeline_iterations": 3
     }
 }'
 

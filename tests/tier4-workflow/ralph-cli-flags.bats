@@ -90,3 +90,21 @@ teardown() {
     assert_file_contains "progress.txt" "\\[DONE\\] Story 1.2"
     assert_file_not_contains "progress.txt" "\\[DONE\\] Story 1.1"
 }
+
+@test "ralph run --auto-continue: chain does not error on clean project" {
+    # --auto-continue should wire up the post-run chain without crashing
+    run "$RALPH_BIN" run --no-interactive --no-tmux --no-dashboard --auto-continue -s 1.1
+    assert_success
+    # Story should still complete normally
+    jq -r '.completed_stories[]' .ralph/state.json | grep -q '^1.1$'
+}
+
+@test "ralph run --auto-continue --max-iterations 0: chain skips immediately" {
+    # With max-iterations=0, the chain should not run at all (counter=0 >= limit=0)
+    run "$RALPH_BIN" run --no-interactive --no-tmux --no-dashboard --auto-continue --max-iterations 0 -s 1.1
+    assert_success
+    # Chain should be skipped — pipeline_iteration stays at 0
+    local iter
+    iter=$(jq '.pipeline_iteration // 0' .ralph/state.json)
+    [[ "$iter" -eq 0 ]]
+}

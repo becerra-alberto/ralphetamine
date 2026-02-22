@@ -73,6 +73,8 @@ usage() {
     echo "  --tmux                Wrap in tmux session"
     echo "  --no-tmux             (no-op, kept for backwards compatibility)"
     echo "  --no-interactive      Skip interactive startup prompts"
+    echo "  --auto-continue       Chain reconcile→E2E→discovery→pipeline after run"
+    echo "  --max-iterations NUM  Max pipeline chain iterations (default: 3)"
     echo ""
     echo "Stats Options:"
     echo "  --last N              Show last N runs"
@@ -141,6 +143,8 @@ cmd_run() {
     [[ -f "${RALPH_DIR}/lib/metrics.sh" ]] && source "${RALPH_DIR}/lib/metrics.sh"
     [[ -f "${RALPH_DIR}/lib/decompose.sh" ]] && source "${RALPH_DIR}/lib/decompose.sh"
     [[ -f "${RALPH_DIR}/lib/mcp.sh" ]] && source "${RALPH_DIR}/lib/mcp.sh"
+    [[ -f "${RALPH_DIR}/lib/post_run.sh" ]] && source "${RALPH_DIR}/lib/post_run.sh"
+    [[ -f "${RALPH_DIR}/lib/feature_discovery.sh" ]] && source "${RALPH_DIR}/lib/feature_discovery.sh"
 
     # Check prerequisites
     prereqs_check || exit 1
@@ -156,6 +160,7 @@ cmd_run() {
     # Parse run-specific flags
     local iterations verbose dry_run specific_story resume_from timeout_secs
     local use_parallel=false use_tmux=false no_interactive=false no_dashboard=false
+    local auto_continue=false max_pipeline_iterations=3
 
     iterations=$(config_get '.loop.max_iterations' '0')
     timeout_secs=$(config_get '.loop.timeout_seconds' '1800')
@@ -177,11 +182,19 @@ cmd_run() {
             --tmux)            use_tmux=true; shift ;;
             --no-tmux)         shift ;;  # backwards compat (tmux already off by default)
             --no-interactive)  no_interactive=true; shift ;;
+            --auto-continue)   auto_continue=true; shift ;;
+            --max-iterations)  max_pipeline_iterations="$2"; shift 2 ;;
             *) log_error "Unknown option: $1"; exit 1 ;;
         esac
     done
 
     export RALPH_VERBOSE="$verbose"
+
+    # Wire up auto-continue post-run chain
+    if [[ "$auto_continue" == true ]] && type post_run_set_enabled &>/dev/null; then
+        post_run_set_enabled
+        post_run_set_max_iterations "$max_pipeline_iterations"
+    fi
 
     # Tmux wrapper (opt-in) — must happen before interactive prompt so user is only prompted once
     if [[ "$use_tmux" == true ]]; then

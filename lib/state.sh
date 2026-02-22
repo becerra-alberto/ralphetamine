@@ -48,7 +48,8 @@ _state_write_empty() {
     "merged_stories": [],
     "decomposed_stories": {},
     "current_story": null,
-    "retry_count": 0
+    "retry_count": 0,
+    "pipeline_iteration": 0
 }
 EOF
     log_debug "Created empty state file"
@@ -197,14 +198,18 @@ _state_ensure_schema() {
     if ! jq -e '.decomposed_stories' "$RALPH_STATE_FILE" &>/dev/null; then
         needs_update=true
     fi
+    if ! jq -e '.pipeline_iteration' "$RALPH_STATE_FILE" &>/dev/null; then
+        needs_update=true
+    fi
 
     if [[ "$needs_update" == true ]]; then
         _state_safe_write '
             .absorbed_stories //= {}
             | .merged_stories //= []
             | .decomposed_stories //= {}
+            | .pipeline_iteration //= 0
         ' || return 1
-        log_debug "State schema upgraded with absorbed/merged/decomposed fields"
+        log_debug "State schema upgraded with absorbed/merged/decomposed/pipeline_iteration fields"
     fi
 }
 
@@ -243,4 +248,14 @@ state_get_decomposition_children() {
     local story="$1"
     [[ ! -f "$RALPH_STATE_FILE" ]] && return 1
     jq -r --arg s "$story" '.decomposed_stories[$s][]? // empty' "$RALPH_STATE_FILE" 2>/dev/null
+}
+
+# Get the current pipeline iteration counter
+state_get_pipeline_iteration() {
+    jq '.pipeline_iteration // 0' "$RALPH_STATE_FILE" 2>/dev/null || echo "0"
+}
+
+# Increment the pipeline iteration counter (atomic via _state_safe_write)
+state_increment_pipeline_iteration() {
+    _state_safe_write '.pipeline_iteration = (.pipeline_iteration // 0) + 1' || return 1
 }
