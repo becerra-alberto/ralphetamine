@@ -6,6 +6,30 @@
 
 *No unreleased changes.*
 
+## [2.6.0] — 2026-02-22
+
+Open-source preparation, first-class MCP integration, and autonomous loop enhancements — renames the project to Ralphetamine, wires MCP browser lifecycle into `ralph run`, and introduces `--auto-continue` for self-improving post-run chains.
+
+### Highlights
+
+- **Project renamed to Ralphetamine** — `ralph-v2` renamed across the entire codebase and docs (Core)
+- **MCP tool support** — Browser lifecycle (mcp-run) wired into `ralph run` with `--mcp-config`/`--allowedTools` injection (Runner)
+- **Auto-continue chain** — `--auto-continue` chains reconcile→E2E→discovery→next-pipeline with configurable iteration guard (Runner)
+- **Config validation** — `config_validate()` catches missing `{{epic}}`/`{{id}}` tokens before any story executes (Config)
+
+*Date ascending, then area alphabetically*
+
+| # | Date | Type | Area | Change | Commit |
+|---|------|------|------|--------|--------|
+| 1 | 2026-02-17 | Fixed | CI | Convert sandbox nested git repos to normal tracked directories to fix CI checkout | d3fdc60 |
+| 2 | 2026-02-17 | Changed | Core | Rename ralph-v2 to Ralphetamine across entire codebase and documentation | 130ebdc |
+| 3 | 2026-02-17 | Changed | Docs | Pipeline-first documentation re-engineering — restructure README around core workflow | 479d631 |
+| 4 | 2026-02-17 | Changed | Docs | Rewrite README to lead with context-window problem framing | 7f811d4 |
+| 5 | 2026-02-17 | Changed | Docs | Scrub private references (names, Slack, internal URLs) for public OSS release | 5fa30d4 |
+| 6 | 2026-02-21 | Added | Runner | First-class MCP tool support: browser lifecycle (mcp-run) wired into run, `config_get_claude_flags` injects MCP flags | be5b845 |
+| 7 | 2026-02-22 | Added | Config | `config_validate()` enforces `{{epic}}` and `{{id}}` tokens in `specs.pattern`; called after `config_load` in `cmd_run` | f2a14eb |
+| 8 | 2026-02-22 | Added | Runner | `--auto-continue` flag chains reconcile→E2E→feature-discovery→next-pipeline with `pipeline_iteration` guard | 867bb80 |
+
 ## [2.5.0] — 2026-02-16
 
 Pipeline orchestration release adding worktree isolation, BMAD-inspired review gates, and decimal batch support to the parallel engine. Also includes open-source readiness preparation and documentation overhaul.
