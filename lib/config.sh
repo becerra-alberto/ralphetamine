@@ -115,6 +115,32 @@ config_load() {
     log_debug "Config loaded from $RALPH_CONFIG_FILE"
 }
 
+config_validate() {
+    local pattern
+    pattern=$(config_get '.specs.pattern' 'specs/epic-{{epic}}/story-{{id}}-*.md')
+
+    local errors=()
+
+    if [[ "$pattern" != *'{{epic}}'* ]]; then
+        errors+=("specs.pattern is missing {{epic}} token: '$pattern'")
+    fi
+
+    if [[ "$pattern" != *'{{id}}'* ]]; then
+        errors+=("specs.pattern is missing {{id}} token: '$pattern'")
+    fi
+
+    if [[ ${#errors[@]} -gt 0 ]]; then
+        log_error "Invalid config — check .ralph/config.json:"
+        for err in "${errors[@]}"; do
+            log_error "  $err"
+        done
+        return 1
+    fi
+
+    log_debug "Config validation passed"
+    return 0
+}
+
 # Get a config value by jq path (e.g., ".loop.timeout_seconds")
 config_get() {
     local path="$1"

@@ -152,6 +152,7 @@ cmd_run() {
 
     # Load config
     config_load || exit 1
+    config_validate || exit 1
 
     # Save original args before parsing consumes them (needed for tmux re-exec)
     local original_args=()
